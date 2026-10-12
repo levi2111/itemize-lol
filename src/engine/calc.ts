@@ -1,0 +1,207 @@
+/* The engine's front door: validate a request, play the combo, measure sustained
+   damage, and report where every point of damage came from. Pure and synchronous. */
+import type { CastSlot, ChampionData, DamageType, ItemData, Slot } from '../shared/types.ts';
+import { CAST_SLOTS, SLOTS } from '../shared/types.ts';
+import { defaultSequence, Fight, type Hit } from './sim.ts';
+import { CalcError, type Action, type Amount, type BuildInput, type ByType, type CalcRequest, type CalcResult, type DataSource, type SourceLine, type TargetInput } from './types.ts';
+
+export const LIMITS = {
+  items: 6,
+  /** per action in `counts` */
+  count: 30,
+  sequence: 80,
+  /** seconds of sustained attacking after which a target counts as unkillable */
+  horizon: 60,
+  /** seconds simulated for DPS when there is no target to kill */
+  window: 10,
+} as const;
+
+const TYPES: DamageType[] = ['physical', 'magic', 'true'];
+const ACTIONS: Action[] = ['aa', ...CAST_SLOTS];
+const LINE_ORDER: SourceLine['key'][] = ['aa', 'q', 'w', 'e', 'r', 'p', 'items'];
+const r2 = (n: number) => Math.round(n * 100) / 100;
+const r4 = (n: number) => Math.round(n * 10000) / 10000;
+const zero = (): Amount => ({ raw: 0, dealt: 0 });
+const byType = (): ByType => ({ physical: zero(), magic: zero(), true: zero() });
+
+function int(v: unknown, field: string, min: number, max: number): number {
+  if (typeof v !== 'number' || !Number.isFinite(v)) throw new CalcError(field, `${field} must be a number`);
+  const n = Math.round(v);
+  if (n < min || n > max) throw new CalcError(field, `${field} must be between ${min} and ${max}`);
+  return n;
+}
+function real(v: unknown, field: string, min: number, max: number): number {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < min || v > max) throw new CalcError(field, `${field} must be a number between ${min} and ${max}`);
+  return v;
+}
+
+interface Checked {
+  champ: ChampionData;
+  items: ItemData[];
+  build: BuildInput;
+  target: TargetInput | null;
+  sequence: Action[];
+}
+
+function check(data: DataSource, req: CalcRequest): Checked {
+  const b = req?.build;
+  if (!b || typeof b !== 'object') throw new CalcError('build', 'build is required');
+  const champ = typeof b.champion === 'string' ? data.champion(b.champion) : undefined;
+  if (!champ) throw new CalcError('build.champion', `unknown champion "${String(b.champion)}"`);
+  const level = int(b.level, 'build.level', 1, 18);
+  const ranks = {} as Record<CastSlot, number>;
+  for (const s of CAST_SLOTS) ranks[s] = int(b.ranks?.[s] ?? 0, `build.ranks.${s}`, 0, champ.slots[s].maxRank);
+
+  if (b.items !== undefined && !Array.isArray(b.items)) throw new CalcError('build.items', 'build.items must be a list');
+  const ids = (b.items ?? []).filter((x): x is number => x !== null && x !== undefined);
+  if (ids.length > LIMITS.items) throw new CalcError('build.items', `a build holds at most ${LIMITS.items} items`);
+  const items = ids.map(id => {
+    const it = typeof id === 'number' ? data.item(id) : undefined;
+    if (!it) throw new CalcError('build.items', `unknown item ${String(id)}`);
+    return it;
+  });
+
+  const options: Record<string, number | boolean> = {};
+  for (const [k, v] of Object.entries(b.options ?? {})) {
+    if (!champ.options.some(o => o.id === k)) throw new CalcError('build.options', `${champ.name} has no option "${k}"`);
+    if (typeof v !== 'number' && typeof v !== 'boolean') throw new CalcError('build.options', `option "${k}" must be a number or true/false`);
+    options[k] = v;
+  }
+
+  let target: TargetInput | null = null;
+  if (req.target !== null && req.target !== undefined) {
+    target = {
+      hp: real(req.target.hp, 'target.hp', 1, 1_000_000),
+      armor: real(req.target.armor, 'target.armor', -1000, 10_000),
+      mr: real(req.target.mr, 'target.mr', -1000, 10_000),
+      bonusHp: req.target.bonusHp === undefined ? 0 : real(req.target.bonusHp, 'target.bonusHp', 0, 1_000_000),
+    };
+  }
+
+  const c = req.combo ?? {};
+  let sequence: Action[];
+  if (c.sequence !== undefined) {
+    if (!Array.isArray(c.sequence) || c.sequence.length > LIMITS.sequence) throw new CalcError('combo.sequence', `combo.sequence must be a list of at most ${LIMITS.sequence} actions`);
+    for (const a of c.sequence) if (!ACTIONS.includes(a)) throw new CalcError('combo.sequence', `unknown action "${String(a)}"`);
+    sequence = c.sequence;
+  } else {
+    const counts: Partial<Record<Action, number>> = {};
+    for (const a of ACTIONS) counts[a] = int(c.counts?.[a] ?? 0, `combo.counts.${a}`, 0, LIMITS.count);
+    sequence = defaultSequence(counts);
+  }
+  return { champ, items, build: { champion: champ.id, level, ranks, items: ids, options }, target, sequence };
+}
+
+function lines(champ: ChampionData, hits: Hit[], sequence: Action[]): SourceLine[] {
+  const label = (k: SourceLine['key']) => k === 'aa' ? 'Auto attack' : k === 'items' ? 'Item effects' : champ.slots[k].name;
+  const out = new Map<SourceLine['key'], SourceLine>();
+  for (const key of LINE_ORDER) {
+    out.set(key, {
+      key, label: label(key), type: 'none', total: zero(), byType: byType(), parts: [],
+      qty: key === 'p' || key === 'items' ? null : sequence.filter(a => a === key).length,
+    });
+  }
+  for (const h of hits) {
+    const l = out.get(h.line)!;
+    l.total.raw += h.raw; l.total.dealt += h.dealt;
+    l.byType[h.type].raw += h.raw; l.byType[h.type].dealt += h.dealt;
+    const id = `${h.owner}/${h.rule}`;
+    let part = l.parts.find(p => p.id === id && p.type === h.type);
+    if (!part) l.parts.push(part = { id, label: h.label, type: h.type, hits: 0, total: zero() });
+    part.hits += h.instances; part.total.raw += h.raw; part.total.dealt += h.dealt;
+  }
+  for (const l of out.values()) {
+    const used = TYPES.filter(t => l.byType[t].raw > 0);
+    l.type = used.length === 0 ? 'none' : used.length === 1 ? used[0]! : 'mixed';
+    round(l.total);
+    for (const t of TYPES) round(l.byType[t]);
+    for (const p of l.parts) round(p.total);
+  }
+  return [...out.values()];
+}
+function round(a: Amount): Amount { a.raw = r2(a.raw); a.dealt = r2(a.dealt); return a; }
+
+/** Sustained basic attacks from a fresh start: damage per second and, against a target, how long a kill takes. */
+function sustain(c: Checked): { dps: Amount; timeToKill: number | null; caveats: Set<string> } {
+  const f = new Fight(c.champ, c.items, c.build, c.target, { sustained: true });
+  const sum = (from: number) => f.hits.slice(from).reduce((s, h) => ({ raw: s.raw + h.raw, dealt: s.dealt + h.dealt }), zero());
+  if (!c.target) {
+    const attacks = Math.max(1, Math.round(LIMITS.window * f.stats.attackSpeed.total));
+    for (let i = 0; i < attacks; i++) f.act('aa');
+    const t = sum(0);
+    return { dps: { raw: t.raw / f.time, dealt: t.dealt / f.time }, timeToKill: null, caveats: f.caveats };
+  }
+  const total = zero();
+  while (f.time < LIMITS.horizon) {
+    const hpBefore = f.targetHp!, t0 = f.time, period = f.attackPeriod;
+    // an attack's hits are whatever the log gained; consecutive hits of one rule merge, so diff totals instead
+    const before = sum(0);
+    f.act('aa');
+    const after = sum(0);
+    const hit = { raw: after.raw - before.raw, dealt: after.dealt - before.dealt };
+    if (f.targetHp === 0 && hit.dealt > 0) {
+      // the killing attack is counted only as far as it was needed, so time to kill moves smoothly with health
+      const part = hpBefore / hit.dealt;
+      const ttk = t0 + part * period;
+      total.raw += hit.raw * part; total.dealt += hpBefore;
+      return { dps: { raw: total.raw / ttk, dealt: total.dealt / ttk }, timeToKill: ttk, caveats: f.caveats };
+    }
+    total.raw += hit.raw; total.dealt += hit.dealt;
+    if (hit.dealt <= 0 && f.time > 5) break;
+  }
+  const t = Math.max(f.time, 1e-9);
+  return { dps: { raw: total.raw / t, dealt: total.dealt / t }, timeToKill: null, caveats: f.caveats };
+}
+
+export function calculate(data: DataSource, req: CalcRequest): CalcResult {
+  const c = check(data, req);
+  const fight = new Fight(c.champ, c.items, c.build, c.target);
+  for (const a of c.sequence) fight.act(a);
+
+  const comboLines = lines(c.champ, fight.hits, c.sequence);
+  const total = zero(), types = byType();
+  for (const h of fight.hits) {
+    total.raw += h.raw; total.dealt += h.dealt;
+    types[h.type].raw += h.raw; types[h.type].dealt += h.dealt;
+  }
+  const s = sustain(c);
+  const caveats = new Set([...fight.caveats, ...s.caveats]);
+  for (const slot of CAST_SLOTS) {
+    if (c.sequence.includes(slot) && c.build.ranks[slot] < 1) caveats.add(`${c.champ.slots[slot].name} is in the combo but has no rank, so it does nothing.`);
+  }
+
+  const st = fight.stats;
+  const sl = (l: { total: number; base: number; bonus: number }) => ({ total: r4(l.total), base: r4(l.base), bonus: r4(l.bonus) });
+  const abilities = {} as CalcResult['abilities'];
+  for (const slot of SLOTS as readonly Slot[]) abilities[slot] = { status: c.champ.models[slot].status, notes: c.champ.models[slot].notes };
+
+  return {
+    patch: data.patch,
+    stats: {
+      level: st.level, hp: sl(st.hp), mana: sl(st.mana), ad: sl(st.ad), ap: sl(st.ap), armor: sl(st.armor), mr: sl(st.mr), moveSpeed: sl(st.moveSpeed),
+      attackSpeed: sl(st.attackSpeed), critChance: r4(st.critChance), critDamage: r4(st.critDamage), lethality: r4(st.lethality),
+      armorPenPct: r4(st.armorPenPct), magicPenFlat: r4(st.magicPenFlat), magicPenPct: r4(st.magicPenPct), abilityHaste: r4(st.abilityHaste),
+      lifeSteal: r4(st.lifeSteal), omnivamp: r4(st.omnivamp), attackRange: st.attackRange, gold: st.gold,
+    },
+    sequence: c.sequence,
+    combo: {
+      total: round(total),
+      byType: { physical: round(types.physical), magic: round(types.magic), true: round(types.true) },
+      blocked: r2(total.raw - total.dealt),
+      lines: comboLines,
+      hpLeft: fight.targetHp === null ? null : r2(fight.targetHp),
+      kills: fight.targetHp === 0,
+    },
+    dps: round(s.dps),
+    timeToKill: s.timeToKill === null ? null : r2(s.timeToKill),
+    abilities,
+    items: c.items.map(i => ({ id: i.id, status: i.model.status, notes: i.model.notes })),
+    caveats: [...caveats],
+  };
+}
+
+/** A champion's own health and resistances at a level, for using them as the target. */
+export function championAsTarget(champ: ChampionData, level: number): TargetInput {
+  const f = new Fight(champ, [], { champion: champ.id, level, ranks: { q: 0, w: 0, e: 0, r: 0 }, items: [] }, null);
+  return { hp: Math.round(f.stats.hp.total), armor: Math.round(f.stats.armor.total), mr: Math.round(f.stats.mr.total) };
+}

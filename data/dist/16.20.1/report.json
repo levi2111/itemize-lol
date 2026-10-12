@@ -1,0 +1,37 @@
+{
+ "patch": "16.20.1",
+ "anchors": {
+  "failed": [],
+  "missing": [],
+  "passed": 13
+ },
+ "modelIssues": [],
+ "stale": [],
+ "unlocked": [],
+ "unknownParts": {
+  "PercentageOfBuffNameElapsed": 3
+ },
+ "unknownStats": {},
+ "sourceMismatches": {
+  "attackdamageperlevel": 172
+ },
+ "warnings": [],
+ "coverage": {
+  "abilities": {
+   "verified": 0,
+   "curated": 10,
+   "stale": 0,
+   "auto": 536,
+   "none": 207,
+   "unmodeled": 112
+  },
+  "items": {
+   "verified": 0,
+   "curated": 15,
+   "stale": 0,
+   "auto": 1,
+   "none": 156,
+   "unmodeled": 43
+  }
+ }
+}

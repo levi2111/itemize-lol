@@ -1,0 +1,1040 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>itemize.lol daily wireframe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: same three columns as the showpiece version (attacker, damage table, target) over a stat strip,
+   with the theatrics removed: flat surface, one raised panel for the numbers, plain type. */
+:root{
+  --bg:#0c2524;           /* page */
+  --panel:#113130;        /* the one raised surface: the damage table */
+  --well:#081c1b;         /* inputs, slots */
+  --rule:#25504d;
+  --text:#ece7d8;
+  --dim:#a3beb7;
+  --faint:#6f948d;
+  --ink:#141714;
+  --a:#eef035;            /* build A */
+  --b:#ff7fb2;            /* build B */
+  --phys:#f29a4a;
+  --magic:#6fb6f2;
+  --warn:#ffb05c;
+  --font-ui:"Archivo",system-ui,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{height:100%;font-size:clamp(11.5px,min(1.04vw,2.1vh),21px);color-scheme:dark}
+body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size:.88rem;line-height:1.3;-webkit-font-smoothing:antialiased}
+@media (max-width:1100px),(max-height:545px){body{overflow:auto}}
+button,input,select{font:inherit;color:inherit;margin:0}
+button{background:none;border:0;padding:0;cursor:pointer;text-align:inherit}
+img{display:block}
+:focus-visible{outline:2px solid var(--a);outline-offset:2px}
+[hidden]{display:none!important}
+
+body[data-compare="off"] .only-cmp,
+body[data-compare="on"] .only-solo,
+body:not([data-target="dummy"]) .only-dummy,
+body:not([data-target="champ"]) .only-champ,
+body:not([data-target="raw"]) .only-raw{display:none!important}
+body[data-target="raw"] .needs-target{opacity:.28;pointer-events:none}
+
+.a{--c:var(--a)} .b{--c:var(--b)}
+
+.app{height:100%;min-width:95.5rem;min-height:47.4rem;display:grid;grid-template-rows:3.1rem minmax(0,1fr) 6.2rem}
+
+.lbl{font-size:.7rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
+.hint{font-size:.76rem;color:var(--faint)}
+.sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:.8rem}
+.key{font-family:var(--font-mono);font-size:.62rem;border:1px solid currentColor;border-radius:2px;padding:0 .28rem;opacity:.75}
+.tag{display:inline-grid;place-items:center;flex:none;font-weight:800;font-style:normal;color:var(--ink);background:var(--c);border-radius:2px;line-height:1}
+.tag.xs{width:1.1rem;height:1.1rem;font-size:.7rem}
+.tag.sm{width:1.35rem;height:1.35rem;font-size:.82rem}
+
+.seg{display:inline-grid;grid-auto-flow:column;gap:2px;padding:2px;border:1px solid var(--rule);background:var(--well);border-radius:4px}
+.seg button{display:flex;align-items:center;justify-content:center;gap:.4rem;padding:.4rem .95rem;font-size:.82rem;font-weight:600;color:var(--dim);border-radius:3px;white-space:nowrap}
+.seg button:hover{color:var(--text)}
+.seg button[aria-checked="true"]{background:var(--text);color:var(--ink)}
+.seg .vs{font-weight:400;opacity:.7}
+.chip{font-size:.74rem;font-weight:600;padding:.2rem .55rem;border:1px solid var(--rule);border-radius:3px;color:var(--dim);white-space:nowrap}
+.chip:hover{color:var(--text);border-color:var(--faint)}
+.chip[aria-pressed="true"]{background:var(--text);color:var(--ink);border-color:var(--text)}
+.search{background:rgba(236,231,216,.06);border:1px solid var(--rule);border-radius:3px;padding:.42rem .7rem;font-size:.88rem;width:100%;min-width:0}
+.search::placeholder{color:var(--faint)}
+.search:focus{outline:0;border-color:var(--text)}
+.esc{font-family:var(--font-mono);font-size:.68rem;border:1px solid var(--rule);border-radius:3px;padding:.3rem .5rem;color:var(--dim)}
+.esc:hover{border-color:var(--text);color:var(--text)}
+.swap{display:inline-flex;align-items:center;gap:.4rem;font-size:.76rem;font-weight:600;border:1px solid var(--rule);border-radius:3px;padding:.22rem .55rem;background:var(--well)}
+.swap:hover,.champ:hover .swap{border-color:var(--text)}
+
+/* ---------- top bar ---------- */
+.bar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:1rem;padding:0 1.5rem;border-bottom:1px solid var(--rule);background:var(--well)}
+.bar-l{display:flex;align-items:center;gap:2.2rem}
+.bar-r{display:flex;align-items:center;justify-content:flex-end;gap:1.1rem}
+.mark{display:inline-flex;align-items:baseline;font-stretch:108%;font-weight:800;font-size:1.2rem;letter-spacing:-.03em;color:var(--text);text-decoration:none}
+.mark b{font-weight:900;color:var(--ink);background:var(--a);border-radius:2px;padding:0 .26em}
+.mark span{padding-left:.12em;color:var(--dim)}
+.nav{display:flex;gap:1.4rem;font-size:.84rem;font-weight:500}
+.nav a{color:var(--dim);text-decoration:none;padding:.25rem 0;border-bottom:2px solid transparent}
+.nav a:hover{color:var(--text)}
+.nav a[aria-current]{color:var(--text);border-color:var(--text)}
+.nav i{font-style:normal;font-family:var(--font-mono);font-size:.66rem;border:1px solid var(--rule);border-radius:2px;padding:0 .3rem;margin-left:.3rem}
+.wf{font-family:var(--font-mono);font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);border:1px dashed var(--rule);padding:.25rem .5rem}
+.patch{font-family:var(--font-mono);font-size:.76rem;color:var(--dim)}
+.patch b{color:var(--text);font-weight:600}
+.btn{border:1px solid var(--rule);border-radius:3px;padding:.36rem .8rem;font-size:.82rem;font-weight:600}
+.btn:hover{border-color:var(--text)}
+
+/* ---------- main ---------- */
+.main{display:grid;grid-template-columns:minmax(34rem,1.15fr) 31rem minmax(24.5rem,.85fr);gap:1.5rem;padding:1.1rem 1.5rem;min-height:0}
+.main>*{min-width:0;min-height:0}
+.atk,.tgt{display:flex;flex-direction:column;justify-content:space-between;gap:1rem}
+
+/* attacker */
+.champ{position:relative;flex:1 1 6.2rem;min-height:6.2rem;max-height:10.5rem;display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;padding:.9rem 1rem;overflow:hidden;border:1px solid var(--rule);border-radius:4px;background:var(--well)}
+.champ:hover{border-color:var(--faint)}
+.champ-art{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 22%;opacity:.55;
+  -webkit-mask-image:linear-gradient(90deg,transparent 12%,#000 70%);mask-image:linear-gradient(90deg,transparent 12%,#000 70%)}
+.champ-txt{position:relative;display:grid;gap:.15rem}
+.champ-name{font-size:2rem;font-weight:800;letter-spacing:-.015em;line-height:1.05}
+.champ-title{color:var(--dim)}
+.champ .swap{position:relative}
+
+.lvl{display:grid;gap:.35rem}
+.lvl output{font-family:var(--font-mono);font-size:1.05rem;font-weight:700;color:var(--text);margin-left:.5rem;letter-spacing:0}
+.ruler{position:relative;display:grid;grid-template-columns:repeat(18,minmax(0,1fr));border-bottom:2px solid var(--rule);margin-bottom:1rem}
+.ruler::before{content:"";position:absolute;left:0;bottom:-2px;height:2px;background:var(--text);width:calc((var(--lv) - .5)/18*100%);transition:width .15s}
+.ruler button{position:relative;height:2.2rem;display:grid;justify-items:center;align-content:start;font-family:var(--font-mono);font-size:.72rem;color:var(--faint)}
+.ruler button::after{content:"";position:absolute;left:50%;bottom:0;width:1px;height:.45rem;background:var(--rule)}
+.ruler button.ult::after{height:.8rem}
+.ruler button[data-r]::before{content:attr(data-r);position:absolute;left:50%;top:calc(100% + .3rem);transform:translateX(-50%);font-size:.58rem;letter-spacing:.05em}
+.ruler button span{padding:.1rem .34rem;border-radius:3px}
+.ruler button:hover span{background:rgba(236,231,216,.14);color:var(--text)}
+.ruler button.past{color:var(--dim)}
+.ruler button.past::after{background:var(--text)}
+.ruler button.past[data-r]::before{color:var(--text)}
+.ruler button.now span{background:var(--text);color:var(--ink);font-weight:700}
+
+.skills{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.6rem 1.8rem;align-items:end}
+.skills .sec-head{grid-column:1/-1}
+.skill-row{display:flex;gap:1rem}
+.skill{display:grid;gap:.4rem;width:3.4rem}
+.skill-ico{position:relative;width:3.4rem;height:3.4rem;border:1px solid var(--rule);border-radius:3px;background:var(--well)}
+.skill-ico img{width:100%;height:100%;border-radius:2px}
+.skill.zero .skill-ico img{filter:grayscale(1) brightness(.5)}
+.skill-ico .k{position:absolute;left:-.4rem;top:-.4rem;font-family:var(--font-mono);font-size:.66rem;font-weight:700;line-height:1.35;padding:0 .3rem;background:var(--bg);border:1px solid var(--faint);border-radius:2px}
+.skill-ico .rk{position:absolute;right:.2rem;bottom:.05rem;font-family:var(--font-mono);font-size:.76rem;font-weight:700;text-shadow:0 0 .25rem #000,0 0 .12rem #000,0 0 .5rem #000}
+.pips{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:.14rem;height:.6rem}
+.pip{position:relative;border:1px solid var(--faint);border-radius:1px}
+.pip::after{content:"";position:absolute;inset:-.4rem -.08rem}
+.pip.on{background:var(--text);border-color:var(--text)}
+.pip:not(.on):hover,.pip:not(.on):has(~ .pip:hover){background:rgba(236,231,216,.4)}
+.pips-none{height:.6rem;font-size:.6rem;color:var(--faint);line-height:.6rem}
+.plan{display:grid;gap:.4rem;justify-items:start}
+.plan select{appearance:none;-webkit-appearance:none;cursor:pointer;font-family:var(--font-mono);font-size:.8rem;padding:.36rem 1.7rem .36rem .6rem;border:1px solid var(--rule);border-radius:3px;background:var(--well) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23ece7d8' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right .55rem center/.6rem}
+.plan select:hover{border-color:var(--faint)}
+.pts{font-size:.78rem;color:var(--dim)}
+.pts b{color:var(--text);font-weight:700}
+.pts.over b{color:var(--warn)}
+
+.builds{position:relative;display:grid;gap:.7rem;padding-bottom:.4rem}
+.build{display:grid;grid-template-columns:7rem minmax(0,1fr) auto;align-items:center;gap:.8rem}
+.b-meta{display:grid;gap:.25rem;min-width:0}
+.b-title{display:flex;align-items:center;gap:.45rem;min-width:0}
+.b-name{flex:1;min-width:0;width:100%;background:none;border:0;border-bottom:1px dashed transparent;padding:0;font-weight:700;font-size:.95rem;text-overflow:ellipsis}
+.b-name:hover{border-bottom-color:var(--faint)}
+.b-name:focus{outline:0;border-bottom:1px solid var(--text)}
+.b-gold{font-family:var(--font-mono);font-size:.74rem;color:var(--dim)}
+.b-gold b{color:var(--text);font-weight:600}
+.slots{display:grid;grid-template-columns:repeat(6,minmax(3.2rem,3.9rem));gap:.4rem;justify-content:start}
+.slot{position:relative;aspect-ratio:1;border:1px solid var(--rule);border-radius:3px;background:var(--well);cursor:pointer}
+.slot img{width:100%;height:100%;border-radius:2px}
+.slot:hover{border-color:var(--text)}
+.slot.empty{border-style:dashed;border-color:var(--faint)}
+.slot.empty::before{content:"+";position:absolute;inset:0;display:grid;place-items:center;font-family:var(--font-mono);font-size:1.1rem;color:var(--faint)}
+.slot.sel{outline:2px solid var(--text);outline-offset:2px}
+.slot .rm{position:absolute;top:-.45rem;right:-.45rem;width:1.15rem;height:1.15rem;display:none;place-items:center;border-radius:50%;background:var(--text);color:var(--ink);font-size:.8rem;font-weight:700;line-height:1}
+.slot:hover .rm,.slot:focus-within .rm{display:grid}
+body[data-compare="on"] .slot.uniq::after{content:"";position:absolute;left:0;right:0;bottom:-.38rem;height:.16rem;background:var(--c);border-radius:1px}
+.b-acts{display:grid;gap:.2rem}
+.act{min-width:2.3rem;height:1.5rem;display:grid;place-items:center;padding:0 .35rem;border:1px solid var(--rule);border-radius:3px;font-size:.66rem;font-weight:600;color:var(--dim)}
+.act:hover{border-color:var(--text);color:var(--text)}
+.add-b{height:3.2rem;display:flex;align-items:center;gap:.6rem;padding:0 .9rem;border:1px dashed var(--faint);border-radius:3px;font-weight:600;color:var(--dim)}
+.add-b:hover{border-color:var(--b);color:var(--text)}
+
+.picker{position:absolute;left:0;right:0;bottom:calc(100% + .8rem);height:22rem;z-index:20;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;background:var(--well);border:1px solid var(--faint);border-radius:4px;box-shadow:0 1rem 2rem rgba(0,0,0,.5)}
+.picker-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:.7rem;align-items:center;padding:.7rem .8rem .55rem}
+.picker-for{display:flex;align-items:center;gap:.45rem;font-weight:700;font-size:.86rem;white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:.3rem;padding:0 .8rem .6rem}
+.picker-grid{overflow:auto;padding:.2rem .8rem .8rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(2.8rem,1fr));gap:.4rem;align-content:start;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.pi{position:relative;aspect-ratio:1;border:1px solid var(--rule);border-radius:3px;overflow:hidden;background:var(--bg)}
+.pi img{width:100%;height:100%}
+.pi:hover,.pi:focus-visible{outline:2px solid var(--text);outline-offset:1px;z-index:1}
+.grp{grid-column:1/-1;padding-top:.3rem;font-size:.68rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+.picker-foot{display:flex;align-items:baseline;gap:.8rem;min-height:2.2rem;padding:.5rem .8rem;border-top:1px solid var(--rule);font-size:.78rem;color:var(--dim);white-space:nowrap;overflow:hidden}
+.picker-foot b{color:var(--text)}
+.picker-foot .g{font-family:var(--font-mono);color:var(--a)}
+.picker-foot span:last-child{overflow:hidden;text-overflow:ellipsis}
+
+/* ---------- damage table ---------- */
+.res{display:flex;flex-direction:column;max-height:46rem;padding:1rem 1.2rem .9rem;background:var(--panel);border:1px solid var(--rule);border-radius:5px}
+.res-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding-bottom:.65rem}
+.res-head h2{margin:0;font-size:1.15rem;font-weight:800;letter-spacing:-.01em}
+.res-head p{margin:.2rem 0 0;font-size:.8rem;color:var(--dim)}
+.pill{flex:none;font-size:.72rem;font-weight:700;padding:.22rem .6rem;border:1px solid var(--faint);border-radius:99px;white-space:nowrap}
+body[data-target="raw"] .pill{border-style:dashed;color:var(--dim)}
+.row{display:grid;grid-template-columns:2.4rem minmax(0,1fr) 4.3rem 4.3rem 3.9rem;column-gap:.5rem;align-items:center}
+body[data-compare="off"] .row{grid-template-columns:2.4rem minmax(0,1fr) 4.8rem 3.4rem}
+.cols{padding:.4rem 0;border-block:1px solid var(--rule);font-size:.68rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
+.cols>*:nth-child(n+3){justify-self:end}
+.lines{flex:1 0 auto;display:grid;grid-auto-rows:minmax(1.7rem,1fr)}
+.line{border-bottom:1px solid rgba(37,80,77,.6)}
+.q{display:flex;align-items:baseline;justify-content:center;font-family:var(--font-mono);font-size:.8rem;color:var(--faint)}
+.q input{width:1.3rem;padding:0;border:0;border-bottom:1px dotted var(--faint);background:none;color:var(--text);font-weight:600;text-align:right;appearance:textfield;-moz-appearance:textfield}
+.q input::-webkit-inner-spin-button{-webkit-appearance:none}
+.q input:focus{outline:0;border-bottom:1px solid var(--text)}
+.src{display:flex;align-items:center;gap:.5rem;min-width:0;white-space:nowrap}
+.src .k{flex:none;display:inline-grid;place-items:center;min-width:1.35rem;height:1.3rem;padding:0 .15rem;border:1px solid var(--faint);border-radius:2px;font-family:var(--font-mono);font-size:.64rem;font-weight:700;color:var(--dim)}
+.src .nm{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.ty{flex:none;font-size:.66rem;font-weight:600}
+.ty.p{color:var(--phys)} .ty.m{color:var(--magic)} .ty.none{color:var(--faint);font-weight:400}
+.n,.g,.sh{justify-self:end;font-family:var(--font-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.n i,.g i{font-style:normal}
+.n{font-size:.9rem}
+body[data-compare="on"] .n{color:var(--dim)}
+body[data-compare="on"] .n.win{color:var(--text);font-weight:700}
+.g{font-size:.76rem;font-weight:600;color:var(--c)}
+.sh{font-size:.8rem;color:var(--dim)}
+.total{padding:.6rem 0 .3rem}
+.total .tl{grid-column:1/3;display:grid;gap:.1rem}
+.total .tl b{font-size:1.15rem;font-weight:800}
+.total .tl span{font-size:.74rem;color:var(--dim)}
+.total .n{font-size:1.3rem;font-weight:700}
+body[data-compare="off"] .total .n{color:var(--a)}
+.total .g{font-size:.86rem}
+.mix{padding-bottom:.6rem;border-bottom:1px solid var(--rule)}
+.mix .ml{grid-column:1/3;display:flex;gap:.9rem;font-size:.72rem;color:var(--dim)}
+.mix .ml span{display:inline-flex;align-items:center;gap:.3rem}
+.sw{width:.55rem;height:.55rem;border-radius:1px;background:var(--c)}
+.split{display:flex;width:100%;height:.4rem;border-radius:1px;overflow:hidden}
+.split i{display:block;background:var(--c)}
+.p{--c:var(--phys)} .m{--c:var(--magic)} .t{--c:var(--text)}
+.more{display:grid;gap:.3rem;padding:.55rem 0}
+.more .ml{grid-column:1/3;color:var(--dim)}
+.verdict{display:grid;gap:.35rem;padding:.55rem 0 0;border-top:1px solid var(--rule)}
+.vd{display:flex;align-items:center;gap:.55rem;font-size:.82rem;white-space:nowrap}
+.vd p{margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--dim)}
+.vd p b{color:var(--text)}
+
+/* ---------- target ---------- */
+.tgt-mode{display:grid;gap:.5rem}
+.tgt-mode .seg{display:grid;grid-auto-columns:1fr}
+.tgt-mode .seg button{padding:.42rem .3rem}
+.who{display:flex;align-items:center;gap:.9rem;min-height:4rem;padding:.8rem .9rem;border:1px solid var(--rule);border-radius:4px;background:var(--well)}
+.who-ico{flex:none;width:3.2rem;height:3.2rem;border:1px solid var(--rule);border-radius:3px;background:var(--bg);color:var(--dim)}
+.who-txt{display:grid;gap:.25rem;min-width:0;justify-items:start}
+.who-name{font-size:1.2rem;font-weight:800;letter-spacing:-.01em;line-height:1.1}
+button.who-name:hover{text-decoration:underline;text-underline-offset:.2em}
+.who-sub{font-size:.8rem;color:var(--dim);line-height:1.3}
+.enemy-row{display:flex;align-items:center;gap:.6rem}
+.mini{display:inline-flex;align-items:center;gap:.45rem;font-family:var(--font-mono);font-size:.78rem;border:1px solid var(--rule);border-radius:3px;padding:.1rem .2rem;background:var(--bg)}
+.mini b{font-weight:600}
+.mini button{width:1.2rem;height:1.2rem;display:grid;place-items:center;color:var(--dim);border-radius:2px}
+.mini button:hover{color:var(--ink);background:var(--text)}
+
+.hits{display:grid;gap:.45rem}
+.hp{display:grid;grid-template-columns:1.35rem minmax(0,1fr) 5.4rem;gap:.6rem;align-items:center}
+.hpbar{position:relative;height:.9rem;border:1px solid var(--faint);border-radius:2px;overflow:hidden;background:color-mix(in srgb,var(--c) 50%,transparent)}
+.hpbar i{position:absolute;inset:0 auto 0 0;width:var(--left);background:var(--text);transition:width .2s}
+.hpbar::after{content:"";position:absolute;inset:0;background:
+  repeating-linear-gradient(90deg,transparent 0 calc(100000%/var(--hpv) - 2px),rgba(8,28,27,.95) 0 calc(100000%/var(--hpv))),
+  repeating-linear-gradient(90deg,transparent 0 calc(10000%/var(--hpv) - 1px),rgba(8,28,27,.45) 0 calc(10000%/var(--hpv)))}
+.hp-txt{font-family:var(--font-mono);font-size:.76rem;color:var(--dim);text-align:right;white-space:nowrap}
+.hp-txt b{color:var(--text);font-weight:600}
+
+.tune{display:grid;gap:.6rem}
+.presets{display:flex;gap:.3rem}
+.dials{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.1rem}
+.dial{display:grid;gap:.2rem;min-width:0}
+.dial input[type=number]{width:100%;min-width:0;padding:0 0 .05rem;border:0;border-bottom:1px dashed var(--faint);background:none;font-family:var(--font-mono);font-size:1.6rem;font-weight:600;letter-spacing:-.03em;appearance:textfield;-moz-appearance:textfield}
+.dial input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+.dial input[type=number]:hover{border-bottom-color:var(--text)}
+.dial input[type=number]:focus{outline:0;border-bottom:1px solid var(--text)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:1rem;background:none;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--rule)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:.8rem;height:.8rem;margin-top:calc(1px - .4rem);background:var(--text);border-radius:50%}
+input[type=range]::-moz-range-track{height:2px;background:var(--rule)}
+input[type=range]::-moz-range-thumb{width:.8rem;height:.8rem;border:0;background:var(--text);border-radius:50%}
+.dial-note{font-size:.72rem;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.t-inv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.5rem .9rem;align-items:center}
+.t-inv .sec-head{grid-column:1/-1;justify-content:flex-start}
+.t-slots{display:flex;gap:.35rem}
+.t-slots span{width:2.3rem;height:2.3rem;border:1px dashed var(--faint);border-radius:3px;opacity:.55}
+.t-inv p{margin:0;font-size:.76rem;line-height:1.25;color:var(--faint)}
+.soon{font-size:.62rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);border:1px solid var(--faint);border-radius:99px;padding:.02rem .45rem}
+
+/* ---------- stat strip ---------- */
+.ledger{display:grid;grid-template-columns:9.5rem repeat(12,minmax(0,1fr));padding:0 1.5rem;border-top:1px solid var(--rule);background:var(--well)}
+.l-head{display:grid;align-content:start;gap:.25rem;padding:.85rem .9rem 0 0}
+.l-head b{font-size:1rem;font-weight:800}
+.l-head span{font-size:.74rem;line-height:1.25;color:var(--dim)}
+.cell{display:grid;align-content:start;gap:.26rem;min-width:0;padding:.85rem .4rem 0 .7rem;border-left:1px solid var(--rule)}
+.cell .lbl{font-size:.64rem;letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v{display:flex;align-items:baseline;gap:.4rem;font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:1rem;line-height:1.15;color:var(--dim)}
+.v b{font-weight:500}
+.v.win{color:var(--text)}
+.v.win b{font-weight:700}
+.v em,.cell>em{font-style:normal;font-family:var(--font-mono);font-size:.64rem;color:var(--faint);white-space:nowrap}
+.cell>em{overflow:hidden;text-overflow:ellipsis}
+.dot{flex:none;align-self:center;width:.5rem;height:.5rem;background:var(--c);border-radius:1px}
+.cell.same .v{color:var(--faint)}
+.cell.same .dot{opacity:.5}
+.cell.same .dot+.dot{margin-left:-.25rem}
+.v.solo{font-size:1.6rem;color:var(--text)}
+.v.solo b{font-weight:600}
+
+/* ---------- champion picker ---------- */
+.veil{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:rgba(4,16,15,.74)}
+.cm{width:min(62rem,92vw);height:min(38rem,84vh);display:grid;grid-template-rows:auto auto minmax(0,1fr);background:var(--well);border:1px solid var(--faint);border-radius:5px;box-shadow:0 2rem 4rem rgba(0,0,0,.6)}
+.cm-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:1.1rem;align-items:center;padding:1rem 1.1rem .7rem}
+.cm-head h2{margin:0;font-size:1.15rem;font-weight:800}
+.cm .chips{padding:0 1.1rem .7rem}
+.cm-grid{overflow:auto;padding:.3rem 1.1rem 1.1rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(4.5rem,1fr));gap:.7rem .5rem;align-content:start;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.ct{display:grid;gap:.25rem;justify-items:center;font-size:.7rem;text-align:center;color:var(--dim)}
+.ct img{width:100%;aspect-ratio:1;border:1px solid var(--rule);border-radius:3px;background:var(--bg)}
+.ct:hover{color:var(--text)}
+.ct:hover img,.ct:focus-visible img{outline:2px solid var(--text);outline-offset:1px}
+</style>
+</head>
+<body data-compare="on" data-target="dummy">
+<div class="app">
+  <header class="bar">
+    <div class="bar-l">
+      <a class="mark" href="#" aria-label="itemize.lol"><b>itemize</b><span>.lol</span></a>
+      <nav class="nav" aria-label="Site">
+        <a href="#" aria-current="page">Workbench</a>
+        <a href="#">Saved builds<i>3</i></a>
+      </nav>
+    </div>
+    <div class="seg" id="cmp-seg" role="radiogroup" aria-label="How many builds">
+      <button role="radio" data-cmp="off" aria-checked="false">One build</button>
+      <button role="radio" data-cmp="on" aria-checked="true">Compare <span class="tag a xs">A</span><span class="vs">vs</span><span class="tag b xs">B</span></button>
+    </div>
+    <div class="bar-r">
+      <span class="wf">Wireframe, sample numbers</span>
+      <span class="patch">Patch <b id="patch">…</b></span>
+      <button class="btn" id="share">Copy build link</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- attacker: champion, level, ranks, items -->
+    <section class="atk" aria-label="Your champion and builds">
+      <button class="champ" id="champ-btn" title="Change champion">
+        <img class="champ-art" id="atk-splash" alt="">
+        <span class="champ-txt">
+          <span class="lbl">Champion</span>
+          <span class="champ-name" id="champ-name">Kai'Sa</span>
+          <span class="champ-title" id="champ-title">Daughter of the Void</span>
+        </span>
+        <span class="swap">Change <span class="key">C</span></span>
+      </button>
+
+      <div class="lvl">
+        <div class="sec-head"><span class="lbl">Level<output id="lvl-out">13</output></span></div>
+        <div class="ruler" id="ruler" role="group" aria-label="Champion level"></div>
+      </div>
+
+      <div class="skills">
+        <div class="sec-head"><span class="lbl">Ability ranks</span><span class="hint">Click a pip to set a rank</span></div>
+        <div class="skill-row" id="skill-row">
+          <div class="skill passive" data-k="p"><div class="skill-ico"><img alt=""><span class="k">P</span></div><div class="pips-none">passive</div></div>
+          <div class="skill" data-k="q"><div class="skill-ico"><img alt=""><span class="k">Q</span><span class="rk"></span></div><div class="pips"></div></div>
+          <div class="skill" data-k="w"><div class="skill-ico"><img alt=""><span class="k">W</span><span class="rk"></span></div><div class="pips"></div></div>
+          <div class="skill" data-k="e"><div class="skill-ico"><img alt=""><span class="k">E</span><span class="rk"></span></div><div class="pips"></div></div>
+          <div class="skill" data-k="r"><div class="skill-ico"><img alt=""><span class="k">R</span><span class="rk"></span></div><div class="pips"></div></div>
+        </div>
+        <div class="plan">
+          <label class="lbl" for="order">Max order</label>
+          <select id="order">
+            <option value="qew">Q › E › W</option>
+            <option value="qwe">Q › W › E</option>
+            <option value="wqe">W › Q › E</option>
+            <option value="weq">W › E › Q</option>
+            <option value="eqw">E › Q › W</option>
+            <option value="ewq">E › W › Q</option>
+            <option value="manual">Set by hand</option>
+          </select>
+          <span class="pts" id="pts"><b>13</b> of 13 points spent</span>
+        </div>
+      </div>
+
+      <div class="builds" id="builds">
+        <div class="sec-head">
+          <span class="lbl">Items</span>
+          <span class="hint only-cmp">Both builds use the level and ranks above. Underlined items differ.</span>
+          <span class="hint only-solo">Click a slot to change it</span>
+        </div>
+        <div class="build a" data-b="a">
+          <div class="b-meta"><div class="b-title"><span class="tag a sm">A</span><input class="b-name" id="name-a" value="On-hit" aria-label="Name of build A" spellcheck="false"></div><span class="b-gold"><b>0</b> gold</span></div>
+          <div class="slots"></div>
+          <div class="b-acts"><button class="act" id="clear-a" title="Empty all six slots">Clear</button></div>
+        </div>
+        <div class="build b only-cmp" data-b="b">
+          <div class="b-meta"><div class="b-title"><span class="tag b sm">B</span><input class="b-name" id="name-b" value="AP burst" aria-label="Name of build B" spellcheck="false"></div><span class="b-gold"><b>0</b> gold</span></div>
+          <div class="slots"></div>
+          <div class="b-acts"><button class="act" id="copy-a" title="Start build B from build A's items">Copy A</button><button class="act" id="rm-b" title="Remove build B">Remove</button></div>
+        </div>
+        <button class="add-b only-solo" id="add-b"><span class="tag b sm">B</span>Add a second build to compare</button>
+
+        <div class="picker" id="picker" role="dialog" aria-label="Choose an item" hidden>
+          <div class="picker-head">
+            <span class="picker-for" id="picker-for"></span>
+            <input class="search" type="search" id="item-q" placeholder="Search items" autocomplete="off" aria-label="Search items">
+            <button class="esc" id="picker-x">Esc</button>
+          </div>
+          <div class="chips" id="item-chips"></div>
+          <div class="picker-grid" id="item-grid"></div>
+          <div class="picker-foot" id="item-foot"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- damage table -->
+    <section class="res" aria-label="Damage">
+      <header class="res-head">
+        <div><h2>Damage</h2><p id="r-sub">Kai'Sa, level 13, against a dummy</p></div>
+        <span class="pill" id="r-mode">After mitigation</span>
+      </header>
+      <div class="row cols">
+        <span>Qty</span><span>Source</span>
+        <span class="only-cmp"><span class="tag a xs">A</span></span>
+        <span class="only-cmp"><span class="tag b xs">B</span></span>
+        <span class="only-cmp">Gap</span>
+        <span class="only-solo">Damage</span><span class="only-solo">Share</span>
+      </div>
+      <div class="lines">
+        <div class="row line" data-k="aa">
+          <label class="q"><input type="number" id="q-aa" value="3" min="0" max="30" aria-label="Number of auto attacks"><span>×</span></label>
+          <span class="src"><span class="k">AA</span><span class="nm">Auto attack</span><span class="ty p">physical</span></span>
+          <span class="n a win" data-win="always"><i data-raw="745" data-mit="414">414</i></span>
+          <span class="n b only-cmp"><i data-raw="470" data-mit="261">261</i></span>
+          <span class="g a only-cmp"><i data-raw="+275" data-mit="+153">+153</i></span>
+          <span class="sh only-solo">26%</span>
+        </div>
+        <div class="row line" data-k="q">
+          <label class="q"><input type="number" id="q-q" value="1" min="0" max="30" aria-label="Number of Q casts"><span>×</span></label>
+          <span class="src"><span class="k">Q</span><span class="nm">Icathian Rain</span><span class="ty p">physical</span></span>
+          <span class="n a win" data-win="always"><i data-raw="698" data-mit="388">388</i></span>
+          <span class="n b only-cmp"><i data-raw="614" data-mit="341">341</i></span>
+          <span class="g a only-cmp"><i data-raw="+84" data-mit="+47">+47</i></span>
+          <span class="sh only-solo">24%</span>
+        </div>
+        <div class="row line" data-k="w">
+          <label class="q"><input type="number" id="q-w" value="1" min="0" max="30" aria-label="Number of W casts"><span>×</span></label>
+          <span class="src"><span class="k">W</span><span class="nm">Void Seeker</span><span class="ty m">magic</span></span>
+          <span class="n a"><i data-raw="393" data-mit="262">262</i></span>
+          <span class="n b win only-cmp" data-win="always"><i data-raw="822" data-mit="548">548</i></span>
+          <span class="g b only-cmp"><i data-raw="+429" data-mit="+286">+286</i></span>
+          <span class="sh only-solo">16%</span>
+        </div>
+        <div class="row line" data-k="e">
+          <span class="q">–</span>
+          <span class="src"><span class="k">E</span><span class="nm">Supercharge</span><span class="ty none">no damage</span></span>
+          <span class="n a">–</span><span class="n b only-cmp">–</span><span class="only-cmp"></span>
+          <span class="sh only-solo">–</span>
+        </div>
+        <div class="row line" data-k="r">
+          <span class="q">–</span>
+          <span class="src"><span class="k">R</span><span class="nm">Killer Instinct</span><span class="ty none">no damage</span></span>
+          <span class="n a">–</span><span class="n b only-cmp">–</span><span class="only-cmp"></span>
+          <span class="sh only-solo">–</span>
+        </div>
+        <div class="row line" data-k="p">
+          <span class="q"></span>
+          <span class="src"><span class="k">P</span><span class="nm">Second Skin</span><span class="ty m">magic</span></span>
+          <span class="n a"><i data-raw="452" data-mit="301">301</i></span>
+          <span class="n b win only-cmp" data-win="always"><i data-raw="558" data-mit="372">372</i></span>
+          <span class="g b only-cmp"><i data-raw="+106" data-mit="+71">+71</i></span>
+          <span class="sh only-solo">19%</span>
+        </div>
+        <div class="row line" data-k="items">
+          <span class="q"></span>
+          <span class="src"><span class="k">+</span><span class="nm">Item effects</span><span class="ty m">magic</span></span>
+          <span class="n a win" data-win="always"><i data-raw="368" data-mit="245">245</i></span>
+          <span class="n b only-cmp"><i data-raw="281" data-mit="187">187</i></span>
+          <span class="g a only-cmp"><i data-raw="+87" data-mit="+58">+58</i></span>
+          <span class="sh only-solo">15%</span>
+        </div>
+      </div>
+      <div class="row total">
+        <span class="tl"><b>Total</b><span>3 autos, Q and W on one target</span></span>
+        <span class="n a"><i data-raw="2,656" data-mit="1,610">1,610</i></span>
+        <span class="n b win only-cmp" data-win="always"><i data-raw="2,745" data-mit="1,709">1,709</i></span>
+        <span class="g b only-cmp"><i data-raw="+89" data-mit="+99">+99</i></span>
+        <span class="sh only-solo">100%</span>
+      </div>
+      <div class="row mix">
+        <span class="ml"><span><i class="sw p"></i>physical</span><span><i class="sw m"></i>magic</span><span><i class="sw t"></i>true</span></span>
+        <span class="split" title="Build A: 50% physical, 50% magic"><i class="p" style="width:50%"></i><i class="m" style="width:50%"></i></span>
+        <span class="split only-cmp" title="Build B: 35% physical, 65% magic"><i class="p" style="width:35%"></i><i class="m" style="width:65%"></i></span>
+        <span></span>
+      </div>
+      <div class="more">
+        <div class="row"><span class="ml">Blocked by target</span>
+          <span class="n a"><i data-raw="–" data-mit="−1,046">−1,046</i></span>
+          <span class="n b only-cmp"><i data-raw="–" data-mit="−1,036">−1,036</i></span><span></span></div>
+        <div class="row"><span class="ml">DPS, autos and procs</span>
+          <span class="n a win" data-win="cmp"><i data-raw="1,121" data-mit="684">684</i></span>
+          <span class="n b only-cmp"><i data-raw="742" data-mit="472">472</i></span>
+          <span class="g a only-cmp"><i data-raw="+379" data-mit="+212">+212</i></span><span class="only-solo"></span></div>
+        <div class="row"><span class="ml">Time to kill</span>
+          <span class="n a win" data-win="mit-cmp"><i data-raw="–" data-mit="3.5 s">3.5 s</i></span>
+          <span class="n b only-cmp"><i data-raw="–" data-mit="5.1 s">5.1 s</i></span>
+          <span class="g a only-cmp"><i data-raw="" data-mit="−1.6 s">−1.6 s</i></span><span class="only-solo"></span></div>
+      </div>
+      <div class="verdict only-cmp">
+        <span class="lbl">Where each build wins</span>
+        <div class="vd"><span class="tag a sm">A</span><p><b>Long fights.</b> +45% DPS, kills 1.6 s sooner</p></div>
+        <div class="vd"><span class="tag b sm">B</span><p><b>Burst.</b> +6% combo, W hits 2.1× harder</p></div>
+      </div>
+    </section>
+
+    <!-- target -->
+    <section class="tgt" aria-label="Target">
+      <div class="tgt-mode">
+        <span class="lbl">Show damage as</span>
+        <div class="seg" id="tseg" role="radiogroup" aria-label="Show damage as">
+          <button role="radio" data-t="raw" aria-checked="false">Raw output</button>
+          <button role="radio" data-t="dummy" aria-checked="true">Target dummy</button>
+          <button role="radio" data-t="champ" aria-checked="false">Enemy champion</button>
+        </div>
+      </div>
+
+      <div class="who">
+        <svg class="who-ico only-dummy" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="24" cy="12" r="5.5"/><path d="M10 23h28M24 18v24M17 42h14"/><circle cx="24" cy="29" r="5"/>
+        </svg>
+        <div class="who-txt only-dummy"><span class="who-name">Target dummy</span><span class="who-sub">Stands still. Set its numbers below.</span></div>
+
+        <img class="who-ico only-champ" id="enemy-img" alt="">
+        <div class="who-txt only-champ">
+          <button class="who-name" id="enemy-btn" title="Change target champion">Ornn</button>
+          <div class="enemy-row">
+            <span class="mini"><button id="el-dn" aria-label="Lower target level">−</button><span>Lv <b id="el">13</b></span><button id="el-up" aria-label="Raise target level">+</button></span>
+            <button class="swap" id="enemy-swap">Change</button>
+          </div>
+        </div>
+
+        <div class="who-txt only-raw"><span class="who-name">No target</span><span class="who-sub">Numbers show damage as it leaves <span id="raw-champ">Kai'Sa</span>, before armor and magic resist.</span></div>
+      </div>
+
+      <div class="hits needs-target" id="hits" style="--hpv:2400">
+        <div class="sec-head"><span class="lbl">Health after the combo</span><span class="hint">one tick = 100 HP</span></div>
+        <div class="hp a"><span class="tag a sm">A</span><div class="hpbar" id="bar-a"><i></i></div><span class="hp-txt"><b id="left-a">790</b> left</span></div>
+        <div class="hp b only-cmp"><span class="tag b sm">B</span><div class="hpbar" id="bar-b"><i></i></div><span class="hp-txt"><b id="left-b">691</b> left</span></div>
+      </div>
+
+      <div class="tune needs-target">
+        <div class="sec-head">
+          <span class="lbl">Target stats</span>
+          <div class="presets only-dummy" id="presets">
+            <button class="chip" data-preset="1800,50,40" aria-pressed="false">Squishy</button>
+            <button class="chip" data-preset="2800,110,70" aria-pressed="false">Bruiser</button>
+            <button class="chip" data-preset="4000,200,120" aria-pressed="false">Tank</button>
+          </div>
+          <span class="hint only-champ" id="auto-note">Base stats at level 13. Edit to override.</span>
+        </div>
+        <div class="dials">
+          <div class="dial"><label class="lbl" for="t-hp">Health</label>
+            <input type="number" id="t-hp" value="2400" min="100" max="10000" step="50">
+            <input type="range" id="t-hp-r" value="2400" min="500" max="8000" step="50" aria-label="Health slider">
+            <span class="dial-note" id="n-hp"></span></div>
+          <div class="dial"><label class="lbl" for="t-ar">Armor</label>
+            <input type="number" id="t-ar" value="80" min="0" max="600" step="5">
+            <input type="range" id="t-ar-r" value="80" min="0" max="400" step="5" aria-label="Armor slider">
+            <span class="dial-note" id="n-ar"></span></div>
+          <div class="dial"><label class="lbl" for="t-mr">Magic resist</label>
+            <input type="number" id="t-mr" value="50" min="0" max="600" step="5">
+            <input type="range" id="t-mr-r" value="50" min="0" max="400" step="5" aria-label="Magic resist slider">
+            <span class="dial-note" id="n-mr"></span></div>
+        </div>
+      </div>
+
+      <div class="t-inv needs-target">
+        <div class="sec-head"><span class="lbl">Target items</span><span class="soon">soon</span></div>
+        <div class="t-slots" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <p>Their items will add to the stats above.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="ledger" aria-label="Champion stats">
+    <div class="l-head"><b>Stats</b><span id="l-sub">Kai'Sa at level 13, items included</span></div>
+    <div id="ledger-cells" style="display:contents"></div>
+  </footer>
+</div>
+
+<div class="veil" id="champ-modal" hidden>
+  <div class="cm" role="dialog" aria-labelledby="cm-title">
+    <div class="cm-head">
+      <h2 id="cm-title">Choose a champion</h2>
+      <input class="search" type="search" id="champ-q" placeholder="Type a name" autocomplete="off" aria-label="Search champions">
+      <button class="esc" id="champ-x">Esc</button>
+    </div>
+    <div class="chips" id="champ-chips"></div>
+    <div class="cm-grid" id="champ-grid"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+/* Icons: Data Dragon for champions, items and spells; Community Dragon as the ability-icon fallback.
+   Nothing here calculates damage. Numbers in the table and the stat strip are fixed sample data. */
+const DD = 'https://ddragon.leagueoflegends.com';
+const CD = 'https://cdn.communitydragon.org/latest';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const nf = n => Math.round(n).toLocaleString('en-US');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const S = {
+  ver: '15.1.1',
+  champ: {id:'Kaisa', key:'145', name:"Kai'Sa", title:'Daughter of the Void'},
+  kit: null,
+  level: 13,
+  ranks: {q:5, w:1, e:5, r:2},
+  order: 'qew',
+  builds: {a:[6672,3006,3124,3115,null,null], b:[6655,3020,3115,4645,null,null]},
+  compare: true,
+  target: 'dummy',
+  dummy: {hp:2400, ar:80, mr:50},
+  enemy: {id:'Ornn', key:'516', name:'Ornn', level:13, stats:null},
+  items: new Map(),
+  champs: [],
+};
+const TOTAL = {a:1610, b:1709};
+
+const SEED_ITEMS = [
+  [6672,'Kraken Slayer',3100,['Damage','AttackSpeed','OnHit']],[3124,"Guinsoo's Rageblade",3000,['Damage','SpellDamage','AttackSpeed','OnHit']],
+  [3115,"Nashor's Tooth",2900,['SpellDamage','AttackSpeed','OnHit','AbilityHaste']],[3153,'Blade of the Ruined King',3200,['Damage','AttackSpeed','OnHit']],
+  [3031,'Infinity Edge',3450,['Damage','CriticalStrike']],[3036,"Lord Dominik's Regards",3100,['Damage','CriticalStrike','ArmorPenetration']],
+  [3072,'Bloodthirster',3400,['Damage','LifeSteal']],[3046,'Phantom Dancer',2650,['AttackSpeed','CriticalStrike']],
+  [3085,"Runaan's Hurricane",2650,['AttackSpeed','CriticalStrike','OnHit']],[3091,"Wit's End",2800,['AttackSpeed','SpellBlock','OnHit']],
+  [3302,'Terminus',3000,['Damage','AttackSpeed','OnHit']],[6676,'The Collector',3000,['Damage','CriticalStrike','ArmorPenetration']],
+  [3142,"Youmuu's Ghostblade",2800,['Damage','ArmorPenetration']],[3071,'Black Cleaver',3000,['Damage','Health','AbilityHaste']],
+  [3026,'Guardian Angel',3200,['Damage','Armor']],[6655,"Luden's Companion",2750,['SpellDamage','AbilityHaste']],
+  [4645,'Shadowflame',3200,['SpellDamage','MagicPenetration']],[3089,"Rabadon's Deathcap",3500,['SpellDamage']],
+  [3157,"Zhonya's Hourglass",3250,['SpellDamage','Armor']],[3135,'Void Staff',3000,['SpellDamage','MagicPenetration']],
+  [3100,'Lich Bane',2900,['SpellDamage','AbilityHaste']],[6653,"Liandry's Torment",3000,['SpellDamage','Health']],
+  [3065,'Spirit Visage',2700,['Health','SpellBlock','AbilityHaste']],[3075,'Thornmail',2450,['Health','Armor']],
+  [3143,"Randuin's Omen",2700,['Health','Armor']],[3083,"Warmog's Armor",3100,['Health']],
+  [3006,"Berserker's Greaves",1100,['Boots','AttackSpeed']],[3020,"Sorcerer's Shoes",1100,['Boots','MagicPenetration']],
+  [3047,'Plated Steelcaps',1200,['Boots','Armor']],[3111,"Mercury's Treads",1250,['Boots','SpellBlock']],
+];
+SEED_ITEMS.forEach(([id,name,gold,tags]) => S.items.set(id, {id, name, gold, tags, plain:'', into:false}));
+
+const SEED_CHAMPS = [['Aatrox',266],['Ahri',103],['Akali',84],['Ashe',22],['Caitlyn',51],['Darius',122],['Ezreal',81],['Garen',86],['Jhin',202],['Jinx',222],['Kaisa',145,"Kai'Sa"],['Lux',99],['Malphite',54],['Ornn',516],['Riven',92],['Vayne',67],['Yasuo',157],['Zed',238]]
+  .map(([id,key,name]) => ({id, key:String(key), name:name||id, title:'', tags:[], stats:null}));
+
+const ITEM_FILTERS = [
+  ['All', null], ['Attack damage',['Damage']], ['Ability power',['SpellDamage']], ['Attack speed',['AttackSpeed']],
+  ['Crit',['CriticalStrike']], ['On-hit',['OnHit']], ['Penetration',['ArmorPenetration','MagicPenetration']],
+  ['Haste',['AbilityHaste','CooldownReduction']], ['Defense',['Health','Armor','SpellBlock']], ['Boots',['Boots']],
+];
+const ROLES = ['All','Fighter','Tank','Mage','Assassin','Marksman','Support'];
+
+/* sample stats: label, build A, build B, note shown with one build */
+const STATS = [
+  ['Attack damage',163,88,'88 base + 75'], ['Ability power',110,290,'all from items'], ['Attack speed',1.67,1.09,'0.644 +160%'],
+  ['Crit chance','0%','0%','no crit items'], ['Lethality',0,0,'none'], ['Magic pen',0,27,'none'],
+  ['Ability haste',15,25,'−13% cooldowns'], ['Health',1757,1757,'base at Lv 13'], ['Mana',783,1383,'base at Lv 13'],
+  ['Armor',71,71,'base at Lv 13'], ['Magic resist',44,44,'base at Lv 13'], ['Move speed',380,380,'335 base + 45'],
+];
+
+const itemImg = id => `${DD}/cdn/${S.ver}/img/item/${id}.png`;
+const champSq = id => `${DD}/cdn/${S.ver}/img/champion/${id}.png`;
+const splash  = id => `${DD}/cdn/img/champion/splash/${id}_0.jpg`;
+
+/* ---------- champion ---------- */
+function paintChamp() {
+  const c = S.champ;
+  $('#champ-name').textContent = c.name;
+  $('#champ-title').textContent = c.title ? c.title[0].toUpperCase() + c.title.slice(1) : '';
+  $('#atk-splash').src = splash(c.id);
+  $('#raw-champ').textContent = c.name;
+  paintSub();
+}
+function paintSub() {
+  $('#l-sub').textContent = `${S.champ.name} at level ${S.level}, items included`;
+  const e = S.enemy, t = S.target;
+  $('#r-sub').textContent = `${S.champ.name}, level ${S.level}, ` +
+    (t === 'raw' ? 'no target' : t === 'dummy' ? 'against a dummy' : `against ${e.name} at level ${e.level}`);
+  $('#r-mode').textContent = t === 'raw' ? 'Raw output' : 'After mitigation';
+}
+function defaultKit() {
+  const k = {}, c = S.champ;
+  ['p','q','w','e','r'].forEach(x => k[x] = [x === 'p' ? 'Passive' : x.toUpperCase() + ' ability', `${CD}/champion/${c.key}/ability-icon/${x}`]);
+  return k;
+}
+async function loadKit() {
+  const c = S.champ;
+  let kit;
+  try {
+    const d = (await (await fetch(`${DD}/cdn/${S.ver}/data/en_US/champion/${c.id}.json`)).json()).data[c.id];
+    kit = {p: [d.passive.name, `${DD}/cdn/${S.ver}/img/passive/${d.passive.image.full}`]};
+    ['q','w','e','r'].forEach((x, i) => kit[x] = [d.spells[i].name, `${DD}/cdn/${S.ver}/img/spell/${d.spells[i].image.full}`]);
+  } catch (e) { kit = defaultKit(); }
+  if (S.champ !== c) return;
+  S.kit = kit;
+  paintKit();
+}
+function paintKit() {
+  for (const k of ['p','q','w','e','r']) {
+    const [name, src] = S.kit[k];
+    const tile = $(`.skill[data-k="${k}"]`);
+    $('img', tile).src = src;
+    tile.title = name;
+    $(`.line[data-k="${k}"] .nm`).textContent = name;
+  }
+}
+function setChamp(c) {
+  S.champ = c;
+  S.kit = defaultKit();
+  paintChamp(); paintKit(); loadKit();
+}
+
+/* ---------- level and ranks ---------- */
+function buildRuler() {
+  $('#ruler').innerHTML = Array.from({length: 18}, (_, i) => {
+    const l = i + 1, r = {6:'R1', 11:'R2', 16:'R3'}[l];
+    return `<button data-l="${l}"${r ? ` data-r="${r}" class="ult"` : ''} aria-label="Level ${l}"><span>${l}</span></button>`;
+  }).join('');
+}
+function paintLevel() {
+  $('#lvl-out').textContent = S.level;
+  $('#ruler').style.setProperty('--lv', S.level);
+  $$('#ruler button').forEach(b => {
+    const l = +b.dataset.l;
+    b.classList.toggle('past', l <= S.level);
+    b.classList.toggle('now', l === S.level);
+    b.setAttribute('aria-pressed', l === S.level);
+  });
+  paintSub();
+}
+function autoRanks() {
+  const ord = [...S.order], r = {q:0, w:0, e:0, r:0};
+  for (let l = 1; l <= S.level; l++) {
+    if (l === 6 || l === 11 || l === 16) { r.r++; continue; }
+    const cap = Math.ceil(l / 2);
+    const k = l <= 3 ? ord[l - 1] : (ord.find(x => r[x] < 5 && r[x] < cap) || ord.find(x => r[x] < 5));
+    if (k) r[k]++;
+  }
+  S.ranks = r;
+}
+function paintSkills() {
+  for (const k of ['q','w','e','r']) {
+    const max = k === 'r' ? 3 : 5, el = $(`.skill[data-k="${k}"]`);
+    $('.pips', el).innerHTML = Array.from({length: max}, (_, i) =>
+      `<button class="pip${i < S.ranks[k] ? ' on' : ''}" data-k="${k}" data-n="${i + 1}" aria-label="${k.toUpperCase()} rank ${i + 1}"></button>`).join('');
+    $('.rk', el).textContent = S.ranks[k];
+    el.classList.toggle('zero', !S.ranks[k]);
+  }
+  const used = S.ranks.q + S.ranks.w + S.ranks.e + S.ranks.r, pts = $('#pts');
+  pts.classList.toggle('over', used > S.level);
+  pts.innerHTML = used > S.level ? `<b>${used}</b> of ${S.level} points, ${used - S.level} too many`
+    : `<b>${used}</b> of ${S.level} points spent`;
+}
+function setLevel(n) {
+  S.level = Math.max(1, Math.min(18, n));
+  if (S.order !== 'manual') autoRanks();
+  paintLevel(); paintSkills();
+}
+
+/* ---------- builds and item picker ---------- */
+let pick = null, itemFilter = 0;
+function renderBuilds() {
+  const sets = {a: new Set(S.builds.a.filter(Boolean)), b: new Set(S.builds.b.filter(Boolean))};
+  for (const k of ['a','b']) {
+    const other = sets[k === 'a' ? 'b' : 'a'], row = $(`.build[data-b="${k}"]`), K = k.toUpperCase();
+    $('.slots', row).innerHTML = S.builds[k].map((id, i) => {
+      const sel = pick && pick.b === k && pick.i === i ? ' sel' : '';
+      if (!id) return `<div class="slot empty${sel}" role="button" tabindex="0" data-b="${k}" data-i="${i}" aria-label="Build ${K}, slot ${i + 1}, empty"></div>`;
+      const name = esc(S.items.get(id)?.name || 'Item ' + id);
+      return `<div class="slot${other.has(id) ? '' : ' uniq'}${sel}" role="button" tabindex="0" data-b="${k}" data-i="${i}" title="${name}" aria-label="Build ${K}, slot ${i + 1}, ${name}"><img src="${itemImg(id)}" alt=""><button class="rm" data-rm aria-label="Remove ${name}">×</button></div>`;
+    }).join('');
+    $('.b-gold b', row).textContent = nf(S.builds[k].reduce((s, id) => s + (S.items.get(id)?.gold || 0), 0));
+  }
+}
+function pickerLabel() {
+  $('#picker-for').innerHTML = `<span class="tag ${pick.b} sm">${pick.b.toUpperCase()}</span>Slot ${pick.i + 1}`;
+}
+function openPicker(b, i) {
+  pick = {b, i};
+  $('#picker').hidden = false;
+  pickerLabel(); renderBuilds();
+  const q = $('#item-q'); q.value = ''; renderItems(); q.focus();
+}
+function closePicker() {
+  if (!pick) return;
+  pick = null; $('#picker').hidden = true; renderBuilds();
+}
+function footIdle() { $('#item-foot').innerHTML = '<span>Hover an item for details. Enter picks the first result.</span>'; }
+function renderItems() {
+  const q = $('#item-q').value.trim().toLowerCase(), f = ITEM_FILTERS[itemFilter][1];
+  const list = [...S.items.values()].filter(it => (!q || it.name.toLowerCase().includes(q)) && (!f || it.tags.some(t => f.includes(t))))
+    .sort((x, y) => x.name.localeCompare(y.name));
+  const cell = it => `<button class="pi" data-id="${it.id}" aria-label="${esc(it.name)}, ${nf(it.gold)} gold"><img src="${itemImg(it.id)}" alt="" loading="lazy"></button>`;
+  const fin = list.filter(i => !i.into), comp = list.filter(i => i.into);
+  $('#item-grid').innerHTML = (fin.length ? `<div class="grp">Finished items</div>${fin.map(cell).join('')}` : '')
+    + (comp.length ? `<div class="grp">Components</div>${comp.map(cell).join('')}` : '')
+    || '<div class="grp">No items match</div>';
+  footIdle();
+}
+function choose(id) {
+  if (!pick) return;
+  S.builds[pick.b][pick.i] = id;
+  const next = S.builds[pick.b].findIndex((v, j) => !v && j > pick.i);
+  if (next > -1) { pick.i = next; pickerLabel(); renderBuilds(); const q = $('#item-q'); q.select(); q.focus(); }
+  else closePicker();
+}
+function ingestItems(json) {
+  const seen = new Set(), out = new Map();
+  for (const [id, it] of Object.entries(json.data)) {
+    if (!it.maps || !it.maps['11'] || !it.gold || !it.gold.purchasable || it.gold.total <= 0) continue;
+    if (it.requiredAlly || it.requiredChampion || it.inStore === false) continue;
+    const tags = it.tags || [];
+    if (tags.includes('Consumable') || tags.includes('Trinket')) continue;
+    if (seen.has(it.name)) continue;
+    seen.add(it.name);
+    out.set(+id, {id:+id, name:it.name, gold:it.gold.total, tags, plain:it.plaintext || '', into:!!(it.into && it.into.length)});
+  }
+  for (const id of [...S.builds.a, ...S.builds.b]) if (id && !out.has(id) && S.items.has(id)) out.set(id, S.items.get(id));
+  if (out.size > 20) S.items = out;
+}
+
+/* ---------- champion picker ---------- */
+let champFor = 'atk', role = 0;
+function openChamps(who) {
+  champFor = who; closePicker();
+  $('#cm-title').textContent = who === 'atk' ? 'Choose a champion' : 'Choose the target';
+  $('#champ-modal').hidden = false;
+  const q = $('#champ-q'); q.value = ''; renderChamps(); q.focus();
+}
+function closeChamps() { $('#champ-modal').hidden = true; }
+function renderChamps() {
+  const q = $('#champ-q').value.trim().toLowerCase(), r = ROLES[role];
+  const src = S.champs.length ? S.champs : SEED_CHAMPS;
+  const list = src.filter(c => (!q || c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)) && (r === 'All' || c.tags.includes(r)));
+  $('#champ-grid').innerHTML = list.map(c => `<button class="ct" data-id="${c.id}"><img src="${champSq(c.id)}" alt="" loading="lazy">${esc(c.name)}</button>`).join('')
+    || '<span class="hint">No champion matches</span>';
+}
+function chooseChamp(id) {
+  const c = (S.champs.length ? S.champs : SEED_CHAMPS).find(x => x.id === id);
+  if (!c) return;
+  closeChamps();
+  if (champFor === 'atk') setChamp(c);
+  else { S.enemy = {id:c.id, key:c.key, name:c.name, level:S.enemy.level, stats:c.stats}; enemyStats(); paintTarget(); }
+}
+
+/* ---------- target ---------- */
+const dial = k => [$(`#t-${k}`), $(`#t-${k}-r`)];
+function readDials() { return {hp: Math.max(1, +$('#t-hp').value || 1), ar: +$('#t-ar').value || 0, mr: +$('#t-mr').value || 0}; }
+function writeDials(v) { for (const k of ['hp','ar','mr']) dial(k).forEach(el => el.value = v[k]); }
+function enemyStats() {
+  const e = S.enemy, s = e.stats || S.champs.find(c => c.id === e.id)?.stats, g = (e.level - 1) * (0.7025 + 0.0175 * (e.level - 1));
+  writeDials(s ? {hp: Math.round(s.hp + s.hpperlevel * g), ar: Math.round(s.armor + s.armorperlevel * g), mr: Math.round(s.spellblock + s.spellblockperlevel * g)}
+               : {hp:1854, ar:90, mr:54});
+  $('#auto-note').textContent = `Base stats at level ${e.level}. Edit to override.`;
+}
+function paintTarget() {
+  const v = readDials(), cut = x => Math.round(x / (100 + Math.max(0, x)) * 100);
+  $('#n-hp').textContent = `eff. ${nf(v.hp * (1 + v.ar / 100))} / ${nf(v.hp * (1 + v.mr / 100))}`;
+  $('#n-hp').title = 'Effective health against physical / magic damage';
+  $('#n-ar').textContent = `blocks ${cut(v.ar)}% physical`;
+  $('#n-mr').textContent = `blocks ${cut(v.mr)}% magic`;
+  $('#hits').style.setProperty('--hpv', v.hp);
+  for (const k of ['a','b']) {
+    const left = Math.max(0, v.hp - TOTAL[k]);
+    $(`#bar-${k}`).style.setProperty('--left', (left / v.hp * 100).toFixed(1) + '%');
+    $(`#left-${k}`).textContent = nf(left);
+  }
+  $$('#presets .chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.preset === `${v.hp},${v.ar},${v.mr}`));
+  const e = S.enemy;
+  $('#enemy-btn').textContent = e.name;
+  $('#el').textContent = e.level;
+  if (S.target === 'champ') $('#enemy-img').src = champSq(e.id);
+  paintSub();
+}
+function paintNumbers() {
+  const raw = S.target === 'raw', cmp = S.compare;
+  $$('[data-raw]').forEach(el => el.textContent = raw ? el.dataset.raw : el.dataset.mit);
+  $$('.n[data-win]').forEach(el => {
+    const w = el.dataset.win;
+    el.classList.toggle('win', w === 'always' || (w === 'cmp' && cmp) || (w === 'mit-cmp' && cmp && !raw));
+  });
+}
+function setTarget(t) {
+  if (S.target === 'dummy') S.dummy = readDials();
+  S.target = t;
+  document.body.dataset.target = t;
+  $$('#tseg button').forEach(b => b.setAttribute('aria-checked', b.dataset.t === t));
+  if (t === 'champ') enemyStats(); else writeDials(S.dummy);
+  paintNumbers(); paintTarget();
+}
+function setCompare(on) {
+  S.compare = on;
+  document.body.dataset.compare = on ? 'on' : 'off';
+  $$('#cmp-seg button').forEach(b => b.setAttribute('aria-checked', (b.dataset.cmp === 'on') === on));
+  if (!on && pick && pick.b === 'b') closePicker();
+  paintNumbers(); renderLedger();
+}
+
+/* ---------- stat strip ---------- */
+function renderLedger() {
+  const f = x => typeof x === 'number' ? (Number.isInteger(x) ? nf(x) : x.toFixed(2)) : x;
+  $('#ledger-cells').innerHTML = STATS.map(([label, a, b, note]) => {
+    const head = `<span class="lbl">${label}</span>`;
+    if (!S.compare) return `<div class="cell">${head}<div class="v solo"><b>${f(a)}</b></div><em>${note}</em></div>`;
+    if (a === b) return `<div class="cell same">${head}<div class="v"><i class="dot a"></i><i class="dot b"></i><b>${f(a)}</b></div><em>same in both</em></div>`;
+    const d = b - a, ds = (d > 0 ? '+' : '−') + f(Math.abs(d));
+    return `<div class="cell">${head}<div class="v a${a > b ? ' win' : ''}"><i class="dot a"></i><b>${f(a)}</b></div><div class="v b${b > a ? ' win' : ''}"><i class="dot b"></i><b>${f(b)}</b><em>${ds}</em></div></div>`;
+  }).join('');
+}
+
+/* ---------- wiring ---------- */
+function wire() {
+  $('#cmp-seg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setCompare(b.dataset.cmp === 'on'); });
+  $('#add-b').addEventListener('click', () => setCompare(true));
+  $('#rm-b').addEventListener('click', () => setCompare(false));
+  $('#copy-a').addEventListener('click', () => { S.builds.b = [...S.builds.a]; renderBuilds(); });
+  $('#clear-a').addEventListener('click', () => { S.builds.a = Array(6).fill(null); renderBuilds(); });
+  $('#tseg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTarget(b.dataset.t); });
+
+  $('#ruler').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setLevel(+b.dataset.l); });
+  $('#ruler').addEventListener('keydown', e => {
+    const d = {ArrowLeft:-1, ArrowDown:-1, ArrowRight:1, ArrowUp:1}[e.key];
+    if (!d) return;
+    e.preventDefault(); setLevel(S.level + d); $(`#ruler button[data-l="${S.level}"]`).focus();
+  });
+  $('#order').addEventListener('change', e => { S.order = e.target.value; if (S.order !== 'manual') autoRanks(); paintSkills(); });
+  $('#skill-row').addEventListener('click', e => {
+    const p = e.target.closest('.pip'); if (!p) return;
+    const k = p.dataset.k, n = +p.dataset.n;
+    S.ranks[k] = S.ranks[k] === n ? n - 1 : n;
+    S.order = 'manual'; $('#order').value = 'manual'; paintSkills();
+  });
+
+  const builds = $('#builds');
+  builds.addEventListener('click', e => {
+    const slot = e.target.closest('.slot'); if (!slot) return;
+    const b = slot.dataset.b, i = +slot.dataset.i;
+    if (e.target.closest('[data-rm]')) { S.builds[b][i] = null; renderBuilds(); return; }
+    openPicker(b, i);
+  });
+  builds.addEventListener('keydown', e => {
+    const slot = e.target.closest('.slot');
+    if (slot && e.target === slot && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openPicker(slot.dataset.b, +slot.dataset.i); }
+  });
+  $('#item-chips').innerHTML = ITEM_FILTERS.map(([l], i) => `<button class="chip" data-f="${i}" aria-pressed="${i === 0}">${l}</button>`).join('');
+  $('#item-chips').addEventListener('click', e => {
+    const c = e.target.closest('.chip'); if (!c) return;
+    itemFilter = +c.dataset.f;
+    $$('#item-chips .chip').forEach(x => x.setAttribute('aria-pressed', x === c));
+    renderItems();
+  });
+  $('#item-q').addEventListener('input', renderItems);
+  $('#item-q').addEventListener('keydown', e => { if (e.key === 'Enter') { const f = $('#item-grid .pi'); if (f) choose(+f.dataset.id); } });
+  $('#item-grid').addEventListener('click', e => { const p = e.target.closest('.pi'); if (p) choose(+p.dataset.id); });
+  $('#item-grid').addEventListener('mouseover', e => {
+    const p = e.target.closest('.pi'); if (!p) return;
+    const it = S.items.get(+p.dataset.id);
+    $('#item-foot').innerHTML = `<b>${esc(it.name)}</b><span class="g">${nf(it.gold)} g</span><span>${esc(it.plain || it.tags.join(', '))}</span>`;
+  });
+  $('#item-grid').addEventListener('mouseleave', footIdle);
+  $('#picker-x').addEventListener('click', closePicker);
+  document.addEventListener('mousedown', e => { if (pick && !e.target.closest('#picker') && !e.target.closest('.slot')) closePicker(); });
+
+  $('#champ-btn').addEventListener('click', () => openChamps('atk'));
+  $('#enemy-btn').addEventListener('click', () => openChamps('enemy'));
+  $('#enemy-swap').addEventListener('click', () => openChamps('enemy'));
+  $('#champ-chips').innerHTML = ROLES.map((r, i) => `<button class="chip" data-r="${i}" aria-pressed="${i === 0}">${r}</button>`).join('');
+  $('#champ-chips').addEventListener('click', e => {
+    const c = e.target.closest('.chip'); if (!c) return;
+    role = +c.dataset.r;
+    $$('#champ-chips .chip').forEach(x => x.setAttribute('aria-pressed', x === c));
+    renderChamps();
+  });
+  $('#champ-q').addEventListener('input', renderChamps);
+  $('#champ-q').addEventListener('keydown', e => { if (e.key === 'Enter') { const f = $('#champ-grid .ct'); if (f) chooseChamp(f.dataset.id); } });
+  $('#champ-grid').addEventListener('click', e => { const c = e.target.closest('.ct'); if (c) chooseChamp(c.dataset.id); });
+  $('#champ-x').addEventListener('click', closeChamps);
+  $('#champ-modal').addEventListener('mousedown', e => { if (e.target.id === 'champ-modal') closeChamps(); });
+
+  const lvl = d => { S.enemy.level = Math.max(1, Math.min(18, S.enemy.level + d)); enemyStats(); paintTarget(); };
+  $('#el-dn').addEventListener('click', () => lvl(-1));
+  $('#el-up').addEventListener('click', () => lvl(1));
+  for (const k of ['hp','ar','mr']) {
+    const [num, rng] = dial(k);
+    num.addEventListener('input', () => { rng.value = num.value; paintTarget(); });
+    rng.addEventListener('input', () => { num.value = rng.value; paintTarget(); });
+  }
+  $('#presets').addEventListener('click', e => {
+    const c = e.target.closest('.chip'); if (!c) return;
+    const [hp, ar, mr] = c.dataset.preset.split(',').map(Number);
+    writeDials({hp, ar, mr}); paintTarget();
+  });
+
+  $('#share').addEventListener('click', e => {
+    const b = e.currentTarget;
+    b.textContent = 'Link copied'; setTimeout(() => b.textContent = 'Copy build link', 1400);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { if (!$('#champ-modal').hidden) closeChamps(); else closePicker(); return; }
+    if (e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); openChamps('atk'); }
+  });
+  /* a missing icon leaves an empty framed slot instead of a broken-image glyph */
+  document.addEventListener('error', e => { if (e.target.tagName === 'IMG') e.target.style.visibility = 'hidden'; }, true);
+  document.addEventListener('load', e => { if (e.target.tagName === 'IMG') e.target.style.visibility = ''; }, true);
+}
+
+async function boot() {
+  buildRuler(); wire();
+  paintLevel(); paintSkills(); renderLedger(); paintNumbers(); paintTarget();
+  try {
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 3500);
+    const v = await (await fetch(`${DD}/api/versions.json`, {signal: ctl.signal})).json();
+    clearTimeout(t);
+    if (v && v[0]) S.ver = v[0];
+  } catch (e) {}
+  const [maj, min] = S.ver.split('.');
+  $('#patch').textContent = `${+maj >= 15 ? +maj + 10 : maj}.${min}`;
+  S.kit = {
+    p: ['Second Skin', `${DD}/cdn/${S.ver}/img/passive/Kaisa_Passive.png`],
+    q: ['Icathian Rain', `${DD}/cdn/${S.ver}/img/spell/KaisaQ.png`],
+    w: ['Void Seeker', `${DD}/cdn/${S.ver}/img/spell/KaisaW.png`],
+    e: ['Supercharge', `${DD}/cdn/${S.ver}/img/spell/KaisaE.png`],
+    r: ['Killer Instinct', `${DD}/cdn/${S.ver}/img/spell/KaisaR.png`],
+  };
+  paintChamp(); paintKit(); renderBuilds();
+  fetch(`${DD}/cdn/${S.ver}/data/en_US/item.json`).then(r => r.json()).then(j => { ingestItems(j); renderBuilds(); if (pick) renderItems(); }).catch(() => {});
+  fetch(`${DD}/cdn/${S.ver}/data/en_US/champion.json`).then(r => r.json()).then(j => {
+    S.champs = Object.values(j.data).map(c => ({id:c.id, key:c.key, name:c.name, title:c.title, tags:c.tags || [], stats:c.stats})).sort((x, y) => x.name.localeCompare(y.name));
+    const me = S.champs.find(c => c.id === S.champ.id);
+    if (me) { S.champ = me; paintChamp(); }
+    if (!$('#champ-modal').hidden) renderChamps();
+  }).catch(() => {});
+  loadKit();
+}
+boot();
+})();
+</script>
+</body>
+</html>

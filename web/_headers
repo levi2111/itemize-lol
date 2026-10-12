@@ -1,0 +1,10 @@
+# Headers Cloudflare adds to the static site. Keep the policy in step with src/server/app.ts,
+# which sets the same one on API responses and on everything the Node server sends.
+/*
+  Content-Security-Policy: default-src 'self'; img-src 'self' data: https://ddragon.leagueoflegends.com https://cdn.communitydragon.org; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; frame-ancestors 'none'
+  Strict-Transport-Security: max-age=15552000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: no-referrer
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin

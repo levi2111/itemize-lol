@@ -1,0 +1,12 @@
+node_modules/
+# Raw upstream downloads are a cache: reproducible from `npm run data:fetch`.
+data/raw/
+# Dev-only cross-check inputs (wiki-derived, CC BY-SA). Never shipped.
+data/crosscheck/
+# Local short-link store
+data/*.sqlite*
+.env
+# Cloudflare: local state, local secrets, and the dataset packed for the Worker (npm run bundle)
+.wrangler/
+.dev.vars
+src/worker/data.gen.txt

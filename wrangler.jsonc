@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "itemize-lol",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  // the site: served straight from Cloudflare's edge, the Worker only sees what is not a file here
+  "assets": { "directory": "web" },
+  // packs data/dist into src/worker/data.gen.txt
+  "build": { "command": "node scripts/bundle.ts" },
+  // POST /api/v1/calc, per client address
+  "ratelimits": [
+    { "name": "CALC_LIMIT", "namespace_id": "1001", "simple": { "limit": 240, "period": 60 } }
+  ],
+  "observability": { "enabled": true }
+}

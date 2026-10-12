@@ -1,0 +1,36 @@
+{
+  "name": "itemize-lol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Backend for itemize.lol: game-data pipeline, damage engine and HTTP API.",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "data:fetch": "node src/pipeline/cli.ts fetch",
+    "data:build": "node src/pipeline/cli.ts build",
+    "data:accept": "node src/pipeline/cli.ts build --accept",
+    "data:update": "node src/pipeline/cli.ts fetch && node src/pipeline/cli.ts build",
+    "data:report": "node src/pipeline/cli.ts report",
+    "data:crosscheck": "node src/pipeline/cli.ts crosscheck",
+    "calc": "node scripts/calc.ts",
+    "outliers": "node scripts/outliers.ts",
+    "dev": "node --watch src/server/main.ts",
+    "start": "node src/server/main.ts",
+    "bundle": "node scripts/bundle.ts",
+    "dev:worker": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.4",
+    "hono": "^4.13.13"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.149.0"
+  }
+}

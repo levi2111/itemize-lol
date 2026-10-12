@@ -1,0 +1,124 @@
+/* What callers send the engine and what they get back. This is also the wire
+   format of POST /api/v1/calc. */
+import type { CastSlot, ChampionData, DamageType, ItemData, ModelStatus, Slot } from '../shared/types.ts';
+
+export type Action = 'aa' | CastSlot;
+
+export interface BuildInput {
+  champion: string;
+  level: number;
+  ranks: Record<CastSlot, number>;
+  /** item ids, in slot order; empty slots left out or null */
+  items: (number | null)[];
+  /** values for the champion's options (see ChampionData.options); omitted ones use their default */
+  options?: Record<string, number | boolean>;
+}
+
+/** The enemy as plain numbers. `null` means raw output: no resistances, no health. */
+export interface TargetInput {
+  hp: number;
+  armor: number;
+  mr: number;
+  /** health beyond the champion's own, from items; a few effects scale with it. 0 when unknown */
+  bonusHp?: number;
+}
+
+export interface ComboInput {
+  /** how many of each action; the engine weaves them into a default order */
+  counts?: Partial<Record<Action, number>>;
+  /** or the exact order, which matters for effects that read the target's health or stack */
+  sequence?: Action[];
+}
+
+export interface CalcRequest {
+  build: BuildInput;
+  target: TargetInput | null;
+  combo: ComboInput;
+}
+
+export interface Amount {
+  /** before armor and magic resist */
+  raw: number;
+  /** after them; equals raw when there is no target */
+  dealt: number;
+}
+export type ByType = Record<DamageType, Amount>;
+
+export interface SourceLine {
+  key: 'aa' | Slot | 'items';
+  label: string;
+  /** times it was used in the combo; null for passives and item effects, which are triggered */
+  qty: number | null;
+  /** the single type it deals, or mixed, or none */
+  type: DamageType | 'mixed' | 'none';
+  total: Amount;
+  byType: ByType;
+  /** what the line is made of: one entry per rule that fired */
+  parts: { id: string; label: string; type: DamageType; hits: number; total: Amount }[];
+}
+
+export interface StatLine {
+  total: number;
+  base: number;
+  bonus: number;
+}
+export interface StatBlock {
+  level: number;
+  hp: StatLine; mana: StatLine; ad: StatLine; ap: StatLine; armor: StatLine; mr: StatLine; moveSpeed: StatLine;
+  /** total = attacks per second, base = at level 1 with no bonuses, bonus = bonus attack speed as a fraction */
+  attackSpeed: StatLine;
+  critChance: number;
+  /** damage multiplier of a crit, e.g. 2.3 */
+  critDamage: number;
+  lethality: number;
+  armorPenPct: number;
+  magicPenFlat: number;
+  magicPenPct: number;
+  abilityHaste: number;
+  lifeSteal: number;
+  omnivamp: number;
+  attackRange: number;
+  gold: number;
+}
+
+export interface ModelInfo {
+  status: ModelStatus;
+  notes: string[];
+}
+
+export interface CalcResult {
+  patch: string;
+  stats: StatBlock;
+  /** the order the combo was played in */
+  sequence: Action[];
+  combo: {
+    total: Amount;
+    byType: ByType;
+    /** raw minus dealt: what armor and magic resist took */
+    blocked: number;
+    lines: SourceLine[];
+    /** target health left, null without a target */
+    hpLeft: number | null;
+    kills: boolean;
+  };
+  /** sustained basic attacks with everything they trigger */
+  dps: Amount;
+  /** seconds of sustained basic attacks to kill from full health; null without a target or beyond the horizon */
+  timeToKill: number | null;
+  abilities: Record<Slot, ModelInfo>;
+  items: ({ id: number } & ModelInfo)[];
+  /** things the caller should tell the user: assumptions, and anything the engine could not evaluate */
+  caveats: string[];
+}
+
+/** Where the engine reads compiled data from. */
+export interface DataSource {
+  patch: string;
+  champion(id: string): ChampionData | undefined;
+  item(id: number): ItemData | undefined;
+}
+
+export class CalcError extends Error {
+  field: string;
+  constructor(field: string, message: string) { super(message); this.field = field; }
+}
