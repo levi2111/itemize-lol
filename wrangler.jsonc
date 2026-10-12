@@ -4,6 +4,9 @@
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-09-01",
   "routes": [{ "pattern": "itemize.lol", "custom_domain": true }],
+  // the workers.dev address stays up next to the domain, and each uploaded version gets a preview address
+  "workers_dev": true,
+  "preview_urls": true,
   // the site: served straight from Cloudflare's edge, the Worker only sees what is not a file here
   "assets": { "directory": "web" },
   // packs data/dist into src/worker/data.gen.txt
