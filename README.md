@@ -9,7 +9,7 @@ npm start               # http://localhost:8787
 npm test
 ```
 
-Requires Node 24 or newer. TypeScript runs directly; there is no build step.
+Requires Node 24 or newer. TypeScript runs directly; there is no build step for development.
 
 ## Where the numbers come from
 
@@ -50,7 +50,7 @@ The wiki is used only by `npm run data:crosscheck`, a development tool that flag
 ## Each patch
 
 ```
-npm run data:update      # mirror + compile the new patch
+npm run data:update      # mirror + compile the new patch, then pack its art into web/art/
 ```
 
 Read the summary it prints:
@@ -59,7 +59,7 @@ Read the summary it prints:
 - `stale models: …` — the spell changed shape. Re-read it with `npm run data:report -- --champion <id>`, fix the model if needed, then `npm run data:accept`.
 - `ANCHOR FAILED …` — the data format itself changed. Fix `src/pipeline/calc.ts` before trusting anything.
 
-Then `npm test` and deploy `data/dist/` with the server. `data/raw/` is a cache and stays out of git.
+Then `npm test`, commit `data/dist/` and `web/art/`, and push: that deploys. `data/raw/` is a cache and stays out of git.
 
 ## Coverage today (patch 26.20)
 
@@ -112,7 +112,7 @@ Environment: `PORT`, `ITEMIZE_PATCH`, `ITEMIZE_DATA_DIR`, `CALC_PER_MINUTE`, `TR
 
 ## Deploying
 
-Production is a Cloudflare Worker (`wrangler.jsonc`). Cloudflare serves `web/` as static files, with the headers in `web/_headers`, and the Worker answers `/api/v1` from the dataset packed into it at build time.
+Production is a Cloudflare Worker (`wrangler.jsonc`). Cloudflare serves the site as static files, with the headers in `web/_headers`, and the Worker answers `/api/v1` from the dataset packed into it at build time. Before each deploy `scripts/site.ts` copies `web/` to `.build/site/` and renames `app.js` after its contents, so everything but the page itself is cached forever.
 
 ```
 npm run dev:worker      # the Worker, locally
@@ -130,7 +130,7 @@ Checked against Riot's [Legal Jibber Jabber](https://www.riotgames.com/en/legal)
 - The required notice is shown on every page (`LEGAL` in `src/server/app.ts`).
 - No Riot logos or trademarks in the site's name or branding.
 - Only information present in the game client is used, and nothing identifies or tracks players.
-- Game data is mirrored once per patch at build time, not fetched per visitor. Images are hotlinked from Data Dragon.
+- Game data is mirrored once per patch at build time, not fetched per visitor. The same goes for the art: the site serves its own packed copies (`npm run data:art`) and loads nothing from Riot's servers.
 
 **To do before monetizing — these need you, not code**
 

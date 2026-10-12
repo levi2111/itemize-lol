@@ -7,8 +7,10 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { rawDir } from './paths.ts';
 
-const DDRAGON = 'https://ddragon.leagueoflegends.com';
+export const DDRAGON = 'https://ddragon.leagueoflegends.com';
 const CDRAGON = 'https://raw.communitydragon.org';
+/** Community Dragon's lookup service: finds a picture by what it is instead of by file name. */
+export const CDRAGON_CDN = 'https://cdn.communitydragon.org';
 const USER_AGENT = `itemize.lol-pipeline/0.1 (${process.env.ITEMIZE_CONTACT ?? 'https://itemize.lol'})`;
 
 export interface RawFile {
@@ -29,7 +31,7 @@ export interface RawManifest {
   files: RawFile[];
 }
 
-async function get(url: string, attempt = 1): Promise<Buffer> {
+export async function get(url: string, attempt = 1): Promise<Buffer> {
   try {
     const res = await fetch(url, { headers: { 'user-agent': USER_AGENT }, signal: AbortSignal.timeout(180_000) });
     if (!res.ok) throw Object.assign(new Error(`${res.status} ${res.statusText} for ${url}`), { status: res.status });
@@ -43,7 +45,7 @@ async function get(url: string, attempt = 1): Promise<Buffer> {
 }
 
 /** Runs `fn` over `items` with a small fixed concurrency so we stay polite to community-run hosts. */
-async function pool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+export async function pool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const out = new Array<R>(items.length);
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {

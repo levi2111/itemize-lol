@@ -8,9 +8,9 @@
   "workers_dev": true,
   "preview_urls": true,
   // the site: served straight from Cloudflare's edge, the Worker only sees what is not a file here
-  "assets": { "directory": "web" },
-  // packs data/dist into src/worker/data.gen.txt
-  "build": { "command": "node scripts/bundle.ts" },
+  "assets": { "directory": ".build/site" },
+  // packs data/dist into .build/data.txt and prepares web/ in .build/site/
+  "build": { "command": "node scripts/bundle.ts && node scripts/site.ts", "watch_dir": ["src", "web", "scripts"] },
   // POST /api/v1/calc, per client address
   "ratelimits": [
     { "name": "CALC_LIMIT", "namespace_id": "1001", "simple": { "limit": 240, "period": 60 } }

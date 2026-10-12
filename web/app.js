@@ -1,11 +1,8 @@
 (() => {
 'use strict';
 /* The workbench. All numbers come from POST /api/v1/calc; this file only keeps the
-   state of the controls and paints what the API returns. Icons are hotlinked from
-   Data Dragon, with Community Dragon as the ability-icon fallback. */
+   state of the controls and paints what the API returns. */
 const API = '/api/v1';
-const DD = 'https://ddragon.leagueoflegends.com';
-const CD = 'https://cdn.communitydragon.org/latest';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const nf = n => Math.round(n).toLocaleString('en-US');
@@ -15,7 +12,6 @@ const ACTIONS = ['aa', ...SLOTS];
 const LINES = ['aa', 'q', 'w', 'e', 'r', 'p', 'items'];
 
 const S = {
-  ver: '16.20.1',
   champ: {id:'Kaisa', key:145, name:"Kai'Sa", title:'Daughter of the Void', tags:[]},
   view: null,                       // GET /champions/:id, the kit with model status per ability
   level: 13,
@@ -40,14 +36,15 @@ const ITEM_FILTERS = [
 const ROLES = ['All','Fighter','Tank','Mage','Assassin','Marksman','Support'];
 const STATUS_WORD = {auto:'estimate', unmodeled:'not counted', stale:'needs review'};
 
-const itemImg = id => `${DD}/cdn/${S.ver}/img/item/${id}.png`;
-const champSq = id => `${DD}/cdn/${S.ver}/img/champion/${id}.png`;
-const splash  = id => `${DD}/cdn/img/champion/splash/${id}_0.jpg`;
 
-/* ---------- icons ---------- */
-/* Every icon is fetched and decoded once, in the background, right after boot. From then on a
-   picker or a build row paints complete in one frame. An icon that is not in yet is an empty
-   framed box that fades in; it never shows the picture it is replacing. */
+/* ---------- pictures ---------- */
+/* The site serves its own copies of the game art, packed by the pipeline (src/pipeline/art.ts).
+   One sheet holds every item icon and another every champion portrait, so a whole picker is a
+   single request: both are fetched in the background at boot and each fades in as one. A
+   champion's five ability icons are one strip, and their splash is the only large picture. */
+let ART = null;                     // web/art/index.json
+const spot = {items: new Map(), champions: new Map()};   // id -> position of its tile on the sheet
+const artUrl = path => `/art/${ART.version}/${path}`;
 const warmed = new Map();           // url -> {im, done}; holding the Image keeps the decoded picture around
 const ready = new Set();            // urls that can be painted at once
 function warm(url) {
@@ -60,29 +57,28 @@ function warm(url) {
   }
   return w.done;
 }
-function warmAll(urls, n = 10) {
-  let i = 0;
-  const next = () => { if (i < urls.length) warm(urls[i++]).then(next); };
-  while (n--) next();
+function useArt(art) {
+  ART = art;
+  const root = document.documentElement.style;
+  for (const k of ['items', 'champions']) {
+    art[k].ids.forEach((id, n) => spot[k].set(id, n));
+    const url = artUrl(`${k}.webp`);
+    root.setProperty(`--art-${k}`, `url("${url}")`);
+    root.setProperty(`--${k}-cols`, art[k].cols);
+    root.setProperty(`--${k}-rows`, art[k].rows);
+    warm(url).then(() => document.body.classList.add(`has-${k}`));
+  }
 }
-const pic = (url, lazy) => `<img src="${url}" alt=""${ready.has(url) ? '' : ` class="wait"${lazy ? ' loading="lazy"' : ''}`}>`;
-/* Points images that are already on the page at new pictures. The old ones go blank straight
-   away and the new ones appear together, once all of them are in. */
-function show(pairs) {
-  const todo = pairs.filter(([el, url]) => el.dataset.src !== url);
-  if (!todo.length) return;
-  const put = () => {
-    for (const [el, url] of todo) {
-      if (el.dataset.src !== url) continue;
-      el.src = url;
-      if (el.complete && el.naturalWidth) el.classList.remove('wait');
-    }
-  };
-  for (const [el, url] of todo) el.dataset.src = url;
-  if (todo.every(([, url]) => ready.has(url))) return put();
-  for (const [el] of todo) el.classList.add('wait');
-  Promise.all(todo.map(([, url]) => warm(url))).then(put);
+function tile(k, id) {
+  const n = spot[k].get(id), s = ART?.[k];
+  if (!s || n === undefined) return '<i class="ico"></i>';
+  const x = s.cols > 1 ? (n % s.cols) / (s.cols - 1) * 100 : 0, y = s.rows > 1 ? Math.floor(n / s.cols) / (s.rows - 1) * 100 : 0;
+  return `<i class="ico ${k}" style="background-position:${+x.toFixed(3)}% ${+y.toFixed(3)}%"></i>`;
 }
+const itemIco = id => tile('items', id);
+const champIco = id => tile('champions', id);
+const kitUrl = id => artUrl(`kit/${id}.webp`);
+const splashUrl = id => artUrl(`splash/${id}.webp`);
 
 const api = async (path, init) => {
   const r = await fetch(API + path, init);
@@ -141,7 +137,7 @@ function paintChamp() {
   const c = S.champ;
   $('#champ-name').textContent = c.name;
   $('#champ-title').textContent = c.title ? c.title[0].toUpperCase() + c.title.slice(1) : '';
-  show([[$('#atk-splash'), splash(c.id)]]);
+  paintSplash(); paintKit();
   paintSub();
 }
 function comboText() {
@@ -160,26 +156,25 @@ function paintSub() {
   paintTabs();
 }
 const maxRank = k => S.view?.slots[k]?.maxRank || (k === 'r' ? 3 : 5);
-function kitIcon(k) {
-  const s = S.view?.slots[k];
-  if (!s?.icon) return `${CD}/champion/${S.champ.key}/ability-icon/${k}`;
-  return `${DD}/cdn/${S.ver}/img/${k === 'p' ? 'passive' : 'spell'}/${s.icon}`;
+/* The old picture goes blank at once and the new one fades in when it has arrived. */
+function paintSplash() {
+  const el = $('#atk-splash'), url = splashUrl(S.champ.id);
+  if (el.dataset.src === url) return;
+  el.dataset.src = url;
+  if (!ready.has(url)) el.classList.add('wait');
+  warm(url).then(() => { if (el.dataset.src === url) el.src = url; });
 }
 function paintKit() {
-  show(['p', ...SLOTS].map(k => {
-    const tile = $(`.skill[data-k="${k}"]`), s = S.view?.slots[k];
-    tile.title = s ? s.name : '';
-    return [$('img', tile), kitIcon(k)];
-  }));
+  const row = $('#skill-row'), url = kitUrl(S.champ.id);
+  if (row.dataset.kit === url) return;
+  row.dataset.kit = url;
+  const put = () => { row.style.setProperty('--art-kit', `url("${url}")`); row.classList.add('has-kit'); };
+  if (ready.has(url)) return put();
+  row.classList.remove('has-kit');
+  warm(url).then(() => { if (row.dataset.kit === url) put(); });
 }
-/* the icon file names come with the kit, so the tiles stay blank until it has loaded */
-function blankKit() {
-  for (const el of $$('#skill-row .skill')) {
-    el.title = '';
-    const img = $('img', el);
-    delete img.dataset.src;
-    img.classList.add('wait');
-  }
+function nameKit() {
+  for (const k of ['p', ...SLOTS]) $(`.skill[data-k="${k}"]`).title = S.view?.slots[k]?.name || '';
 }
 async function loadKit() {
   const c = S.champ;
@@ -189,7 +184,7 @@ async function loadKit() {
     S.view = view;
   } catch (e) { if (S.champ === c) S.view = null; }
   for (const k of SLOTS) S.ranks[k] = Math.min(S.ranks[k], maxRank(k));
-  paintKit(); paintSkills(); renderLines(); schedule();
+  nameKit(); paintSkills(); renderLines(); schedule();
 }
 function setChamp(c) {
   S.champ = c; S.view = null;
@@ -198,7 +193,7 @@ function setChamp(c) {
   comboFresh = true;
   if (S.order === 'manual') { S.order = 'qew'; $('#order').value = 'qew'; }
   autoRanks();
-  paintChamp(); blankKit(); paintSkills(); renderLines(); loadKit();
+  paintChamp(); nameKit(); paintSkills(); renderLines(); loadKit();
 }
 let comboFresh = false;
 
@@ -259,7 +254,7 @@ function renderBuilds() {
       const sel = pick && pick.b === k && pick.i === i ? ' sel' : '';
       if (!id) return `<div class="slot empty${sel}" role="button" tabindex="0" data-b="${k}" data-i="${i}" aria-label="Build ${K}, slot ${i + 1}, empty"></div>`;
       const name = esc(S.items.get(id)?.name || 'Item ' + id);
-      return `<div class="slot${other.has(id) ? '' : ' uniq'}${sel}" role="button" tabindex="0" data-b="${k}" data-i="${i}" title="${name}" aria-label="Build ${K}, slot ${i + 1}, ${name}">${pic(itemImg(id))}<button class="rm" data-rm aria-label="Remove ${name}">×</button></div>`;
+      return `<div class="slot${other.has(id) ? '' : ' uniq'}${sel}" role="button" tabindex="0" data-b="${k}" data-i="${i}" title="${name}" aria-label="Build ${K}, slot ${i + 1}, ${name}">${itemIco(id)}<button class="rm" data-rm aria-label="Remove ${name}">×</button></div>`;
     }).join('');
     $('.b-gold b', row).textContent = nf(S.builds[k].reduce((s, id) => s + (S.items.get(id)?.gold || 0), 0));
   }
@@ -283,7 +278,7 @@ function renderItems() {
   const q = $('#item-q').value.trim().toLowerCase(), f = ITEM_FILTERS[itemFilter][1];
   const list = [...S.items.values()].filter(it => (!q || it.name.toLowerCase().includes(q)) && (!f || it.tags.some(t => f.includes(t))))
     .sort((x, y) => x.name.localeCompare(y.name));
-  const cell = it => `<button class="pi" data-id="${it.id}" aria-label="${esc(it.name)}, ${nf(it.gold)} gold">${pic(itemImg(it.id), true)}</button>`;
+  const cell = it => `<button class="pi" data-id="${it.id}" aria-label="${esc(it.name)}, ${nf(it.gold)} gold">${itemIco(it.id)}</button>`;
   const fin = list.filter(i => !i.component), comp = list.filter(i => i.component);
   $('#item-grid').innerHTML = (fin.length ? `<div class="grp">Finished items</div>${fin.map(cell).join('')}` : '')
     + (comp.length ? `<div class="grp">Components</div>${comp.map(cell).join('')}` : '')
@@ -311,7 +306,7 @@ function closeChamps() { $('#champ-modal').hidden = true; }
 function renderChamps() {
   const q = $('#champ-q').value.trim().toLowerCase(), r = ROLES[role];
   const list = S.champs.filter(c => (!q || c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)) && (r === 'All' || c.tags.includes(r)));
-  $('#champ-grid').innerHTML = list.map(c => `<button class="ct" data-id="${c.id}"><span class="ci">${pic(champSq(c.id), true)}</span>${esc(c.name)}</button>`).join('')
+  $('#champ-grid').innerHTML = list.map(c => `<button class="ct" data-id="${c.id}"><span class="ci">${champIco(c.id)}</span>${esc(c.name)}</button>`).join('')
     || '<span class="hint">No champion matches</span>';
 }
 function chooseChamp(id) {
@@ -356,7 +351,8 @@ function paintTarget() {
   const e = S.enemy;
   $('#enemy-btn').textContent = e.name;
   $('#el').textContent = e.level;
-  if (S.target === 'champ') show([[$('#enemy-img'), champSq(e.id)]]);
+  const face = $('#enemy-img');
+  if (face.dataset.id !== e.id) { face.dataset.id = e.id; face.innerHTML = champIco(e.id); }
   paintSub();
 }
 function setTarget(t) {
@@ -685,8 +681,11 @@ function wire() {
   $('#champ-q').addEventListener('input', renderChamps);
   $('#champ-q').addEventListener('keydown', e => { if (e.key === 'Enter') { const f = $('#champ-grid .ct'); if (f) chooseChamp(f.dataset.id); } });
   $('#champ-grid').addEventListener('click', e => { const c = e.target.closest('.ct'); if (c) chooseChamp(c.dataset.id); });
-  // the splash is the one large picture: start on it as soon as a champion is pointed at
-  $('#champ-grid').addEventListener('mouseover', e => { const c = e.target.closest('.ct'); if (c && champFor === 'atk') warm(splash(c.dataset.id)); });
+  // start on a champion's own pictures as soon as they are pointed at
+  $('#champ-grid').addEventListener('mouseover', e => {
+    const c = e.target.closest('.ct');
+    if (c && champFor === 'atk') { warm(splashUrl(c.dataset.id)); warm(kitUrl(c.dataset.id)); }
+  });
   $('#champ-x').addEventListener('click', closeChamps);
   $('#champ-modal').addEventListener('mousedown', e => { if (e.target.id === 'champ-modal') closeChamps(); });
 
@@ -719,20 +718,22 @@ function wire() {
     if (tab) { setTab(tab); return; }
     if (e.key.toLowerCase() === 'c') { e.preventDefault(); openChamps('atk'); }
   });
-  /* a missing icon leaves an empty framed slot instead of a broken-image glyph */
+  /* a missing splash leaves the card plain instead of showing a broken-image glyph */
   document.addEventListener('error', e => { if (e.target.tagName === 'IMG') { e.target.style.visibility = 'hidden'; e.target.classList.remove('wait'); } }, true);
   document.addEventListener('load', e => {
     if (e.target.tagName !== 'IMG') return;
     e.target.style.visibility = '';
     e.target.classList.remove('wait');
-    ready.add(e.target.src);
   }, true);
 }
 
 async function boot() {
   buildRuler(); wire();
-  const [meta, champs, items] = await Promise.all([api('/meta'), api('/champions'), api('/items')]);
-  S.ver = meta.sources.ddragon;
+  // the built site carries the art index in the page; the dev server leaves it to be fetched
+  const inline = $('#art-index');
+  const [meta, champs, items, art] = await Promise.all([api('/meta'), api('/champions'), api('/items'),
+    inline ? JSON.parse(inline.textContent) : fetch('/art/index.json').then(r => r.json())]);
+  useArt(art);
   $('#patch').textContent = meta.displayPatch;
   $('#legal').textContent = meta.legal;
   S.champs = champs.map(c => ({id: c.id, key: c.key, name: c.name, title: c.title, tags: c.tags || []})).sort((x, y) => x.name.localeCompare(y.name));
@@ -755,12 +756,6 @@ async function boot() {
   paintLevel(); paintSkills(); paintChamp(); renderBuilds(); renderLines(); paintTarget();
   if (S.target === 'champ') enemyStats();
   await loadKit();
-  // what is on screen has been asked for; now fetch the rest, in the order the pickers list it
-  if (!navigator.connection?.saveData) warmAll([
-    ...items.filter(i => !i.component).map(i => itemImg(i.id)),
-    ...items.filter(i => i.component).map(i => itemImg(i.id)),
-    ...S.champs.map(c => champSq(c.id)),
-  ]);
 }
 boot().catch(e => {
   const q = $('#quality');

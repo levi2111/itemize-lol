@@ -6,7 +6,7 @@ data/crosscheck/
 # Local short-link store
 data/*.sqlite*
 .env
-# Cloudflare: local state, local secrets, and the dataset packed for the Worker (npm run bundle)
+# Cloudflare: local state, local secrets, and what is built for the Worker (npm run bundle, npm run site)
 .wrangler/
 .dev.vars
-src/worker/data.gen.txt
+.build/

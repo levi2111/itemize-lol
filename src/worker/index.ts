@@ -3,7 +3,7 @@
 import { createApp } from '../server/app.ts';
 import type { ChampionIndexEntry, ServedData } from '../server/dataset.ts';
 import type { ChampionData, DatasetManifest, ItemData } from '../shared/types.ts';
-import text from './data.gen.txt';
+import text from '../../.build/data.txt';
 
 interface Env {
   /** the rate limit declared in wrangler.jsonc */

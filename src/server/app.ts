@@ -57,10 +57,10 @@ export function createApp(data: ServedData, opts: AppOptions = {}) {
   app.use(secureHeaders({
     contentSecurityPolicy: {
       defaultSrc: ["'self'"],
-      // game art is hotlinked from Riot's Data Dragon CDN, with Community Dragon as the ability-icon fallback
-      imgSrc: ["'self'", 'data:', 'https://ddragon.leagueoflegends.com', 'https://cdn.communitydragon.org'],
-      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      // art and fonts are the site's own files; nothing is loaded from another origin
+      imgSrc: ["'self'", 'data:'],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      fontSrc: ["'self'"],
       scriptSrc: ["'self'"],
       connectSrc: ["'self'"],
       frameAncestors: ["'none'"],

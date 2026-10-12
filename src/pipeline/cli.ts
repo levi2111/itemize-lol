@@ -16,6 +16,11 @@ try {
       await buildDataset({ patch: arg('patch'), accept: flag('accept'), force: flag('force'), log });
       break;
     }
+    case 'art': {
+      const { buildArt } = await import('./art.ts');
+      await buildArt({ patch: arg('patch'), force: flag('force'), log });
+      break;
+    }
     case 'report': {
       const { printReport } = await import('./report.ts');
       await printReport({ patch: arg('patch'), champion: arg('champion'), item: arg('item'), status: arg('status'), log });
@@ -27,7 +32,7 @@ try {
       break;
     }
     default:
-      console.error('usage: node src/pipeline/cli.ts <fetch|build|report|crosscheck> [--patch X.Y.Z] [--champion Id] [--item id|name] [--status auto] [--accept] [--force]');
+      console.error('usage: node src/pipeline/cli.ts <fetch|build|art|report|crosscheck> [--patch X.Y.Z] [--champion Id] [--item id|name] [--status auto] [--accept] [--force]');
       process.exit(2);
   }
 } catch (err) {

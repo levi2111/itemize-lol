@@ -11,7 +11,8 @@
     "data:fetch": "node src/pipeline/cli.ts fetch",
     "data:build": "node src/pipeline/cli.ts build",
     "data:accept": "node src/pipeline/cli.ts build --accept",
-    "data:update": "node src/pipeline/cli.ts fetch && node src/pipeline/cli.ts build",
+    "data:art": "node src/pipeline/cli.ts art",
+    "data:update": "node src/pipeline/cli.ts fetch && node src/pipeline/cli.ts build && node src/pipeline/cli.ts art",
     "data:report": "node src/pipeline/cli.ts report",
     "data:crosscheck": "node src/pipeline/cli.ts crosscheck",
     "calc": "node scripts/calc.ts",
@@ -19,6 +20,7 @@
     "dev": "node --watch src/server/main.ts",
     "start": "node src/server/main.ts",
     "bundle": "node scripts/bundle.ts",
+    "site": "node scripts/site.ts",
     "dev:worker": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
@@ -30,6 +32,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "sharp": "^0.35.5",
     "typescript": "^7.0.2",
     "wrangler": "^4.149.0"
   }
