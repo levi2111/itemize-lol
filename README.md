@@ -102,12 +102,24 @@ src/pipeline/   fetch -> compile -> bind models -> write data/dist/<patch>/
 src/models/     hand-written models: champions/*.ts, items/*.ts, models.lock.json
 src/shared/     dataset types, formula evaluator
 src/engine/     stats, mitigation, the fight simulation, the calculation
-src/server/     HTTP API and static site
+src/server/     HTTP API, and the Node server that also serves the site
+src/worker/     the same API as a Cloudflare Worker
 web/            the site (the tabbed design, wired to the API)
-scripts/        calc.ts (one calculation from the command line), outliers.ts (sanity scan)
+scripts/        calc.ts (one calculation from the command line), outliers.ts (sanity scan), bundle.ts (packs the dataset for the Worker)
 ```
 
 Environment: `PORT`, `ITEMIZE_PATCH`, `ITEMIZE_DATA_DIR`, `CALC_PER_MINUTE`, `TRUST_PROXY` (see `src/server/main.ts`); `ITEMIZE_CONTACT` sets the contact in the pipeline's User-Agent.
+
+## Deploying
+
+Production is a Cloudflare Worker (`wrangler.jsonc`). Cloudflare serves `web/` as static files, with the headers in `web/_headers`, and the Worker answers `/api/v1` from the dataset packed into it at build time.
+
+```
+npm run dev:worker      # the Worker, locally
+npm run deploy          # publish it
+```
+
+Pushing to `main` runs the tests and then deploys (`.github/workflows/ci.yml`). `npm start` remains the Node server for development; both run the same `src/server/app.ts`.
 
 ## Riot's rules
 
