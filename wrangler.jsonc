@@ -3,6 +3,7 @@
   "name": "itemize-lol",
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-09-01",
+  "routes": [{ "pattern": "itemize.lol", "custom_domain": true }],
   // the site: served straight from Cloudflare's edge, the Worker only sees what is not a file here
   "assets": { "directory": "web" },
   // packs data/dist into src/worker/data.gen.txt
