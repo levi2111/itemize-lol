@@ -108,7 +108,7 @@ src/shared/     dataset types, formula evaluator
 src/engine/     stats, mitigation, the fight simulation, the calculation
 src/server/     HTTP API, and the Node server that also serves the site
 src/worker/     the same API as a Cloudflare Worker
-web/            the site (the tabbed design, wired to the API)
+web/            the site, wired to the API: two layouts, one page each (index.html the tabs, receipt.html the receipt), one app.js for both
 scripts/        calc.ts (one calculation from the command line), outliers.ts (sanity scan), bundle.ts (packs the dataset for the Worker)
 ```
 
@@ -116,7 +116,7 @@ Environment: `PORT`, `ITEMIZE_PATCH`, `ITEMIZE_DATA_DIR`, `CALC_PER_MINUTE`, `TR
 
 ## Deploying
 
-Production is a Cloudflare Worker (`wrangler.jsonc`). Cloudflare serves the site as static files, with the headers in `web/_headers`, and the Worker answers `/api/v1` from the dataset packed into it at build time. Before each deploy `scripts/site.ts` copies `web/` to `.build/site/` and renames `app.js` after its contents, so everything but the page itself is cached forever.
+Production is a Cloudflare Worker (`wrangler.jsonc`). Cloudflare serves the site as static files, with the headers in `web/_headers`, and the Worker answers `/api/v1` from the dataset packed into it at build time. Before each deploy `scripts/site.ts` copies `web/` to `.build/site/` and renames the scripts after their contents, so everything but the pages themselves is cached forever. The tabs are at `/` and the receipt layout at `/receipt`; the gear in the top bar swaps between them and remembers the choice in the browser.
 
 ```
 npm run dev:worker      # the Worker, locally
@@ -148,4 +148,3 @@ Checked against Riot's [Legal Jibber Jabber](https://www.riotgames.com/en/legal)
 - Runes, summoner spells, and the target's own items (the UI marks that last one "soon").
 - Attack speed that ramps within a fight. Ramping effects count as fully ramped for sustained damage and not at all in a short combo; each affected item says so in its notes.
 - Saved builds. The share link encodes the whole build in the URL, so it needs no storage.
-- The receipt layout (`itemize-showpiece-receipt.html`). It uses the same state and the same API response; only the page needs wiring.

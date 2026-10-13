@@ -18,8 +18,11 @@ const app = createApp(data, {
   calcPerMinute: Number(process.env.CALC_PER_MINUTE ?? 240),
   clientAddress: c => (trustProxy && c.req.header('x-forwarded-for')?.split(',')[0]?.trim()) || getConnInfo(c).remote.address,
 });
-// everything that is not the API is the static site in web/
-app.use('/*', serveStatic({ root: relative(process.cwd(), join(ROOT, 'web')) || '.' }));
+// everything that is not the API is the static site in web/; a page answers without its .html, as on Cloudflare
+app.use('/*', serveStatic({
+  root: relative(process.cwd(), join(ROOT, 'web')) || '.',
+  rewriteRequestPath: path => path === '/receipt' ? '/receipt.html' : path,
+}));
 const port = Number(process.env.PORT ?? 8787);
 
 serve({ fetch: app.fetch, port }, info => {

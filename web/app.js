@@ -1,8 +1,11 @@
 (() => {
 'use strict';
 /* The workbench. All numbers come from POST /api/v1/calc; this file only keeps the
-   state of the controls and paints what the API returns. */
+   state of the controls and paints what the API returns.
+   Two pages run it, one per layout: the tabs (index.html) and the receipt (receipt.html). Their
+   controls carry the same ids; what differs is how a result is shown, and each has its own painters. */
 const API = '/api/v1';
+const RECEIPT = document.documentElement.dataset.layout === 'receipt';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const nf = n => Math.round(n).toLocaleString('en-US');
@@ -89,8 +92,10 @@ const api = async (path, init) => {
 };
 
 /* ---------- calculation ---------- */
-let timer = 0, seq = 0;
-function schedule() { clearTimeout(timer); timer = setTimeout(recalc, 70); }
+let timer = 0, seq = 0, feed = false;
+/* `quiet` is for a control that changes continuously, a dial being dragged or a number being typed:
+   the receipt is then redrawn in place instead of being fed out of the till again. */
+function schedule(quiet) { if (!quiet) feed = true; clearTimeout(timer); timer = setTimeout(recalc, 70); }
 function targetBody() {
   if (S.target === 'raw') return null;
   const v = readDials();
@@ -127,6 +132,7 @@ function setTab(t) {
   if (t !== 'build') closePicker();
 }
 function paintTabs() {
+  if (RECEIPT) return;
   const na = S.builds.a.filter(Boolean).length, nb = S.builds.b.filter(Boolean).length, v = readDials(), e = S.enemy;
   $('#ts-build').textContent = `${S.champ.name}, level ${S.level}, ` + (S.compare ? `${na} and ${nb} items` : `${na} items`);
   $('#ts-target').textContent = S.target === 'raw' ? 'None, raw output'
@@ -135,10 +141,11 @@ function paintTabs() {
 
 /* ---------- champion ---------- */
 function paintChamp() {
-  const c = S.champ;
-  $('#champ-name').textContent = c.name;
+  const c = S.champ, name = $('#champ-name');
+  name.textContent = c.name;
+  name.style.setProperty('--len', Math.max(5, c.name.length));   // the receipt page sets the name as large as its length allows
   $('#champ-title').textContent = c.title ? c.title[0].toUpperCase() + c.title.slice(1) : '';
-  paintSplash(); paintKit();
+  paintSplash($('#atk-splash'), c.id); paintKit();
   paintSub();
 }
 function comboText() {
@@ -150,6 +157,17 @@ function comboText() {
 }
 function paintSub() {
   const e = S.enemy, t = S.target;
+  if (RECEIPT) {
+    const v = readDials(), stats = `${nf(v.hp)} HP, ${v.ar} armor, ${v.mr} MR`;
+    $('#r-champ').textContent = $('#raw-champ').textContent = S.champ.name;
+    $('#r-lvl').textContent = S.level;
+    $('#r-target').textContent = t === 'raw' ? 'None' : t === 'dummy' ? `Dummy, ${stats}` : `${e.name} Lv ${e.level}, ${stats}`;
+    $('#r-combo').textContent = comboText();
+    $('#stamp-sm').textContent = t === 'raw' ? 'before resistances' : 'after mitigation';
+    $('#stamp-lg').textContent = t === 'raw' ? 'raw output' : t === 'dummy' ? 'vs dummy' : 'vs ' + e.name;
+    $('#l-sub').textContent = `${S.champ.name} at level ${S.level}, items included`;
+    return;
+  }
   $('#h-ctx').textContent = `${S.champ.name}, level ${S.level}, ` +
     (t === 'raw' ? 'no target' : t === 'dummy' ? 'against a dummy' : `against ${e.name} at level ${e.level}`);
   $('#h-combo').textContent = comboText();
@@ -158,8 +176,8 @@ function paintSub() {
 }
 const maxRank = k => S.view?.slots[k]?.maxRank || (k === 'r' ? 3 : 5);
 /* The old picture goes blank at once and the new one fades in when it has arrived. */
-function paintSplash() {
-  const el = $('#atk-splash'), url = splashUrl(S.champ.id);
+function paintSplash(el, id) {
+  const url = splashUrl(id);
   if (el.dataset.src === url) return;
   el.dataset.src = url;
   if (!ready.has(url)) el.classList.add('wait');
@@ -302,12 +320,14 @@ function choose(id) {
 /* ---------- champion picker ---------- */
 let champFor = 'atk', role = 0;
 function openChamps(who) {
-  champFor = who; closePicker();
+  champFor = who; closePicker(); setMenu(null);
   $('#cm-title').textContent = who === 'atk' ? 'Choose a champion' : 'Choose the target';
   $('#champ-modal').hidden = false;
   const q = $('#champ-q'); q.value = ''; renderChamps(); q.focus();
 }
 function closeChamps() { $('#champ-modal').hidden = true; }
+const nameOf = k => $(`#name-${k}`).value || `Build ${k.toUpperCase()}`;
+function paintNames() { if (!RECEIPT) for (const k of ['a', 'b']) $(`#h-name-${k}`).textContent = nameOf(k); }
 function renderChamps() {
   const q = $('#champ-q').value.trim().toLowerCase(), r = ROLES[role];
   const list = S.champs.filter(c => (!q || c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)) && (r === 'All' || c.tags.includes(r)));
@@ -339,25 +359,32 @@ async function enemyStats() {
 }
 function paintTarget() {
   const v = readDials(), raw = S.target === 'raw', cut = x => Math.round(x / (100 + Math.max(0, x)) * 100);
-  $('#n-hp').textContent = `Effective ${nf(v.hp * (1 + v.ar / 100))} vs physical, ${nf(v.hp * (1 + v.mr / 100))} vs magic`;
-  $('#n-ar').textContent = `Blocks ${cut(v.ar)}% of physical damage`;
-  $('#n-mr').textContent = `Blocks ${cut(v.mr)}% of magic damage`;
+  const eff = [nf(v.hp * (1 + v.ar / 100)), nf(v.hp * (1 + v.mr / 100))];
+  // the receipt page's target column is narrow, so its dials get the short form
+  $('#n-hp').textContent = RECEIPT ? `eff. ${eff[0]} / ${eff[1]}` : `Effective ${eff[0]} vs physical, ${eff[1]} vs magic`;
+  $('#n-hp').title = RECEIPT ? 'Effective health against physical / magic damage' : '';
+  $('#n-ar').textContent = RECEIPT ? `blocks ${cut(v.ar)}% physical` : `Blocks ${cut(v.ar)}% of physical damage`;
+  $('#n-mr').textContent = RECEIPT ? `blocks ${cut(v.mr)}% magic` : `Blocks ${cut(v.mr)}% of magic damage`;
   $('#hits').style.setProperty('--hpv', v.hp);
   for (const k of ['a','b']) {
     const r = S.res?.[k], total = r ? r.combo.total.dealt : 0;
     const left = r && r.combo.hpLeft !== null ? r.combo.hpLeft : Math.max(0, v.hp - total), share = Math.min(100, total / v.hp * 100);
     $(`#bar-${k}`).style.setProperty('--left', (left / v.hp * 100).toFixed(1) + '%');
     $(`#left-${k}`).textContent = r ? nf(left) : '–';
+    if (RECEIPT) continue;
     $(`#h-bar-${k}`).style.setProperty('--w', (r ? share : 0).toFixed(1) + '%');
     $(`#h-cap-${k}`).innerHTML = !r ? '' : raw ? 'Before armor and magic resist'
       : r.combo.kills ? `<b>Kills</b> the target, ${nf(v.hp)} HP` : `<b>${Math.round(share)}%</b> of the target's ${nf(v.hp)} HP`;
   }
   $$('#presets .chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.preset === `${v.hp},${v.ar},${v.mr}`));
-  const e = S.enemy;
-  $('#enemy-btn').textContent = e.name;
+  const e = S.enemy, eb = $('#enemy-btn');
+  eb.textContent = e.name;
+  eb.style.setProperty('--len', Math.max(4, e.name.length));
   $('#el').textContent = e.level;
+  // the enemy is a portrait on the tabs and a splash behind the column on the receipt page
   const face = $('#enemy-img');
-  if (face.dataset.id !== e.id) { face.dataset.id = e.id; face.innerHTML = champIco(e.id); }
+  if (RECEIPT) { if (S.target === 'champ') paintSplash($('#enemy-splash'), e.id); }
+  else if (face.dataset.id !== e.id) { face.dataset.id = e.id; face.innerHTML = champIco(e.id); }
   paintSub();
 }
 function setTarget(t) {
@@ -391,6 +418,11 @@ function renderLines() {
     const qty = !castable ? '<span class="q"></span>' : dead ? '<span class="q">–</span>'
       : `<label class="q"><input type="number" data-q="${k}" value="${S.combo[k]}" min="0" max="30" aria-label="Number of ${k === 'aa' ? 'auto attacks' : k.toUpperCase() + ' casts'}"><span>×</span></label>`;
     const word = slot && STATUS_WORD[slot.status];
+    // on the receipt a line has one short note: its status if it has one, else what paintReceipt finds to say
+    if (RECEIPT) return `<div class="r-row r-line" data-k="${k}">${qty}
+      <span class="src"><span class="k">${key}</span><span class="nm">${esc(name)}</span><span class="note" data-fixed="${word || (dead ? 'no damage' : '')}"${word ? ` title="${esc(slot.notes.join(' ') || word)}"` : ''}></span></span>
+      <span class="n a"><i>–</i><small></small></span><span class="n b only-cmp"><i>–</i><small></small></span>
+      <span class="n sh only-solo">–</span></div>`;
     const badge = word ? ` <span class="est" title="${esc(slot.notes.join(' ') || word)}">${word}</span>` : '';
     return `<div class="row line" data-k="${k}">${qty}
       <span class="src"><span class="k">${key}</span><span class="nm">${esc(name)}</span>${badge}</span><span class="ty none"></span>
@@ -400,11 +432,11 @@ function renderLines() {
   }).join('');
   // the default combo can only be trimmed once the kit says which abilities deal damage
   if (S.view) comboFresh = false;
-  $('#total-row').innerHTML = `<span class="tl">Total</span>
+  if (!RECEIPT) $('#total-row').innerHTML = `<span class="tl">Total</span>
     <span class="n a"><i>–</i></span><span class="n b only-cmp"><i>–</i></span>
     <span class="g only-cmp"><i></i></span><span class="sh only-solo">100%</span>`;
   paintSub();
-  if (S.res) paintLines();
+  if (S.res) RECEIPT ? paintReceipt() : paintLines();
 }
 function gap(el, a, b) {
   const d = Math.round(a) - Math.round(b);
@@ -414,6 +446,13 @@ function gap(el, a, b) {
 const secs = s => `${+s.toFixed(1)}s`;
 /* "240/s · 15s": what a line's over-time part deals each second while it runs, and for how long. */
 const rate = l => l?.over && l.total.dealt ? `${nf(l.over.perSecond.dealt)}/s · ${secs(l.over.seconds)}` : '';
+/* What a line is made of in each build, for its tooltip. One burn is often several parts (applied by
+   an attack, refreshed by a spell), so only the line's rate is given. */
+function lineParts(a, b) {
+  const part = (tag, p) => `${tag}: ${p.label}${p.hits > 1 ? ' ×' + p.hits : ''} ${nf(p.total.dealt)}${p.over ? ', over time' : ''}`;
+  const timed = (tag, l) => l.over && l.total.dealt ? [`${tag}: ${nf(l.over.perSecond.dealt)} per second for ${secs(l.over.seconds)} while it runs`] : [];
+  return [...a.parts.map(p => part('A', p)), ...timed('A', a), ...(b ? [...b.parts.map(p => part('B', p)), ...timed('B', b)] : [])].join('\n');
+}
 function paintLines() {
   const A = S.res.a, B = S.compare ? S.res.b : null;
   const of = (r, k) => r?.combo.lines.find(l => l.key === k);
@@ -439,11 +478,7 @@ function paintLines() {
     $('.n.b', row).classList.toggle('win', !!B && vb > va);
     gap($('.g', row), va, vb);
     $('.sh', row).textContent = va && A.combo.total.dealt ? Math.round(va / A.combo.total.dealt * 100) + '%' : '–';
-    // one burn is often several parts (applied by an attack, refreshed by a spell), so only the line's rate is given
-    const part = (tag, p) => `${tag}: ${p.label}${p.hits > 1 ? ' ×' + p.hits : ''} ${nf(p.total.dealt)}${p.over ? ', over time' : ''}`;
-    const timed = (tag, l) => l.over && l.total.dealt ? [`${tag}: ${nf(l.over.perSecond.dealt)} per second for ${secs(l.over.seconds)} while it runs`] : [];
-    const parts = [...a.parts.map(p => part('A', p)), ...timed('A', a), ...(b ? [...b.parts.map(p => part('B', p)), ...timed('B', b)] : [])];
-    $('.nm', row).title = parts.join('\n');
+    $('.nm', row).title = lineParts(a, b);
   }
   const ta = A.combo.total.dealt, tb = B ? B.combo.total.dealt : 0, tot = $('#total-row');
   $('.n.a i', tot).textContent = nf(ta);
@@ -453,11 +488,18 @@ function paintLines() {
   gap($('.g', tot), ta, tb);
 }
 
-function mixRow(k, r, cmpOnly) {
+/* A build's damage by type: the two bars of its split, and the same in words. */
+function mix(r) {
   const t = r.combo.byType, sum = r.combo.total.dealt || 1;
   const pct = x => Math.round(t[x].dealt / sum * 100);
-  const txt = [`${pct('physical')}% physical`, `${pct('magic')}% magic`, ...(t.true.dealt > 0 ? [`${pct('true')}% true`] : [])].join(', ');
-  return `<div class="mixrow${cmpOnly ? ' only-cmp' : ''}"><span class="tag ${k} sm">${k.toUpperCase()}</span><span class="split"><i class="p" style="width:${pct('physical')}%"></i><i class="m" style="width:${pct('magic')}%"></i></span><span>${txt}</span></div>`;
+  return {
+    bars: `<i class="p" style="width:${pct('physical')}%"></i><i class="m" style="width:${pct('magic')}%"></i>`,
+    text: [`${pct('physical')}% physical`, `${pct('magic')}% magic`, ...(t.true.dealt > 0 ? [`${pct('true')}% true`] : [])].join(', '),
+  };
+}
+function mixRow(k, r, cmpOnly) {
+  const m = mix(r);
+  return `<div class="mixrow${cmpOnly ? ' only-cmp' : ''}"><span class="tag ${k} sm">${k.toUpperCase()}</span><span class="split">${m.bars}</span><span>${m.text}</span></div>`;
 }
 function verdicts(A, B) {
   const pc = (x, y) => y > 0 ? Math.round((x / y - 1) * 100) : null;
@@ -482,15 +524,19 @@ function verdicts(A, B) {
   }
   return ['a', 'b'].map(k => `<div class="vd"><span class="tag ${k} sm">${k.toUpperCase()}</span><p>${say[k].join('. ') || 'Behind on this combo and in long fights'}</p></div>`).join('');
 }
-function paintSide() {
-  const A = S.res.a, B = S.compare ? S.res.b : null, raw = S.target === 'raw';
+/* What the numbers on screen assume: the engine's caveats, and the notes of every model that took part. */
+function assumptions() {
   const notes = new Set();
-  for (const [k, r] of [['a', A], ['b', B]]) {
+  for (const r of [S.res.a, S.compare ? S.res.b : null]) {
     if (!r) continue;
     r.caveats.forEach(n => notes.add(n));
     for (const s of ['p', ...SLOTS]) if (s === 'p' || S.combo[s]) r.abilities[s].notes.forEach(n => notes.add(`${lineLabel(s)[1]}: ${n}`));
     for (const it of r.items) it.notes.forEach(n => notes.add(`${S.items.get(it.id)?.name || 'Item'}: ${n}`));
   }
+  return [...notes];
+}
+function paintSide() {
+  const A = S.res.a, B = S.compare ? S.res.b : null, raw = S.target === 'raw', notes = assumptions();
   $('#bside').innerHTML = `
     <div class="bs"><span class="lbl">Damage mix</span>${mixRow('a', A)}${B ? mixRow('b', B, true) : ''}</div>
     <div class="bs"><span class="lbl">Blocked by the target</span>
@@ -499,8 +545,9 @@ function paintSide() {
         ${B ? `<span class="mv b only-cmp"><span class="tag b sm">B</span><i>${raw ? '–' : nf(B.combo.blocked)}</i></span>` : ''}
       </div><span class="hint">Damage lost to armor and magic resist</span></div>
     ${B ? `<div class="bs only-cmp"><span class="lbl">Where each build wins</span>${verdicts(A, B)}</div>` : ''}
-    ${notes.size ? `<div class="bs"><span class="lbl">What these numbers assume</span><div class="notes">${[...notes].map(n => `<p>${esc(n)}</p>`).join('')}</div></div>` : ''}`;
+    ${notes.length ? `<div class="bs"><span class="lbl">What these numbers assume</span><div class="notes">${notes.map(n => `<p>${esc(n)}</p>`).join('')}</div></div>` : ''}`;
 }
+const killTime = r => !r || S.target === 'raw' || r.timeToKill === null ? '–' : r.timeToKill.toFixed(1) + ' s';
 
 /* ---------- hero ---------- */
 function paintHero() {
@@ -521,10 +568,67 @@ function paintHero() {
   const da = A.dps.dealt, db = B ? B.dps.dealt : 0;
   put(dps, 'a', nf(da), !B || da >= db);
   put(dps, 'b', B ? nf(db) : '–', !!B && db > da);
-  const sec = r => !r || raw || r.timeToKill === null ? '–' : r.timeToKill.toFixed(1) + ' s';
   const ka = A.timeToKill ?? Infinity, kb = B ? B.timeToKill ?? Infinity : Infinity;
-  put(ttk, 'a', sec(A), !raw && (!B || ka <= kb) && ka < Infinity);
-  put(ttk, 'b', sec(B), !raw && !!B && kb < ka);
+  put(ttk, 'a', killTime(A), !raw && (!B || ka <= kb) && ka < Infinity);
+  put(ttk, 'b', killTime(B), !raw && !!B && kb < ka);
+}
+
+/* ---------- the receipt page ---------- */
+/* The same result as the hero and the breakdown tab, printed as one slip. In a comparison the
+   larger of two numbers is marked with its build's highlighter. */
+const TYPE_LETTER = {physical: 'P', magic: 'M', true: 'T', mixed: '*', none: ''};
+function paintReceipt() {
+  const A = S.res.a, B = S.compare ? S.res.b : null, raw = S.target === 'raw';
+  const of = (r, k) => r?.combo.lines.find(l => l.key === k);
+  const put = (el, text, win) => { $('i', el).textContent = text; el.classList.toggle('win', win); };
+  for (const k of LINES) {
+    const row = $(`.r-line[data-k="${k}"]`), a = of(A, k), b = of(B, k);
+    if (!row || !a) continue;
+    const va = a.total.dealt, vb = b ? b.total.dealt : 0;
+    put($('.n.a', row), va ? nf(va) : '–', !!B && va > vb);
+    put($('.n.b', row), vb ? nf(vb) : '–', !!B && vb > va);
+    $('.n.a small', row).textContent = va ? TYPE_LETTER[a.type] : '';
+    $('.n.b small', row).textContent = vb ? TYPE_LETTER[b.type] : '';
+    $('.sh', row).textContent = va && A.combo.total.dealt ? Math.round(va / A.combo.total.dealt * 100) + '%' : '–';
+    // a line with nothing else to say gives the rate of its damage over time, per build when they differ
+    const note = $('.note', row), ra = rate(a), rb = rate(b);
+    note.textContent = note.dataset.fixed || (!B || ra === rb ? ra : [ra && 'A ' + ra, rb && 'B ' + rb].filter(Boolean).join(', '));
+    $('.nm', row).title = lineParts(a, b);
+  }
+  const ta = A.combo.total.dealt, tb = B ? B.combo.total.dealt : 0, tot = $('#total-row');
+  put($('.n.a', tot), nf(ta), !B || ta > tb);
+  put($('.n.b', tot), B ? nf(tb) : '–', !!B && tb > ta);
+  $('#pop-a').textContent = nf(ta);
+  $('#pop-b').textContent = B ? nf(tb) : '';
+  for (const [k, r] of [['a', A], ['b', B]]) {
+    if (!r) continue;
+    const m = mix(r), el = $(`#split-${k}`);
+    el.innerHTML = m.bars;
+    el.title = `${nameOf(k)}: ${m.text}`;
+  }
+  const [blocked, dps, ttk] = $$('#more .r-row');
+  put($('.n.a', blocked), raw ? '–' : '−' + nf(A.combo.blocked), false);
+  put($('.n.b', blocked), raw || !B ? '–' : '−' + nf(B.combo.blocked), false);
+  const da = A.dps.dealt, db = B ? B.dps.dealt : 0;
+  put($('.n.a', dps), nf(da), !!B && da > db);
+  put($('.n.b', dps), B ? nf(db) : '–', !!B && db > da);
+  const ka = A.timeToKill ?? Infinity, kb = B ? B.timeToKill ?? Infinity : Infinity;
+  put($('.n.a', ttk), killTime(A), !raw && !!B && ka < kb);
+  put($('.n.b', ttk), killTime(B), !raw && !!B && kb < ka);
+  $('#verdict').innerHTML = B ? verdicts(A, B) : '';
+  // a verdict is one line on the slip; the full sentence is its tooltip when it is cut short
+  for (const p of $$('#verdict p')) p.title = p.textContent;
+  const notes = assumptions(), fine = $('#r-notes');
+  fine.textContent = notes.length ? `${notes.length} assumption${notes.length === 1 ? '' : 's'}, hover to read` : '';
+  fine.title = notes.join('\n');
+}
+/* The receipt feeds a notch out of the till when a new one is printed. Not for a quiet change
+   (see schedule), and not for the first, which is still rolling out. */
+let printed = false;
+function reprint() {
+  const s = $('#sheet');
+  if (feed && printed) { s.classList.remove('feed'); void s.offsetWidth; s.classList.add('feed'); }
+  feed = false; printed = true;
 }
 
 /* ---------- stats tab ---------- */
@@ -553,23 +657,36 @@ function statGroups(A, B) {
     ]],
   ];
 }
+/* A stat is a number, or text that starts with one ("25%", "18 + 35%"). */
+const statText = x => typeof x === 'number' ? (Number.isInteger(x) ? nf(x) : x.toFixed(2)) : x;
+const statNum = x => typeof x === 'number' ? x : parseFloat(x) || 0;
 function renderStats() {
   const A = S.res.a, B = S.compare ? S.res.b : null, groups = statGroups(A, B);
-  const f = x => typeof x === 'number' ? (Number.isInteger(x) ? nf(x) : x.toFixed(2)) : x;
-  const val = x => typeof x === 'number' ? x : parseFloat(x) || 0;
   $('#stats-pane').innerHTML = groups.map(([group, rows]) => {
     const head = B
       ? `<div class="srow shead"><span class="lbl">${group}</span><span class="tag a xs">A</span><span class="tag b xs">B</span><span class="lbl">Gap</span></div>`
       : `<div class="srow shead"><span class="lbl">${group}</span><span></span><span></span></div>`;
     return `<div class="sgroup">${head}${rows.map(([label, a, b, note]) => {
-      if (!B) return `<div class="srow"><span class="sn">${label}</span><span class="n">${f(a)}</span><span class="note">${esc(note)}</span></div>`;
-      if (a === b) return `<div class="srow same"><span class="sn">${label}</span><span class="n">${f(a)}</span><span class="n">${f(b)}</span><span class="g">same</span></div>`;
-      const w = val(a) >= val(b) ? 'a' : 'b', d = Math.abs(val(b) - val(a));
-      return `<div class="srow"><span class="sn">${label}</span><span class="n${w === 'a' ? ' win' : ''}">${f(a)}</span><span class="n${w === 'b' ? ' win' : ''}">${f(b)}</span><span class="g ${w}">+${f(+d.toFixed(2))}${String(a).endsWith('%') ? '%' : ''}</span></div>`;
+      if (!B) return `<div class="srow"><span class="sn">${label}</span><span class="n">${statText(a)}</span><span class="note">${esc(note)}</span></div>`;
+      if (a === b) return `<div class="srow same"><span class="sn">${label}</span><span class="n">${statText(a)}</span><span class="n">${statText(b)}</span><span class="g">same</span></div>`;
+      const w = statNum(a) >= statNum(b) ? 'a' : 'b', d = Math.abs(statNum(b) - statNum(a));
+      return `<div class="srow"><span class="sn">${label}</span><span class="n${w === 'a' ? ' win' : ''}">${statText(a)}</span><span class="n${w === 'b' ? ' win' : ''}">${statText(b)}</span><span class="g ${w}">+${statText(+d.toFixed(2))}${String(a).endsWith('%') ? '%' : ''}</span></div>`;
     }).join('')}</div>`;
   }).join('');
   const all = groups.flatMap(g => g[1]), diff = all.filter(r => r[1] !== r[2]).length;
   $('#ts-stats').textContent = B ? `${diff} of ${all.length} differ` : `${S.champ.name} with items`;
+}
+/* The receipt page's strip along the bottom: the same twelve stats, one cell each. */
+function renderLedger() {
+  const A = S.res.a, B = S.compare ? S.res.b : null;
+  $('#ledger-cells').innerHTML = statGroups(A, B).flatMap(g => g[1]).map(([label, a, b, note]) => {
+    const head = `<span class="eyebrow">${label}</span>`;
+    if (!B) return `<div class="cell">${head}<div class="v solo${String(statText(a)).length > 5 ? ' long' : ''}"><b>${statText(a)}</b></div><em>${esc(note)}</em></div>`;
+    if (a === b) return `<div class="cell same">${head}<div class="v"><i class="dot a"></i><i class="dot b"></i><b>${statText(a)}</b></div><em>same in both</em></div>`;
+    // B's line says how far it is from A's; nothing when only the text after the number differs
+    const d = statNum(b) - statNum(a), ds = d ? (d > 0 ? '+' : '−') + statText(+Math.abs(d).toFixed(2)) + (String(a).endsWith('%') ? '%' : '') : '';
+    return `<div class="cell">${head}<div class="v a${d < 0 ? ' win' : ''}"><i class="dot a"></i><b>${statText(a)}</b></div><div class="v b${d > 0 ? ' win' : ''}"><i class="dot b"></i><b>${statText(b)}</b><em>${ds}</em></div></div>`;
+  }).join('');
 }
 
 /* ---------- data quality ---------- */
@@ -588,7 +705,9 @@ function paintQuality() {
 }
 
 function paintResults() {
-  paintHero(); paintLines(); paintOpts(); paintSide(); renderStats(); paintTarget(); paintQuality();
+  if (RECEIPT) { paintReceipt(); renderLedger(); reprint(); }
+  else { paintHero(); paintLines(); paintSide(); renderStats(); }
+  paintOpts(); paintTarget(); paintQuality();
 }
 
 /* ---------- champion options ---------- */
@@ -612,8 +731,11 @@ function paintOpts() {
     if (input.type === 'checkbox') input.checked = !!v;
     else if (document.activeElement !== input) input.value = v ?? '';
   }
-  const reset = $('#opts-reset');
-  if (reset) reset.hidden = !Object.keys(S.options).length;
+  const reset = $('#opts-reset'), set = Object.keys(S.options).length;
+  if (reset) reset.hidden = !set;
+  // the receipt page keeps the options in a menu, and its button says how many are set
+  const btn = $('#opts-btn');
+  if (btn) { btn.hidden = $('#opts').hidden; btn.textContent = `${S.champ.name} options` + (set ? ` · ${set} set` : ''); }
 }
 function setOpt(input) {
   const o = S.view?.options.find(x => x.id === input.dataset.o);
@@ -621,7 +743,28 @@ function setOpt(input) {
   if (o.kind === 'bool') S.options[o.id] = input.checked ? 1 : 0;
   else if (input.value.trim() === '' || !Number.isFinite(+input.value)) delete S.options[o.id];
   else S.options[o.id] = Math.max(o.min ?? -1e6, Math.min(o.max ?? 1e6, Math.round(+input.value)));
-  paintOpts(); schedule();
+  paintOpts(); schedule(o.kind !== 'bool');
+}
+
+/* ---------- menus ---------- */
+/* A .menu-btn opens the panel its aria-controls names; one is open at a time. The settings gear is
+   one, and so is the receipt page's button for the champion's options. */
+let menu = null;                    // the button of the open menu
+function setMenu(btn) {
+  const show = (b, on) => { b.setAttribute('aria-expanded', on); $('#' + b.getAttribute('aria-controls')).hidden = !on; };
+  if (menu) show(menu, false);
+  menu = btn === menu ? null : btn;
+  if (menu) show(menu, true);
+}
+/* The two layouts are two pages, so choosing the other one is a link. The choice is remembered
+   (layout.js sends later visits to that page) and the build is handed over, so nothing but the
+   layout changes. */
+function setLayout(link) {
+  if (link.getAttribute('aria-checked') === 'true') return setMenu(null);
+  try { localStorage.setItem('layout', link.dataset.layout); } catch (e) {}
+  let hash = '';
+  try { sessionStorage.setItem('carry', encodeState()); } catch (e) { hash = '#s=' + encodeState(); }
+  location.assign(link.getAttribute('href') + hash);
 }
 
 /* ---------- share link ---------- */
@@ -631,10 +774,13 @@ function encodeState() {
     ...(Object.keys(S.options).length && {x: S.options})};
   return btoa(unescape(encodeURIComponent(JSON.stringify(s)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
+/* A build arrives in the link, or from the other layout's page when the visitor has just swapped. */
 function decodeState() {
-  const m = /[#&]s=([\w-]+)/.exec(location.hash);
-  if (!m) return null;
-  try { return JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/-/g, '+').replace(/_/g, '/'))))); } catch (e) { return null; }
+  let text = null;
+  try { text = sessionStorage.getItem('carry'); sessionStorage.removeItem('carry'); } catch (e) {}
+  text ||= /[#&]s=([\w-]+)/.exec(location.hash)?.[1];
+  if (!text) return null;
+  try { return JSON.parse(decodeURIComponent(escape(atob(text.replace(/-/g, '+').replace(/_/g, '/'))))); } catch (e) { return null; }
 }
 function applyState(s) {
   const int = (v, lo, hi, d) => Number.isFinite(+v) ? Math.max(lo, Math.min(hi, Math.round(+v))) : d;
@@ -658,14 +804,19 @@ function applyState(s) {
 
 /* ---------- wiring ---------- */
 function wire() {
-  $('.tabs').addEventListener('click', e => { const t = e.target.closest('.tab'); if (t) setTab(t.dataset.tab); });
+  $('.tabs')?.addEventListener('click', e => { const t = e.target.closest('.tab'); if (t) setTab(t.dataset.tab); });
+  document.addEventListener('click', e => {
+    const b = e.target.closest('.menu-btn');
+    if (b) setMenu(b); else if (menu && !e.target.closest('.menu')) setMenu(null);
+  });
+  $('#set-menu').addEventListener('click', e => { const a = e.target.closest('a[data-layout]'); if (a) { e.preventDefault(); setLayout(a); } });
   $('#cmp-seg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setCompare(b.dataset.cmp === 'on'); });
   $('#add-b').addEventListener('click', () => setCompare(true));
   $('#rm-b').addEventListener('click', () => setCompare(false));
   $('#copy-a').addEventListener('click', () => { S.builds.b = [...S.builds.a]; renderBuilds(); schedule(); });
   $('#clear-a').addEventListener('click', () => { S.builds.a = Array(6).fill(null); renderBuilds(); schedule(); });
-  $('#name-a').addEventListener('input', e => $('#h-name-a').textContent = e.target.value || 'Build A');
-  $('#name-b').addEventListener('input', e => $('#h-name-b').textContent = e.target.value || 'Build B');
+  $('#name-a').addEventListener('input', paintNames);
+  $('#name-b').addEventListener('input', paintNames);
   document.addEventListener('click', e => { const b = e.target.closest('button[data-t]'); if (b) setTarget(b.dataset.t); });
 
   $('#ruler').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setLevel(+b.dataset.l); });
@@ -684,7 +835,7 @@ function wire() {
   $('#lines').addEventListener('input', e => {
     const k = e.target.dataset.q; if (!k) return;
     S.combo[k] = Math.max(0, Math.min(30, Math.round(+e.target.value) || 0));
-    paintSub(); schedule();
+    paintSub(); schedule(true);
   });
   $('#opts').addEventListener('input', e => { if (e.target.matches('input[data-o]')) setOpt(e.target); });
   $('#opts').addEventListener('click', e => { if (e.target.closest('#opts-reset')) { S.options = {}; paintOpts(); schedule(); } });
@@ -746,8 +897,8 @@ function wire() {
   $('#el-up').addEventListener('click', () => lvl(1));
   for (const k of ['hp','ar','mr']) {
     const [num, rng] = dial(k);
-    num.addEventListener('input', () => { rng.value = num.value; paintTarget(); schedule(); });
-    rng.addEventListener('input', () => { num.value = rng.value; paintTarget(); schedule(); });
+    num.addEventListener('input', () => { rng.value = num.value; paintTarget(); schedule(true); });
+    rng.addEventListener('input', () => { num.value = rng.value; paintTarget(); schedule(true); });
   }
   $('#presets').addEventListener('click', e => {
     const c = e.target.closest('.chip'); if (!c) return;
@@ -764,9 +915,13 @@ function wire() {
     setTimeout(() => b.textContent = 'Copy build link', 1600);
   });
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { if (!$('#champ-modal').hidden) closeChamps(); else closePicker(); return; }
+    if (e.key === 'Escape') {
+      if (menu) { const b = menu; setMenu(null); b.focus(); }
+      else if (!$('#champ-modal').hidden) closeChamps(); else closePicker();
+      return;
+    }
     if (e.ctrlKey || e.metaKey || e.altKey || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || !$('#champ-modal').hidden) return;
-    const tab = {1:'build', 2:'target', 3:'break', 4:'stats'}[e.key];
+    const tab = !RECEIPT && {1:'build', 2:'target', 3:'break', 4:'stats'}[e.key];
     if (tab) { setTab(tab); return; }
     if (e.key.toLowerCase() === 'c') { e.preventDefault(); openChamps('atk'); }
   });
@@ -795,10 +950,9 @@ async function boot() {
   const saved = decodeState();
   if (saved) applyState(saved);
   const tab = /[#&]tab=(build|target|break|stats)\b/.exec(location.hash);
-  if (tab) setTab(tab[1]);
+  if (tab && !RECEIPT) setTab(tab[1]);
   $('#order').value = S.order;
-  $('#h-name-a').textContent = $('#name-a').value || 'Build A';
-  $('#h-name-b').textContent = $('#name-b').value || 'Build B';
+  paintNames();
   document.body.dataset.compare = S.compare ? 'on' : 'off';
   $$('#cmp-seg button').forEach(b => b.setAttribute('aria-checked', (b.dataset.cmp === 'on') === S.compare));
   document.body.dataset.target = S.target;

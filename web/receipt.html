@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="en" data-layout="receipt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>itemize.lol</title>
+<meta name="description" content="Compare League of Legends item builds by the damage they actually deal: combo damage, DPS and time to kill, broken down by source.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<script src="/layout.js"></script>
+<link rel="preload" href="/fonts/archivo-v25.woff2" as="font" type="font/woff2" crossorigin>
+<!--art-->
+<style>
+/* Archivo and IBM Plex Mono, both under the SIL Open Font License, served from this site. */
+@font-face{font-family:"Archivo";font-style:normal;font-weight:100 900;font-stretch:62% 125%;font-display:swap;src:url(/fonts/archivo-v25.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/plex-mono-v20-400.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/plex-mono-v20-500.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/plex-mono-v20-600.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:700;font-display:swap;src:url(/fonts/plex-mono-v20-700.woff2) format("woff2")}
+</style>
+<style>
+/* Layout: attacker (left) -> itemized receipt (centre) -> target (right), stat ledger pinned underneath.
+   Everything is sized in rem off a viewport-fitted root, so the bench always fills exactly one screen.
+   This is the second layout of the site; index.html is the first, and web/app.js runs both. */
+:root{
+  --mat:#113331;          /* workbench surface */
+  --mat-deep:#0a2221;
+  --mat-line:rgba(214,240,226,.055);
+  --rule:#2c5754;         /* hairlines on the mat */
+  --chalk:#efe9d8;        /* text on the mat */
+  --chalk-dim:#a3c0b8;
+  --chalk-faint:#6f968f;
+  --paper:#f1ecdd;        /* the receipt */
+  --ink:#161a17;
+  --ink-soft:#6c695c;
+  --hl-a:#eef035;         /* highlighter, build A */
+  --hl-b:#ff7fb2;         /* highlighter, build B */
+  --stamp:#1d6b62;
+  --warn:#ffb05c;
+  --font-display:"Archivo","Arial Narrow",Impact,sans-serif;
+  --font-ui:"Archivo",system-ui,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+/* The root size is the largest at which .app's minimum, 95.5rem by 52.6rem, still fits the window. */
+html{height:100%;font-size:clamp(11.5px,min(1.04vw,1.89vh),21px);color-scheme:dark}
+body{margin:0;height:100%;overflow:hidden;background:var(--mat-deep);color:var(--chalk);font-family:var(--font-ui);font-size:.86rem;line-height:1.3;-webkit-font-smoothing:antialiased}
+@media (max-width:1100px),(max-height:605px){body{overflow:auto}}
+button,input,select{font:inherit;color:inherit;margin:0}
+button{background:none;border:0;padding:0;cursor:pointer;text-align:inherit}
+img{display:block}
+:focus-visible{outline:2px solid var(--hl-a);outline-offset:2px}
+[hidden]{display:none!important}
+
+/* mode switches */
+body[data-compare="off"] .only-cmp,
+body[data-compare="on"] .only-solo,
+body:not([data-target="dummy"]) .only-dummy,
+body:not([data-target="champ"]) .only-champ,
+body:not([data-target="raw"]) .only-raw{display:none!important}
+body[data-target="raw"] .needs-target{opacity:.26;pointer-events:none}
+
+.a{--c:var(--hl-a)} .b{--c:var(--hl-b)}
+
+/* ---------- shell ---------- */
+.app{position:relative;isolation:isolate;height:100%;min-width:95.5rem;min-height:52.6rem;display:grid;grid-template-rows:3.2rem minmax(0,1fr) 6.6rem auto;overflow:hidden}
+.app::before{content:"";position:absolute;inset:0;z-index:-2;background:
+  linear-gradient(var(--mat-line) 1px,transparent 1px) 0 3.2rem/2rem 2rem,
+  linear-gradient(90deg,var(--mat-line) 1px,transparent 1px) 1.5rem 0/2rem 2rem,
+  linear-gradient(rgba(214,240,226,.06) 1px,transparent 1px) 0 3.2rem/10rem 10rem,
+  linear-gradient(90deg,rgba(214,240,226,.06) 1px,transparent 1px) 1.5rem 0/10rem 10rem,
+  radial-gradient(110% 95% at 50% 38%,var(--mat) 0%,var(--mat-deep) 100%)}
+.splash{position:absolute;z-index:-1;top:0;object-fit:cover;mix-blend-mode:luminosity;opacity:.6;pointer-events:none;transition:opacity .25s}
+.splash-l{left:0;width:56%;height:74%;object-position:50% 20%;
+  -webkit-mask-image:linear-gradient(90deg,#000 28%,transparent 94%),linear-gradient(#000 38%,transparent 96%);-webkit-mask-composite:source-in;
+  mask-image:linear-gradient(90deg,#000 28%,transparent 94%),linear-gradient(#000 38%,transparent 96%);mask-composite:intersect}
+.splash-r{right:0;width:40%;height:62%;object-position:50% 18%;
+  -webkit-mask-image:linear-gradient(270deg,#000 30%,transparent 94%),linear-gradient(#000 40%,transparent 96%);-webkit-mask-composite:source-in;
+  mask-image:linear-gradient(270deg,#000 30%,transparent 94%),linear-gradient(#000 40%,transparent 96%);mask-composite:intersect}
+
+.eyebrow{font-family:var(--font-mono);font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;color:var(--chalk-dim)}
+.hint{font-size:.74rem;color:var(--chalk-faint)}
+.row-head{display:flex;align-items:baseline;justify-content:space-between;gap:.8rem}
+.key{font-family:var(--font-mono);font-size:.62rem;border:1px solid currentColor;border-radius:2px;padding:0 .28rem;opacity:.75}
+
+.tag{display:inline-grid;place-items:center;flex:none;font-family:var(--font-display);font-stretch:85%;font-weight:900;font-style:normal;color:var(--ink);background:var(--c);line-height:1;transform:rotate(-2deg);border-radius:.22em .5em .28em .45em/.45em .25em .5em .22em}
+.tag.xs{width:1.1rem;height:1.1rem;font-size:.7rem}
+.tag.sm{width:1.4rem;height:1.4rem;font-size:.86rem}
+.tag.lg{width:1.9rem;align-self:stretch;font-size:1.45rem}
+
+.seg{display:inline-grid;grid-auto-flow:column;gap:2px;padding:2px;border:1px solid var(--rule);background:rgba(4,18,17,.6);border-radius:3px}
+.seg button{display:flex;align-items:center;justify-content:center;gap:.4rem;padding:.4rem .95rem;font-size:.8rem;font-weight:600;color:var(--chalk-dim);border-radius:2px;white-space:nowrap}
+.seg button:hover{color:var(--chalk)}
+.seg button[aria-checked="true"]{background:var(--chalk);color:var(--ink)}
+.seg .vs{font-weight:400;opacity:.7}
+
+.chip{font-size:.72rem;font-weight:600;padding:.2rem .55rem;border:1px solid var(--rule);border-radius:2px;color:var(--chalk-dim);white-space:nowrap}
+.chip:hover{color:var(--chalk);border-color:var(--chalk-faint)}
+.chip[aria-pressed="true"]{background:var(--chalk);color:var(--ink);border-color:var(--chalk)}
+
+.search{background:rgba(239,233,216,.07);border:1px solid var(--rule);border-radius:2px;padding:.42rem .7rem;font-size:.86rem;width:100%;min-width:0}
+.search::placeholder{color:var(--chalk-faint)}
+.search:focus{outline:0;border-color:var(--chalk)}
+.esc{font-family:var(--font-mono);font-size:.68rem;border:1px solid var(--rule);border-radius:2px;padding:.3rem .5rem;color:var(--chalk-dim)}
+.esc:hover{border-color:var(--chalk);color:var(--chalk)}
+
+/* ---------- top bar ---------- */
+.bar{position:relative;z-index:6;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:1rem;padding:0 1.5rem;border-bottom:1px solid var(--rule);background:rgba(7,25,24,.8)}
+.bar-l{display:flex;align-items:center;gap:2.2rem}
+.bar-r{display:flex;align-items:center;justify-content:flex-end;gap:1.1rem}
+.mark{display:inline-flex;align-items:baseline;font-family:var(--font-display);font-stretch:112%;font-weight:800;font-size:1.3rem;letter-spacing:-.03em;color:var(--chalk);text-decoration:none}
+.mark b{position:relative;z-index:0;font-weight:900;color:var(--ink);padding:0 .3em 0 .28em}
+.mark b::before{content:"";position:absolute;z-index:-1;inset:.1em 0 0;background:var(--hl-a);transform:rotate(-1.4deg) skewX(-7deg);border-radius:.2em .5em .25em .45em/.4em .2em .5em .2em}
+.mark span{padding-left:.12em;color:var(--chalk-dim)}
+.nav{display:flex;gap:1.4rem;font-size:.82rem;font-weight:500}
+.nav a{color:var(--chalk-dim);text-decoration:none;padding:.25rem 0;border-bottom:2px solid transparent}
+.nav a:hover{color:var(--chalk)}
+.nav a[aria-current]{color:var(--chalk);border-color:var(--chalk)}
+.nav i{font-style:normal;font-family:var(--font-mono);font-size:.66rem;border:1px solid var(--rule);border-radius:2px;padding:0 .3rem;margin-left:.25rem}
+.wf{font-family:var(--font-mono);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--chalk-faint);border:1px dashed var(--rule);padding:.25rem .5rem;cursor:help}
+.wf.warn{color:var(--warn);border-color:var(--warn)}
+.patch{font-family:var(--font-mono);font-size:.74rem;color:var(--chalk-dim)}
+.patch b{color:var(--chalk);font-weight:600}
+.btn{border:1px solid var(--chalk);border-radius:2px;padding:.36rem .8rem;font-size:.8rem;font-weight:600}
+.btn:hover{background:var(--chalk);color:var(--ink)}
+
+/* ---------- menus ---------- */
+/* a button and the panel it opens: the settings gear in the bar, the champion's options by the ranks */
+.set{position:relative;display:inline-flex}
+.gear{width:2rem;height:2rem;display:grid;place-items:center;border:1px solid var(--rule);border-radius:2px;color:var(--chalk-dim)}
+.gear svg{width:1.05rem;height:1.05rem}
+.gear:hover,.gear[aria-expanded="true"]{border-color:var(--chalk);color:var(--chalk)}
+.menu{position:absolute;right:0;top:calc(100% + .5rem);z-index:40;width:19rem;display:grid;gap:.3rem;padding:.7rem;background:#081d1c;border:1px solid var(--chalk);border-radius:3px;box-shadow:0 1.2rem 2.5rem rgba(0,0,0,.55)}
+.menu>.eyebrow{padding:0 .3rem .15rem}
+.menu a{display:grid;grid-template-columns:.8rem minmax(0,1fr);column-gap:.6rem;padding:.45rem .5rem;border-radius:2px;color:var(--chalk-dim);text-decoration:none}
+.menu a::before{content:"";grid-row:1/3;margin-top:.22rem;width:.8rem;height:.8rem;border:1px solid var(--chalk-faint);border-radius:50%}
+.menu a[aria-checked="true"]::before{border-color:var(--chalk);background:radial-gradient(var(--chalk) 42%,transparent 48%)}
+.menu a b{color:var(--chalk);font-weight:700}
+.menu a span{grid-column:2;font-size:.74rem}
+.menu a:hover{background:rgba(239,233,216,.08)}
+.menu.opts{width:24rem;gap:.5rem;padding:.8rem .9rem;font-size:.8rem}
+.opts .sec-head{display:flex;align-items:center;justify-content:space-between;gap:.8rem;min-height:1.5rem}
+.opts .lbl{font-family:var(--font-mono);font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;color:var(--chalk-dim)}
+.opt{display:grid;grid-template-columns:2.4rem minmax(0,1fr);column-gap:.7rem;align-items:center;color:var(--chalk-dim);cursor:pointer}
+.opt input{justify-self:end;margin:0}
+.opt input[type="checkbox"]{width:.95rem;height:.95rem;accent-color:var(--chalk)}
+.opt input[type="number"]{width:100%;padding:0 0 .05rem;border:0;border-bottom:1px dotted var(--chalk-faint);background:none;color:var(--chalk);font-family:var(--font-mono);font-weight:600;text-align:right;appearance:textfield;-moz-appearance:textfield}
+.opt input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none}
+.opt input[type="number"]:focus{outline:0;border-bottom:1px solid var(--chalk)}
+.opt.set span{color:var(--chalk)}
+
+/* ---------- main ---------- */
+.main{display:grid;grid-template-columns:minmax(35.5rem,1.25fr) 29.5rem minmax(24.5rem,.8fr);gap:1.5rem;padding:0 1.5rem;min-height:0}
+.main>*{min-width:0;min-height:0}
+
+/* attacker */
+.atk{display:flex;flex-direction:column;gap:1.15rem;padding:1.2rem 0 1.15rem}
+.champ{display:grid;justify-items:start;gap:.4rem;margin-bottom:auto;max-width:100%}
+.champ-name{font-family:var(--font-display);font-stretch:62%;font-weight:900;text-transform:uppercase;white-space:nowrap;line-height:.82;font-size:min(7rem,calc(34rem/(var(--len,6)*.5)));text-shadow:0 .1rem 1.6rem rgba(5,20,19,.75)}
+.champ-sub{display:flex;align-items:center;gap:.8rem;font-size:.95rem;color:var(--chalk-dim)}
+.swap{display:inline-flex;align-items:center;gap:.4rem;font-size:.74rem;font-weight:600;color:var(--chalk);border:1px solid var(--chalk);border-radius:2px;padding:.2rem .5rem;background:rgba(7,25,24,.5)}
+.champ:hover .swap,button.swap:hover{background:var(--chalk);color:var(--ink)}
+
+.lvl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:1.2rem;align-items:start}
+.lvl-num{display:grid;gap:.3rem}
+.lvl-num output{font-family:var(--font-display);font-stretch:62%;font-weight:900;font-size:3.2rem;line-height:.78;min-width:2.5rem}
+.ruler{position:relative;display:grid;grid-template-columns:repeat(18,minmax(0,1fr));border-bottom:2px solid var(--rule);margin-top:.35rem}
+.ruler::before{content:"";position:absolute;left:0;bottom:-2px;height:2px;background:var(--chalk);width:calc((var(--lv) - .5)/18*100%);transition:width .18s}
+.ruler button{position:relative;height:2.35rem;display:grid;justify-items:center;align-content:start;font-family:var(--font-mono);font-size:.7rem;color:var(--chalk-faint)}
+.ruler button::after{content:"";position:absolute;left:50%;bottom:0;width:1px;height:.5rem;background:var(--rule)}
+.ruler button.ult::after{height:.9rem}
+.ruler button[data-r]::before{content:attr(data-r);position:absolute;left:50%;top:calc(100% + .32rem);transform:translateX(-50%);font-size:.58rem;letter-spacing:.06em}
+.ruler button span{padding:.1rem .34rem;border-radius:2px}
+.ruler button:hover span{background:rgba(239,233,216,.16);color:var(--chalk)}
+.ruler button.past{color:var(--chalk-dim)}
+.ruler button.past::after{background:var(--chalk)}
+.ruler button.past[data-r]::before{color:var(--chalk)}
+.ruler button.now span{background:var(--chalk);color:var(--ink);font-weight:700}
+
+.skills{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.6rem 1.8rem;align-items:end;margin-top:.5rem}
+.skills .row-head{grid-column:1/-1;align-items:center;justify-content:flex-start;gap:1.2rem}
+.skills .row-head .set{margin-left:auto}
+.skill-row{display:flex;gap:1.05rem}
+.skill{display:grid;gap:.4rem;width:3.5rem}
+.skill-ico{position:relative;width:3.5rem;height:3.5rem;border:1px solid var(--rule);border-radius:2px;background:#061918}
+.skill-ico .ico{border-radius:1px}
+.skill.zero .skill-ico .ico{filter:grayscale(1) brightness(.5)}
+.skill-ico .k{position:absolute;left:-.42rem;top:-.42rem;font-family:var(--font-mono);font-size:.66rem;font-weight:700;line-height:1.35;padding:0 .3rem;background:var(--mat-deep);border:1px solid var(--chalk);border-radius:2px}
+.skill-ico .rk{position:absolute;right:.2rem;bottom:.05rem;font-family:var(--font-mono);font-size:.76rem;font-weight:700;text-shadow:0 0 .25rem #000,0 0 .12rem #000,0 0 .5rem #000}
+.pips{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:.14rem;height:.62rem}
+.pip{position:relative;border:1px solid var(--chalk-faint);border-radius:1px}
+.pip::after{content:"";position:absolute;inset:-.4rem -.08rem}
+.pip.on{background:var(--chalk);border-color:var(--chalk)}
+.pip:not(.on):hover,.pip:not(.on):has(~ .pip:hover){background:rgba(239,233,216,.4)}
+.pips-none{height:.62rem;font-family:var(--font-mono);font-size:.56rem;letter-spacing:.08em;text-transform:uppercase;color:var(--chalk-faint);line-height:.62rem}
+.plan{display:grid;gap:.4rem;justify-items:start}
+.plan select{appearance:none;-webkit-appearance:none;cursor:pointer;font-family:var(--font-mono);font-size:.78rem;padding:.36rem 1.7rem .36rem .6rem;border:1px solid var(--rule);border-radius:2px;background:rgba(4,18,17,.6) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23efe9d8' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right .55rem center/.6rem}
+.plan select:hover{border-color:var(--chalk)}
+.pts{font-family:var(--font-mono);font-size:.72rem;color:var(--chalk-dim)}
+.pts b{color:var(--chalk);font-weight:600}
+.pts.over b{color:var(--warn)}
+
+.builds{position:relative;display:grid;gap:.75rem;margin-top:.4rem}
+.build{display:grid;grid-template-columns:1.9rem 6.6rem minmax(0,1fr) auto;align-items:center;gap:.7rem}
+.b-meta{display:grid;gap:.15rem;min-width:0}
+.b-name{background:none;border:0;border-bottom:1px dashed transparent;padding:0;width:100%;min-width:0;font-weight:700;font-size:.98rem;text-overflow:ellipsis}
+.b-name:hover{border-bottom-color:var(--chalk-faint)}
+.b-name:focus{outline:0;border-bottom:1px solid var(--chalk)}
+.b-gold{font-family:var(--font-mono);font-size:.72rem;color:var(--chalk-dim)}
+.b-gold b{color:var(--chalk);font-weight:600}
+.slots{display:grid;grid-template-columns:repeat(6,minmax(3.4rem,4.1rem));gap:.45rem;justify-content:start}
+.slot{position:relative;aspect-ratio:1;border:1px solid var(--rule);border-radius:2px;background:rgba(4,18,17,.55);cursor:pointer}
+.slot .ico{border-radius:1px}
+.slot:hover{border-color:var(--chalk)}
+.slot.empty{border-style:dashed;border-color:var(--chalk-faint)}
+.slot.empty::before{content:"+";position:absolute;inset:0;display:grid;place-items:center;font-family:var(--font-mono);font-size:1.1rem;color:var(--chalk-faint)}
+.slot.sel{outline:2px solid var(--chalk);outline-offset:2px}
+.slot .rm{position:absolute;top:-.45rem;right:-.45rem;width:1.15rem;height:1.15rem;display:none;place-items:center;border-radius:50%;background:var(--chalk);color:var(--ink);font-size:.8rem;font-weight:700;line-height:1}
+.slot:hover .rm,.slot:focus-within .rm{display:grid}
+body[data-compare="on"] .slot.uniq::after{content:"";position:absolute;left:.1rem;right:.1rem;bottom:-.48rem;height:.22rem;background:var(--c);transform:rotate(-1deg);border-radius:.1rem .3rem .12rem .25rem}
+.b-acts{display:grid;gap:.2rem}
+.act{min-width:2.3rem;height:1.5rem;display:grid;place-items:center;padding:0 .3rem;border:1px solid var(--rule);border-radius:2px;font-family:var(--font-mono);font-size:.6rem;color:var(--chalk-dim)}
+.act:hover{border-color:var(--chalk);color:var(--chalk)}
+.add-b{height:3.4rem;display:flex;align-items:center;gap:.7rem;padding:0 .9rem;border:1px dashed var(--chalk-faint);border-radius:2px;font-weight:600;color:var(--chalk-dim)}
+.add-b:hover{border-color:var(--hl-b);color:var(--chalk)}
+
+.picker{position:absolute;left:0;right:0;bottom:calc(100% + .9rem);height:24rem;z-index:20;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;background:#081d1c;border:1px solid var(--chalk);border-radius:3px;box-shadow:0 1.2rem 2.5rem rgba(0,0,0,.55)}
+.picker-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:.7rem;align-items:center;padding:.7rem .8rem .55rem}
+.picker-for{display:flex;align-items:center;gap:.45rem;font-weight:700;font-size:.84rem;white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:.3rem;padding:0 .8rem .6rem}
+.picker-grid{overflow:auto;padding:.2rem .8rem .8rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(2.8rem,1fr));gap:.4rem;align-content:start;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.pi{position:relative;aspect-ratio:1;border:1px solid var(--rule);border-radius:2px;background:#061918}
+.pi .ico{border-radius:1px}
+.pi:hover,.pi:focus-visible{outline:2px solid var(--chalk);outline-offset:1px;z-index:1}
+.grp{grid-column:1/-1;padding-top:.3rem;font-family:var(--font-mono);font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--chalk-faint)}
+.picker-foot{display:flex;align-items:baseline;gap:.8rem;min-height:2.2rem;padding:.5rem .8rem;border-top:1px solid var(--rule);font-size:.76rem;color:var(--chalk-dim);white-space:nowrap;overflow:hidden}
+.picker-foot b{color:var(--chalk)}
+.picker-foot .g{font-family:var(--font-mono);color:var(--hl-a)}
+.picker-foot span:last-child{overflow:hidden;text-overflow:ellipsis}
+
+/* ---------- receipt ---------- */
+.till{position:relative;z-index:5}
+.mouth{position:absolute;left:-.7rem;right:-.7rem;top:-1px;height:.85rem;z-index:3;background:linear-gradient(#030f0e,#0a2423);border:1px solid var(--rule);border-top:0;border-radius:0 0 .45rem .45rem;box-shadow:0 .3rem .5rem rgba(0,0,0,.5)}
+.mouth::after{content:"";position:absolute;left:.7rem;right:.7rem;bottom:.2rem;height:2px;background:#000;border-radius:2px}
+.feedbox{position:absolute;inset:.45rem -2.2rem -3rem;padding:0 2.2rem 2.45rem;overflow:hidden;pointer-events:none}
+.sheet{height:100%;max-height:46rem;pointer-events:auto;filter:drop-shadow(0 .9rem 1.1rem rgba(0,0,0,.42));animation:print 1.6s cubic-bezier(.3,.5,.3,1) both}
+.sheet.feed{animation:feed .26s steps(5,end)}
+@keyframes print{from{transform:translateY(-102%)}to{transform:none}}
+@keyframes feed{from{transform:translateY(-1.4rem)}to{transform:none}}
+@media (prefers-reduced-motion:reduce){.sheet,.sheet.feed{animation:none}}
+
+.receipt{position:relative;height:100%;overflow:hidden;display:flex;flex-direction:column;padding:1.3rem 1.35rem 1.5rem;color:var(--ink);font-family:var(--font-mono);font-size:.78rem;line-height:1.25;
+  background:linear-gradient(90deg,rgba(60,50,20,.08),transparent 7%,transparent 93%,rgba(60,50,20,.1)),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2 0 0 0 0 .18 0 0 0 0 .1 0 0 0 .1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),var(--paper);
+  -webkit-mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/.8rem 100%;
+  mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/.8rem 100%}
+.stamp{position:absolute;right:1.15rem;top:1.25rem;padding:.3rem .6rem .28rem;text-align:center;color:var(--stamp);border:.15rem solid var(--stamp);outline:1px solid var(--stamp);outline-offset:.13rem;border-radius:.2rem;transform:rotate(6deg);opacity:.85;font-family:var(--font-display);font-stretch:75%;text-transform:uppercase;line-height:1}
+.stamp span{display:block;font-size:.56rem;font-weight:700;letter-spacing:.16em}
+.stamp b{display:block;margin-top:.15rem;font-size:1.2rem;font-weight:900;letter-spacing:.03em;white-space:nowrap}
+.r-brand{font-family:var(--font-display);font-stretch:118%;font-weight:900;font-size:1.45rem;letter-spacing:-.035em;line-height:1}
+.r-tagline{margin-top:.25rem;font-size:.64rem;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-soft)}
+.r-meta{margin:.75rem 0 0;display:grid;gap:.12rem}
+.r-meta div{display:grid;grid-template-columns:4.7rem minmax(0,1fr);gap:.4rem}
+.r-meta dt{color:var(--ink-soft)}
+.r-meta dd{margin:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rule{flex:none;width:100%;border:0;border-top:1px dashed rgba(22,26,23,.5);margin:.6rem 0 .25rem}
+.r-row{display:grid;grid-template-columns:2.2rem minmax(0,1fr) 4.5rem 4.5rem;column-gap:.45rem;align-items:baseline}
+body[data-compare="off"] .r-row{grid-template-columns:2.2rem minmax(0,1fr) 4.5rem 3rem}
+.r-cols{padding-bottom:.2rem;font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)}
+.r-cols .n{align-items:center;padding-right:.75rem}
+.r-lines{flex:1;min-height:0;display:grid;align-content:space-evenly}
+.r-line{min-height:1.55rem}
+.q{display:flex;align-items:baseline;justify-content:center;color:var(--ink-soft)}
+.q input{width:1.25rem;padding:0;border:0;border-bottom:1px dotted var(--ink-soft);background:none;color:var(--ink);font-weight:600;text-align:right;appearance:textfield;-moz-appearance:textfield}
+.q input::-webkit-inner-spin-button{-webkit-appearance:none}
+.q input:focus{outline:0;border-bottom:1px solid var(--ink)}
+.src{display:flex;align-items:baseline;gap:.45rem;min-width:0;white-space:nowrap}
+.src .k{flex:none;display:inline-grid;place-items:center;min-width:1.3rem;height:1.25rem;padding:0 .15rem;border:1px solid var(--ink);border-radius:2px;font-size:.64rem;font-weight:700;align-self:center}
+.src .nm{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.src .note{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:.68rem;color:var(--ink-soft)}
+.src .note[title]{cursor:help}
+.n{justify-self:end;display:inline-flex;align-items:baseline;gap:.2rem;font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap}
+.n i{position:relative;z-index:0;font-style:normal;padding:0 .12rem}
+.n small{width:.55rem;font-size:.6rem;color:var(--ink-soft)}
+.n.sh{color:var(--ink-soft);font-weight:400}
+.n.win i{font-weight:700}
+.n.win i::before{content:"";position:absolute;z-index:-1;inset:-.02rem -.22rem;background:var(--c);transform:rotate(-1.3deg);border-radius:.25em .6em .3em .5em/.5em .3em .6em .25em}
+.r-total{align-items:end;padding:.3rem 0 .1rem}
+.r-total .lbl{grid-column:1/3;font-family:var(--font-display);font-stretch:62%;font-weight:900;font-size:1.9rem;text-transform:uppercase;line-height:.9}
+.r-total .lbl small{display:block;margin-top:.25rem;font-family:var(--font-mono);font-size:.62rem;font-weight:400;text-transform:none;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r-total .n{font-size:1.22rem;font-weight:700;padding-bottom:.95rem}
+.r-total .n i{padding:0 .05rem}
+.r-total .n.sh{font-size:.78rem;font-weight:400;padding-bottom:1.1rem}
+.r-split{align-items:center;margin-top:.35rem}
+.r-split .lbl{grid-column:1/3;display:flex;gap:.8rem;font-size:.64rem;color:var(--ink-soft)}
+.r-split .lbl span{display:inline-flex;align-items:center;gap:.3rem}
+.sw{display:inline-block;width:.6rem;height:.5rem;border:1px solid var(--ink)}
+.split{display:flex;width:100%;height:.55rem;border:1px solid var(--ink)}
+.p{background:var(--ink)}
+.m{background:repeating-linear-gradient(-45deg,var(--ink) 0 1px,transparent 1px 3px)}
+.r-more{display:grid;gap:.22rem}
+.r-more .lbl{grid-column:1/3}
+.r-verdict{display:grid;gap:.4rem}
+.vd{display:flex;align-items:center;gap:.5rem;font-size:.72rem;white-space:nowrap}
+.vd p{margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.r-foot{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.9rem;align-items:center;margin-top:.75rem}
+.barcode{width:8.5rem;height:1.8rem;background:repeating-linear-gradient(90deg,var(--ink) 0 .1rem,transparent .1rem .2rem,var(--ink) .2rem .5rem,transparent .5rem .6rem,var(--ink) .6rem .7rem,transparent .7rem 1rem,var(--ink) 1rem 1.15rem,transparent 1.15rem 1.3rem,var(--ink) 1.3rem 1.6rem,transparent 1.6rem 1.7rem,var(--ink) 1.7rem 1.78rem,transparent 1.78rem 2.05rem)}
+.r-foot-txt{display:grid;gap:.1rem;font-size:.64rem;color:var(--ink-soft);min-width:0}
+.r-foot-txt b{color:var(--ink);font-size:.72rem}
+.r-foot-txt span[title]{cursor:help;text-decoration:underline dotted;text-underline-offset:.2em}
+
+/* ---------- target ---------- */
+.tgt{display:flex;flex-direction:column;gap:1.05rem;padding:1.2rem 0 1.15rem}
+.tgt-mode{display:grid;gap:.5rem}
+.tgt-mode .seg{display:grid;grid-auto-columns:1fr}
+.tgt-mode .seg button{padding:.42rem .3rem}
+.stage{position:relative;flex:1;min-height:9rem}
+.dummy{position:absolute;right:.2rem;bottom:0;height:100%;max-height:14.5rem;aspect-ratio:220/260;color:var(--chalk);overflow:visible}
+body[data-target="champ"] .dummy,body[data-target="raw"] .dummy .arrows{display:none}
+body[data-target="raw"] .dummy{opacity:.3}
+body[data-target="raw"] .dummy .line{stroke-dasharray:4 5}
+.stage-cap{position:absolute;left:0;bottom:.1rem;display:grid;gap:.4rem;justify-items:start;max-width:11.5rem}
+body[data-target="champ"] .stage-cap{max-width:100%}
+.cap-title{font-family:var(--font-display);font-stretch:62%;font-weight:900;text-transform:uppercase;font-size:2.6rem;line-height:.84;text-shadow:0 .1rem 1.2rem rgba(5,20,19,.75)}
+.cap-title.fit{white-space:nowrap;font-size:min(4.4rem,calc(23rem/(var(--len,4)*.5)))}
+.cap-sub{font-size:.8rem;color:var(--chalk-dim);line-height:1.3}
+.enemy-row{display:flex;align-items:center;gap:.7rem}
+.mini{display:inline-flex;align-items:center;gap:.45rem;font-family:var(--font-mono);font-size:.76rem;border:1px solid var(--rule);border-radius:2px;padding:.12rem .25rem;background:rgba(7,25,24,.5)}
+.mini b{font-weight:600}
+.mini button{width:1.2rem;height:1.2rem;display:grid;place-items:center;color:var(--chalk-dim)}
+.mini button:hover{color:var(--ink);background:var(--chalk)}
+.pop{position:absolute;font-family:var(--font-display);font-stretch:68%;font-weight:900;line-height:1;color:var(--c);text-shadow:0 .12rem 0 rgba(0,0,0,.5)}
+.pop.a{left:.3rem;top:4%;font-size:1.9rem;transform:rotate(-7deg)}
+.pop.b{left:4.6rem;top:20%;font-size:2.3rem;transform:rotate(5deg)}
+body[data-compare="off"] .pop.a{font-size:2.5rem;left:1.2rem;top:10%}
+body[data-target="raw"] .pop{display:none}
+
+.hits{display:grid;gap:.42rem}
+.hp{display:grid;grid-template-columns:1.4rem minmax(0,1fr) 5.2rem;gap:.6rem;align-items:center}
+.hpbar{position:relative;height:1rem;border:1px solid var(--chalk);border-radius:1px;overflow:hidden;background:repeating-linear-gradient(-55deg,var(--c) 0 .2rem,transparent .2rem .44rem)}
+.hpbar i{position:absolute;inset:0 auto 0 0;width:var(--left);background:var(--chalk);transition:width .25s}
+.hpbar::after{content:"";position:absolute;inset:0;background:
+  repeating-linear-gradient(90deg,transparent 0 calc(100000%/var(--hpv) - 2px),rgba(7,25,24,.95) 0 calc(100000%/var(--hpv))),
+  repeating-linear-gradient(90deg,transparent 0 calc(10000%/var(--hpv) - 1px),rgba(7,25,24,.5) 0 calc(10000%/var(--hpv)))}
+.hp-txt{font-family:var(--font-mono);font-size:.74rem;color:var(--chalk-dim);text-align:right;white-space:nowrap}
+.hp-txt b{color:var(--chalk);font-weight:600}
+
+.tune{display:grid;gap:.55rem}
+.presets{display:flex;gap:.3rem}
+.dials{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.1rem}
+.dial{display:grid;gap:.2rem;min-width:0}
+.dial input[type=number]{width:100%;min-width:0;padding:0 0 .05rem;border:0;border-bottom:1px dashed var(--chalk-faint);background:none;font-family:var(--font-mono);font-size:1.7rem;font-weight:600;letter-spacing:-.03em;appearance:textfield;-moz-appearance:textfield}
+.dial input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+.dial input[type=number]:hover{border-bottom-color:var(--chalk)}
+.dial input[type=number]:focus{outline:0;border-bottom:1px solid var(--chalk)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:1rem;background:none;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--rule)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:.5rem;height:.95rem;margin-top:calc(1px - .475rem);background:var(--chalk);border-radius:1px}
+input[type=range]::-moz-range-track{height:2px;background:var(--rule)}
+input[type=range]::-moz-range-thumb{width:.5rem;height:.95rem;border:0;background:var(--chalk);border-radius:1px}
+.dial-note{font-family:var(--font-mono);font-size:.64rem;color:var(--chalk-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.t-inv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.45rem .9rem;align-items:center}
+.t-inv .row-head{grid-column:1/-1;justify-content:flex-start}
+.t-slots{display:flex;gap:.35rem}
+.t-slots span{width:2.2rem;height:2.2rem;border:1px dashed var(--chalk-faint);border-radius:2px;opacity:.6}
+.t-inv p{margin:0;font-size:.72rem;line-height:1.25;color:var(--chalk-faint)}
+.soon{font-family:var(--font-mono);font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:var(--chalk-dim);border:1px solid var(--chalk-faint);border-radius:2px;padding:.02rem .35rem}
+
+/* ---------- stat ledger ---------- */
+.ledger{position:relative;z-index:1;display:grid;grid-template-columns:10rem repeat(12,minmax(0,1fr));padding:0 1.5rem;border-top:1px solid var(--rule);background:rgba(7,25,24,.82)}
+.l-head{display:grid;align-content:start;gap:.3rem;padding:.9rem .9rem 0 0}
+.l-head b{font-family:var(--font-display);font-stretch:62%;font-weight:900;font-size:1.9rem;text-transform:uppercase;line-height:.85}
+.l-head span{font-size:.72rem;line-height:1.25;color:var(--chalk-dim)}
+.cell{display:grid;align-content:start;gap:.26rem;min-width:0;padding:.9rem .4rem 0 .7rem;border-left:1px solid var(--rule);overflow:hidden}
+.cell .eyebrow{font-size:.6rem;letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v{display:flex;align-items:baseline;gap:.4rem;font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:1.02rem;line-height:1.15;color:var(--chalk-dim);white-space:nowrap}
+.v b{font-weight:500}
+.v.win{color:var(--chalk)}
+.v.win b{font-weight:700}
+.v em,.cell>em{font-style:normal;font-family:var(--font-mono);font-size:.64rem;color:var(--chalk-faint);white-space:nowrap}
+.cell>em{overflow:hidden;text-overflow:ellipsis}
+.dot{flex:none;align-self:center;width:.5rem;height:.5rem;background:var(--c);border-radius:1px;transform:rotate(-4deg)}
+.cell.same .v{color:var(--chalk-faint)}
+.cell.same .dot{opacity:.5}
+.cell.same .dot+.dot{margin-left:-.25rem}
+.v.solo{font-size:1.7rem;color:var(--chalk)}
+.v.solo b{font-weight:600}
+.v.solo.long{font-size:1.02rem;line-height:1.9}
+
+/* Riot's required notice has to be readily visible: a row of its own under the ledger, two lines tall. */
+.legal{position:relative;z-index:1;display:grid;align-content:center;min-height:2.8rem;padding:.4rem 1.5rem .45rem;border-top:1px solid var(--rule);background:var(--mat-deep);font-size:max(.7rem,10px);line-height:1.35;color:var(--chalk-dim)}
+
+/* ---------- champion picker ---------- */
+.veil{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:rgba(4,16,15,.74)}
+.cm{width:min(62rem,92vw);height:min(38rem,84vh);display:grid;grid-template-rows:auto auto minmax(0,1fr);background:#081d1c;border:1px solid var(--chalk);border-radius:3px;box-shadow:0 2rem 4rem rgba(0,0,0,.6)}
+.cm-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:1.1rem;align-items:center;padding:1rem 1.1rem .7rem}
+.cm-head h2{margin:0;font-family:var(--font-display);font-stretch:62%;font-weight:900;font-size:1.9rem;text-transform:uppercase;line-height:.9}
+.cm .chips{padding:0 1.1rem .7rem}
+.cm-grid{overflow:auto;padding:.3rem 1.1rem 1.1rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(4.5rem,1fr));gap:.7rem .5rem;align-content:start;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.ct{display:grid;gap:.25rem;justify-items:center;font-size:.68rem;text-align:center;color:var(--chalk-dim)}
+.ct .ci{width:100%;aspect-ratio:1;border:1px solid var(--rule);border-radius:2px;overflow:hidden;background:#061918}
+.ct:hover{color:var(--chalk)}
+.ct:hover .ci,.ct:focus-visible .ci{outline:2px solid var(--chalk);outline-offset:1px}
+
+/* ---------- pictures ---------- */
+/* Icons are tiles cut from a sheet (see the pictures section of app.js). Until its sheet has
+   arrived a tile is an empty frame; then every tile on that sheet fades in together. */
+.ico{display:block;width:100%;aspect-ratio:1;background-repeat:no-repeat;opacity:0;transition:opacity .18s}
+.ico.items{background-image:var(--art-items);background-size:calc(var(--items-cols)*100%) calc(var(--items-rows)*100%)}
+.ico.champions{background-image:var(--art-champions);background-size:calc(var(--champions-cols)*100%) calc(var(--champions-rows)*100%)}
+.ico.kit{background-image:var(--art-kit);background-size:500% 100%}
+.skill[data-k="q"] .kit{background-position:25% 0} .skill[data-k="w"] .kit{background-position:50% 0}
+.skill[data-k="e"] .kit{background-position:75% 0} .skill[data-k="r"] .kit{background-position:100% 0}
+.has-items .ico.items,.has-champions .ico.champions,.has-kit .ico.kit{opacity:1}
+img.wait{opacity:0}
+body:not(.has-items) .slot:not(.empty),#skill-row:not(.has-kit) .skill-ico{animation:wait .7s ease-in-out infinite alternate}
+@keyframes wait{to{background-color:var(--rule)}}
+@media (prefers-reduced-motion:reduce){.slot,.skill-ico{animation:none!important}}
+.loading .r-total .n,.loading .pop{opacity:.55}
+</style>
+</head>
+<body data-compare="on" data-target="dummy">
+<div class="app">
+  <img class="splash splash-l wait" id="atk-splash" alt="">
+  <img class="splash splash-r only-champ wait" id="enemy-splash" alt="">
+
+  <header class="bar">
+    <div class="bar-l">
+      <a class="mark" href="#" aria-label="itemize.lol"><b>itemize</b><span>.lol</span></a>
+      <nav class="nav" aria-label="Site">
+        <a href="#" aria-current="page">Workbench</a>
+        <a href="#" id="saved-link">Saved builds<i id="saved-n" hidden>0</i></a>
+      </nav>
+    </div>
+    <div class="seg" id="cmp-seg" role="radiogroup" aria-label="How many builds">
+      <button role="radio" data-cmp="off" aria-checked="false">One build</button>
+      <button role="radio" data-cmp="on" aria-checked="true">Compare <span class="tag a xs">A</span><span class="vs">vs</span><span class="tag b xs">B</span></button>
+    </div>
+    <div class="bar-r">
+      <span class="wf" id="quality" hidden></span>
+      <span class="patch">Patch <b id="patch">…</b></span>
+      <button class="btn" id="share">Copy build link</button>
+      <div class="set">
+        <button class="gear menu-btn" id="set-btn" aria-haspopup="true" aria-expanded="false" aria-controls="set-menu" aria-label="Settings" title="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+        <div class="menu" id="set-menu" role="menu" aria-label="Settings" hidden>
+          <span class="eyebrow">Layout</span>
+          <a href="/" role="menuitemradio" data-layout="tabs" aria-checked="false"><b>Tabs</b><span>Totals on top, the details one tab at a time</span></a>
+          <a href="/receipt" role="menuitemradio" data-layout="receipt" aria-checked="true"><b>Receipt</b><span>Everything on one screen, printed as a receipt</span></a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- attacker: champion, level, ranks, items -->
+    <section class="atk" aria-label="Your champion and builds">
+      <button class="champ" id="champ-btn" title="Change champion">
+        <span class="eyebrow">Champion</span>
+        <span class="champ-name" id="champ-name">Kai'Sa</span>
+        <span class="champ-sub"><span id="champ-title">Daughter of the Void</span><span class="swap">Change <span class="key">C</span></span></span>
+      </button>
+
+      <div class="lvl">
+        <div class="lvl-num"><span class="eyebrow">Level</span><output id="lvl-out">13</output></div>
+        <div class="ruler" id="ruler" role="group" aria-label="Champion level"></div>
+      </div>
+
+      <div class="skills">
+        <div class="row-head">
+          <span class="eyebrow">Ability ranks</span><span class="hint">Click a pip to set a rank</span>
+          <!-- the champion's own switches: a form, stacks, seconds in an aura -->
+          <div class="set">
+            <button class="chip menu-btn" id="opts-btn" aria-haspopup="true" aria-expanded="false" aria-controls="opts-menu" hidden></button>
+            <div class="menu opts" id="opts-menu" hidden><div id="opts" style="display:contents" hidden></div></div>
+          </div>
+        </div>
+        <div class="skill-row" id="skill-row">
+          <div class="skill passive" data-k="p"><div class="skill-ico"><i class="ico kit"></i><span class="k">P</span></div><div class="pips-none">passive</div></div>
+          <div class="skill" data-k="q"><div class="skill-ico"><i class="ico kit"></i><span class="k">Q</span><span class="rk"></span></div><div class="pips"></div></div>
+          <div class="skill" data-k="w"><div class="skill-ico"><i class="ico kit"></i><span class="k">W</span><span class="rk"></span></div><div class="pips"></div></div>
+          <div class="skill" data-k="e"><div class="skill-ico"><i class="ico kit"></i><span class="k">E</span><span class="rk"></span></div><div class="pips"></div></div>
+          <div class="skill" data-k="r"><div class="skill-ico"><i class="ico kit"></i><span class="k">R</span><span class="rk"></span></div><div class="pips"></div></div>
+        </div>
+        <div class="plan">
+          <label class="eyebrow" for="order">Max order</label>
+          <select id="order">
+            <option value="qew">Q › E › W</option>
+            <option value="qwe">Q › W › E</option>
+            <option value="wqe">W › Q › E</option>
+            <option value="weq">W › E › Q</option>
+            <option value="eqw">E › Q › W</option>
+            <option value="ewq">E › W › Q</option>
+            <option value="manual">Set by hand</option>
+          </select>
+          <span class="pts" id="pts"><b>13</b> of 13 points spent</span>
+        </div>
+      </div>
+
+      <div class="builds" id="builds">
+        <div class="row-head">
+          <span class="eyebrow">Items</span>
+          <span class="hint only-cmp">Both builds use the level and ranks above. Underlined items differ.</span>
+          <span class="hint only-solo">Click a slot to change it</span>
+        </div>
+        <div class="build a" data-b="a">
+          <span class="tag a lg">A</span>
+          <div class="b-meta"><input class="b-name" id="name-a" value="On-hit" aria-label="Name of build A" spellcheck="false"><span class="b-gold"><b>0</b> gold</span></div>
+          <div class="slots"></div>
+          <div class="b-acts"><button class="act" id="clear-a" title="Empty all six slots">clear</button></div>
+        </div>
+        <div class="build b only-cmp" data-b="b">
+          <span class="tag b lg">B</span>
+          <div class="b-meta"><input class="b-name" id="name-b" value="AP burst" aria-label="Name of build B" spellcheck="false"><span class="b-gold"><b>0</b> gold</span></div>
+          <div class="slots"></div>
+          <div class="b-acts"><button class="act" id="copy-a" title="Start build B from build A's items">= A</button><button class="act" id="rm-b" title="Remove build B">remove</button></div>
+        </div>
+        <button class="add-b only-solo" id="add-b"><span class="tag b sm">B</span>Add a second build to compare</button>
+
+        <div class="picker" id="picker" role="dialog" aria-label="Choose an item" hidden>
+          <div class="picker-head">
+            <span class="picker-for" id="picker-for"></span>
+            <input class="search" type="search" id="item-q" placeholder="Search items" autocomplete="off" aria-label="Search items">
+            <button class="esc" id="picker-x">Esc</button>
+          </div>
+          <div class="chips" id="item-chips"></div>
+          <div class="picker-grid" id="item-grid"></div>
+          <div class="picker-foot" id="item-foot"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- the receipt -->
+    <section class="till" aria-label="Damage receipt">
+      <div class="mouth"></div>
+      <div class="feedbox"><div class="sheet" id="sheet">
+        <article class="receipt">
+          <div class="stamp"><span id="stamp-sm">after mitigation</span><b id="stamp-lg">vs dummy</b></div>
+          <div class="r-brand">itemize.lol</div>
+          <div class="r-tagline">Damage, itemized</div>
+          <dl class="r-meta">
+            <div><dt>Champion</dt><dd><span id="r-champ">Kai'Sa</span>, level <span id="r-lvl">13</span></dd></div>
+            <div><dt>Target</dt><dd id="r-target"></dd></div>
+          </dl>
+          <hr class="rule">
+          <div class="r-row r-cols">
+            <span>Qty</span><span>Source</span>
+            <span class="n only-cmp"><span class="tag a xs">A</span></span>
+            <span class="n only-cmp"><span class="tag b xs">B</span></span>
+            <span class="n only-solo">Dmg</span><span class="n only-solo">Share</span>
+          </div>
+          <div class="r-lines" id="lines"></div>
+          <hr class="rule">
+          <div class="r-row r-total" id="total-row">
+            <span class="lbl">Total<small id="r-combo"></small></span>
+            <span class="n a"><i>–</i></span>
+            <span class="n b only-cmp"><i>–</i></span>
+            <span class="n sh only-solo">100%</span>
+          </div>
+          <div class="r-row r-split">
+            <span class="lbl"><span><i class="sw p"></i>physical</span><span><i class="sw m"></i>magic</span><span><i class="sw"></i>true</span></span>
+            <span class="split" id="split-a"></span>
+            <span class="split only-cmp" id="split-b"></span>
+            <span class="only-solo"></span>
+          </div>
+          <hr class="rule">
+          <div class="r-more" id="more">
+            <div class="r-row"><span class="lbl">Blocked by target</span>
+              <span class="n a"><i>–</i></span><span class="n b only-cmp"><i>–</i></span><span class="only-solo"></span></div>
+            <div class="r-row"><span class="lbl">DPS, autos and procs</span>
+              <span class="n a"><i>–</i></span><span class="n b only-cmp"><i>–</i></span><span class="only-solo"></span></div>
+            <div class="r-row"><span class="lbl">Time to kill</span>
+              <span class="n a"><i>–</i></span><span class="n b only-cmp"><i>–</i></span><span class="only-solo"></span></div>
+          </div>
+          <hr class="rule only-cmp">
+          <div class="r-verdict only-cmp" id="verdict"></div>
+          <footer class="r-foot">
+            <div class="barcode" aria-hidden="true"></div>
+            <div class="r-foot-txt"><b>itemize.lol</b><span id="r-notes"></span></div>
+          </footer>
+        </article>
+      </div></div>
+    </section>
+
+    <!-- target -->
+    <section class="tgt" aria-label="Target">
+      <div class="tgt-mode">
+        <span class="eyebrow">Show damage as</span>
+        <div class="seg" id="tseg" role="radiogroup" aria-label="Show damage as">
+          <button role="radio" data-t="raw" aria-checked="false">Raw output</button>
+          <button role="radio" data-t="dummy" aria-checked="true">Target dummy</button>
+          <button role="radio" data-t="champ" aria-checked="false">Enemy champion</button>
+        </div>
+      </div>
+
+      <div class="stage">
+        <svg class="dummy" viewBox="0 0 220 260" aria-hidden="true">
+          <ellipse cx="110" cy="249" rx="62" ry="6" fill="rgba(0,0,0,.35)"/>
+          <g class="line" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M64 247h92M95 247l6-14h18l6 14"/>
+            <rect x="103" y="94" width="14" height="140" fill="#113331"/>
+            <rect x="30" y="110" width="160" height="12" rx="6" fill="#113331"/>
+            <path d="M30 116l-13-8M30 116l-15 2M32 120l-11 8M190 116l13-8M190 116l15 2M188 120l11 8"/>
+            <path d="M46 108v16M52 108v16M168 108v16M174 108v16"/>
+            <path d="M70 100q40-10 80 0l-7 90q-33 10-66 0z" fill="#16403d"/>
+            <path d="M139 110l-4 68M133 108l-2 28" stroke-width="1.2" opacity=".5"/>
+            <circle cx="108" cy="146" r="27"/><circle cx="108" cy="146" r="17"/>
+            <circle cx="110" cy="60" r="31" fill="#16403d"/>
+            <path d="M95 52l8 8m0-8l-8 8M117 52l8 8m0-8l-8 8"/>
+            <path d="M97 77h26M101 73v8M110 73v8M119 73v8"/>
+            <path d="M88 87q22 12 44 0"/>
+          </g>
+          <circle cx="108" cy="146" r="7" fill="var(--chalk)"/>
+          <g class="arrows" fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M120 138l44-34M158 100l6 4-1 7" stroke="var(--hl-a)"/>
+            <path class="only-cmp" d="M106 148l-52 30M60 170l-6 8 9 1" stroke="var(--hl-b)"/>
+          </g>
+        </svg>
+
+        <div class="pop a" id="pop-a" title="Build A's combo"></div>
+        <div class="pop b only-cmp" id="pop-b" title="Build B's combo"></div>
+
+        <div class="stage-cap only-dummy">
+          <span class="cap-title">Target dummy</span>
+          <span class="cap-sub">Stands still and takes it. Set its numbers below.</span>
+        </div>
+        <div class="stage-cap only-champ">
+          <button class="cap-title fit" id="enemy-btn" title="Change target champion">Ornn</button>
+          <div class="enemy-row">
+            <span class="mini"><button id="el-dn" aria-label="Lower target level">−</button><span>Lv <b id="el">13</b></span><button id="el-up" aria-label="Raise target level">+</button></span>
+            <button class="swap" id="enemy-swap">Change</button>
+          </div>
+        </div>
+        <div class="stage-cap only-raw">
+          <span class="cap-title">No target</span>
+          <span class="cap-sub">Numbers show damage as it leaves <span id="raw-champ">Kai'Sa</span>, before armor and magic resist.</span>
+        </div>
+      </div>
+
+      <div class="hits needs-target" id="hits" style="--hpv:2400">
+        <div class="row-head"><span class="eyebrow">Health after the combo</span><span class="hint">one tick = 100 HP</span></div>
+        <div class="hp a"><span class="tag a sm">A</span><div class="hpbar" id="bar-a"><i></i></div><span class="hp-txt"><b id="left-a">–</b> left</span></div>
+        <div class="hp b only-cmp"><span class="tag b sm">B</span><div class="hpbar" id="bar-b"><i></i></div><span class="hp-txt"><b id="left-b">–</b> left</span></div>
+      </div>
+
+      <div class="tune needs-target">
+        <div class="row-head">
+          <span class="eyebrow">Target stats</span>
+          <div class="presets only-dummy" id="presets">
+            <button class="chip" data-preset="1800,50,40" aria-pressed="false">Squishy</button>
+            <button class="chip" data-preset="2800,110,70" aria-pressed="false">Bruiser</button>
+            <button class="chip" data-preset="4000,200,120" aria-pressed="false">Tank</button>
+          </div>
+          <span class="hint only-champ" id="auto-note">Base stats at level 13. Edit to override.</span>
+        </div>
+        <div class="dials">
+          <div class="dial"><label class="eyebrow" for="t-hp">Health</label>
+            <input type="number" id="t-hp" value="2400" min="100" max="10000" step="50">
+            <input type="range" id="t-hp-r" value="2400" min="500" max="8000" step="50" aria-label="Health slider">
+            <span class="dial-note" id="n-hp"></span></div>
+          <div class="dial"><label class="eyebrow" for="t-ar">Armor</label>
+            <input type="number" id="t-ar" value="80" min="0" max="600" step="5">
+            <input type="range" id="t-ar-r" value="80" min="0" max="400" step="5" aria-label="Armor slider">
+            <span class="dial-note" id="n-ar"></span></div>
+          <div class="dial"><label class="eyebrow" for="t-mr">Magic resist</label>
+            <input type="number" id="t-mr" value="50" min="0" max="600" step="5">
+            <input type="range" id="t-mr-r" value="50" min="0" max="400" step="5" aria-label="Magic resist slider">
+            <span class="dial-note" id="n-mr"></span></div>
+        </div>
+      </div>
+
+      <div class="t-inv needs-target">
+        <div class="row-head"><span class="eyebrow">Target items</span><span class="soon">soon</span></div>
+        <div class="t-slots" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <p>Their items will add to the stats above.</p>
+      </div>
+    </section>
+  </main>
+
+  <section class="ledger" aria-label="Champion stats">
+    <div class="l-head"><b>Stats</b><span id="l-sub"></span></div>
+    <div id="ledger-cells" style="display:contents"></div>
+  </section>
+  <footer class="legal" id="legal"></footer>
+</div>
+
+<div class="veil" id="champ-modal" hidden>
+  <div class="cm" role="dialog" aria-labelledby="cm-title">
+    <div class="cm-head">
+      <h2 id="cm-title">Choose a champion</h2>
+      <input class="search" type="search" id="champ-q" placeholder="Type a name" autocomplete="off" aria-label="Search champions">
+      <button class="esc" id="champ-x">Esc</button>
+    </div>
+    <div class="chips" id="champ-chips"></div>
+    <div class="cm-grid" id="champ-grid"></div>
+  </div>
+</div>
+
+<script src="/app.js" defer></script>
+</body>
+</html>
