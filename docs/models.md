@@ -14,6 +14,8 @@ npm run data:accept                          # once it reads right: records the 
 
 The report lists, per ability: cooldown and cost, the tooltip, every data value with its per-rank values, every calculation as a formula, the damage mentions found in the tooltip, and the model currently in use. For items: `npm run data:report -- --item 3153` (id or part of the name).
 
+While writing, `--draft` skips the build: `npm run data:report -- --champion Samira --draft` and `npm run calc -- Samira --draft …` bind the champion's model file as it is on disk, in memory, and print the same binding errors. Nothing under `data/dist/` is touched, so several champions can be worked on at once; the build is then run once at the end.
+
 `npm run data:crosscheck -- --champion Samira` shows where the wiki's ability tables imply a hit count, as a hint for what to look for.
 
 ## A champion file
@@ -46,6 +48,7 @@ Set `verified: ['q', 'r']` on the champion once a person has checked those slots
 | `type` | `physical`, `magic` or `true`. |
 | `amount` | Damage of one instance before resistances. A formula. |
 | `count` | How many instances. Played one by one, so each sees the health the last one left. |
+| `over` | Seconds the damage takes to land, for anything that is not instant: a burn, a channel, a zone, a pet's attacks. See "Damage over time". |
 | `when` | The rule only fires when this is non-zero. |
 | `crit` | Damage of one instance when it crits. The engine then uses the crit-chance-weighted average. |
 | `appliesOnHit` | `true`, or a fraction for reduced effectiveness: the hit also sets off on-hit effects. |
@@ -134,6 +137,23 @@ options: { melee: { label: 'Fighting in melee range', default: false } },
 **Damage amplification**: `amps: [{ value: 'SpellItemDamageAmp', when: 'hasTarget && target.hpPct < HealthThreshold', types: ['magic', 'true'] }]`. `value` is the bonus: 0.2 means 20% more.
 
 **Shred and penetration that builds during a fight**: `resists: [{ stat: 'armor', kind: 'reducePct', value: 'carve * ShredPerStack' }]`. Kinds are `reducePct`, `reduceFlat`, `penPct`, `penFlat`. Permanent penetration is a stat and needs no model.
+
+## Damage over time
+
+A combo is a list of actions, not a timeline, so a burn's whole damage is dealt when it is applied. `over` says how long it really takes:
+
+```ts
+r: { hits: [{ type: 'magic', amount: 'TotalDamagePerSecond * TickRate', count: 'BuffDuration / TickRate', over: 'BuffDuration' }] },
+```
+
+The total is unchanged. The result additionally carries the rule's damage per second and its duration (`over` on the part and on the line, see `src/engine/types.ts`), and the site shows them under the total: `240/s · 15s`. That is what lets a reader tell a 15 second aura from a nuke of the same size.
+
+- Set it on every hit or rule whose damage is spread over more than about a second: damage over time, channels, zones and auras the target stands in, pets and turrets attacking for a while, delayed repeats. Not on instant hits, even multi-part ones, and not on the delay before a single detonation.
+- It is the seconds **this firing's damage** covers. The reported rate is the damage divided by the seconds, added up over the combo, so the two have to describe the same thing. When an option shortens what is counted (`min(seconds, BuffDuration)`), `over` uses the same expression.
+- A burn that is refreshed rather than stacked is usually written so that a re-application pays only for the time the old one ran. Its `over` is then that same time, not the full duration: `amount: 'DamagePerSecond * ran'`, `over: 'ran'`. Otherwise the rate reads low.
+- What one action sets off runs side by side (the longest part is its length); a second cast adds its own time. Two entries that describe one stretch of time, such as the strikes of a spin before and after a shred lands, each get the whole stretch.
+- The fight's clock does not wait for it. `time` moves by cast times only.
+- An ability with an instant hit and a burn has two entries; only the burn has `over`.
 
 ## Items
 

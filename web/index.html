@@ -360,6 +360,21 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 5rem 9.5rem}
 .wf{cursor:help}
 .wf.warn{color:var(--warn);border-color:var(--warn)}
 .line.off .nm,.line.off .n{color:var(--faint)}
+/* damage dealt over time: its rate and duration sit under the total, in the same cell */
+.line .n{display:grid;justify-items:end;line-height:1.05}
+.line .n small{font-size:.68rem;font-weight:400;letter-spacing:-.02em;color:var(--dim)}
+.line .n small:empty{display:none}
+/* the champion's own switches (a form, stacks, seconds in an aura) sit above the assumptions they change.
+   They are built once per kit and filled in place; the rest of the column is redrawn with every result. */
+#bside{display:contents}
+#opts:not([hidden])+#bside>.bs:first-child{padding-top:1.3rem;border-top:1px solid var(--rule)}
+.opt{display:grid;grid-template-columns:2.4rem minmax(0,1fr);column-gap:.7rem;align-items:center;font-size:.84rem;color:var(--dim);cursor:pointer}
+.opt input{justify-self:end;margin:0}
+.opt input[type="checkbox"]{width:.95rem;height:.95rem;accent-color:var(--text)}
+.opt input[type="number"]{width:100%;padding:0 0 .05rem;border:0;border-bottom:1px dotted var(--faint);background:none;color:var(--text);font-family:var(--font-mono);font-size:.84rem;font-weight:600;text-align:right;appearance:textfield;-moz-appearance:textfield}
+.opt input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none}
+.opt input[type="number"]:focus{outline:0;border-bottom:1px solid var(--text)}
+.opt.set span{color:var(--text)}
 .loading .tot-n,.loading .mv{opacity:.55}
 .err{grid-column:1/-1;color:var(--warn);font-size:.84rem}
 /* the assumptions list can be long: the side column scrolls instead of running under the footer */
@@ -611,7 +626,10 @@ body:not(.has-items) .slot:not(.empty),#skill-row:not(.has-kit) .skill-ico{anima
         <div class="row total" id="total-row"></div>
       </div>
 
-      <aside class="bside" id="bside"></aside>
+      <aside class="bside">
+        <div class="bs" id="opts" hidden></div>
+        <div id="bside"></div>
+      </aside>
     </section>
 
     <!-- 4. stats -->

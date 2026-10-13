@@ -35,6 +35,7 @@ const showRefs = (refs: DamageRef[], out: string[]) => {
   }
 };
 const showRule = (r: Rule) => `${r.on} ${r.type} ${r.count ? `${formatExpr(r.count)} × ` : ''}${formatExpr(r.amount)}`
+  + `${r.over ? `  over ${formatExpr(r.over)} s` : ''}`
   + `${r.when ? `  when ${formatExpr(r.when)}` : ''}${r.crit ? `  crit ${formatExpr(r.crit)}` : ''}${r.appliesOnHit ? `  on-hit×${r.appliesOnHit}` : ''}`
   + `${r.then ? `  then ${r.then.map(t => `${t.counter} ${t.op === 'add' ? '+=' : '='} ${formatExpr(t.value)}`).join(', ')}` : ''}`;
 const showModel = (m: AbilityModel | ItemModel, out: string[]) => {
@@ -60,12 +61,15 @@ function championReport(c: ChampionData): string[] {
     if (spell.damageRefs.length) { out.push('  damage in tooltip:'); showRefs(spell.damageRefs, out); }
     showModel(c.models[slot], out);
   }
-  const extra = Object.values(c.spells).filter(s => !slotSpells.has(s.id) && Object.keys(s.calcs).length);
-  if (extra.length) out.push('', 'other spells with calculations:');
+  // recasts, forms and empowered versions: a form's spell may have only a tooltip, its formulas living on the ability that grants the form
+  const extra = Object.values(c.spells).filter(s => !slotSpells.has(s.id) && (Object.keys(s.calcs).length || s.tooltip));
+  if (extra.length) out.push('', 'other spells with calculations or a tooltip:');
   for (const s of extra) {
     out.push(`  ${s.id}${s.slot ? ` (follows ${s.slot.toUpperCase()})` : ''}${s.name ? ` "${s.name}"` : ''}`);
+    if (s.tooltip) out.push(`    tooltip: ${plain(s.tooltip)}`);
     for (const [n, v] of Object.entries(s.dataValues)) out.push(`    ${n}: ${ranks(v, s.maxRank || 1)}`);
     showCalcs(s.calcs, out);
+    if (s.damageRefs.length) { out.push('    damage in tooltip:'); showRefs(s.damageRefs, out); }
   }
   return out;
 }
@@ -80,10 +84,23 @@ function itemReport(i: ItemData): string[] {
   return out;
 }
 
-export interface ReportOptions { patch?: string; champion?: string; item?: string; status?: string; log?: (msg: string) => void }
+export interface ReportOptions {
+  patch?: string; champion?: string; item?: string; status?: string;
+  /** show the champion with its model file as it is on disk now, not as last built */
+  draft?: boolean;
+  log?: (msg: string) => void;
+}
 
 export async function printReport(opts: ReportOptions = {}): Promise<void> {
   const log = opts.log ?? console.log;
+  if (opts.champion && opts.draft) {
+    const { draftChampion } = await import('./draft.ts');
+    const d = await draftChampion(opts.champion, opts.patch);
+    log(championReport(d.champion).join('\n'));
+    for (const i of d.issues) log(`MODEL DOES NOT BIND  ${i.where}: ${i.message}`);
+    if (d.issues.length) process.exitCode = 1;
+    return;
+  }
   const dir = distDir(await currentPatch(opts.patch));
   if (opts.champion) {
     const index: { id: string; name: string }[] = await readJson(join(dir, 'champions.json'));

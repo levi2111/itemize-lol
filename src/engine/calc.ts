@@ -92,7 +92,7 @@ function check(data: DataSource, req: CalcRequest): Checked {
   return { champ, items, build: { champion: champ.id, level, ranks, items: ids, options }, target, sequence };
 }
 
-function lines(champ: ChampionData, hits: Hit[], sequence: Action[]): SourceLine[] {
+function lines(champ: ChampionData, hits: Hit[], spread: Fight['spread'], sequence: Action[]): SourceLine[] {
   const label = (k: SourceLine['key']) => k === 'aa' ? 'Auto attack' : k === 'items' ? 'Item effects' : champ.slots[k].name;
   const out = new Map<SourceLine['key'], SourceLine>();
   for (const key of LINE_ORDER) {
@@ -113,6 +113,21 @@ function lines(champ: ChampionData, hits: Hit[], sequence: Action[]): SourceLine
   for (const l of out.values()) {
     const used = TYPES.filter(t => l.byType[t].raw > 0);
     l.type = used.length === 0 ? 'none' : used.length === 1 ? used[0]! : 'mixed';
+    // What one action sets off runs side by side, so the longest part is its length; actions follow
+    // one another, so their lengths add up. Either way rate x seconds is the damage dealt over time.
+    const perAction = new Map<number, number>(), timed = zero();
+    for (const p of l.parts) {
+      const byAction = spread.get(p.id);
+      if (!byAction) continue;
+      let seconds = 0;
+      for (const [action, s] of byAction) { seconds += s; perAction.set(action, Math.max(perAction.get(action) ?? 0, s)); }
+      p.over = { seconds: r2(seconds), perSecond: round({ raw: p.total.raw / seconds, dealt: p.total.dealt / seconds }) };
+      timed.raw += p.total.raw; timed.dealt += p.total.dealt;
+    }
+    if (perAction.size) {
+      const seconds = [...perAction.values()].reduce((a, b) => a + b, 0);
+      l.over = { seconds: r2(seconds), perSecond: round({ raw: timed.raw / seconds, dealt: timed.dealt / seconds }) };
+    }
     round(l.total);
     for (const t of TYPES) round(l.byType[t]);
     for (const p of l.parts) round(p.total);
@@ -158,7 +173,7 @@ export function calculate(data: DataSource, req: CalcRequest): CalcResult {
   const fight = new Fight(c.champ, c.items, c.build, c.target);
   for (const a of c.sequence) fight.act(a);
 
-  const comboLines = lines(c.champ, fight.hits, c.sequence);
+  const comboLines = lines(c.champ, fight.hits, fight.spread, c.sequence);
   const total = zero(), types = byType();
   for (const h of fight.hits) {
     total.raw += h.raw; total.dealt += h.dealt;
@@ -195,6 +210,7 @@ export function calculate(data: DataSource, req: CalcRequest): CalcResult {
     dps: round(s.dps),
     timeToKill: s.timeToKill === null ? null : r2(s.timeToKill),
     abilities,
+    options: fight.optionValues,
     items: c.items.map(i => ({ id: i.id, status: i.model.status, notes: i.model.notes })),
     caveats: [...caveats],
   };

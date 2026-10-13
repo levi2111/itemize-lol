@@ -26,6 +26,7 @@ const S = {
   items: new Map(),
   champs: [],
   res: null,                        // {a, b}: the last results, b null with one build
+  options: {},                      // the champion's options the user has set, by id; the rest keep their defaults
 };
 
 const ITEM_FILTERS = [
@@ -99,7 +100,7 @@ async function recalc() {
   const mine = ++seq;
   document.body.classList.add('loading');
   const body = {
-    champion: S.champ.id, level: S.level, ranks: S.ranks,
+    champion: S.champ.id, level: S.level, ranks: S.ranks, options: S.options,
     builds: (S.compare ? ['a', 'b'] : ['a']).map(k => ({items: S.builds[k].filter(Boolean)})),
     target: targetBody(), combo: {counts: S.combo},
   };
@@ -184,10 +185,14 @@ async function loadKit() {
     S.view = view;
   } catch (e) { if (S.champ === c) S.view = null; }
   for (const k of SLOTS) S.ranks[k] = Math.min(S.ranks[k], maxRank(k));
-  nameKit(); paintSkills(); renderLines(); schedule();
+  // a shared link may carry options this kit no longer has
+  const known = new Set((S.view?.options || []).map(o => o.id));
+  for (const id of Object.keys(S.options)) if (!known.has(id)) delete S.options[id];
+  nameKit(); paintSkills(); renderLines(); renderOpts(); schedule();
 }
 function setChamp(c) {
-  S.champ = c; S.view = null;
+  S.champ = c; S.view = null; S.options = {};
+  renderOpts();
   // a new kit gets the default combo: three autos and one of each ability that deals damage
   S.combo = {aa:3, q:1, w:1, e:1, r:1};
   comboFresh = true;
@@ -390,7 +395,7 @@ function renderLines() {
     return `<div class="row line" data-k="${k}">${qty}
       <span class="src"><span class="k">${key}</span><span class="nm">${esc(name)}</span>${badge}</span><span class="ty none"></span>
       <span class="bars"><i class="a"></i><i class="b only-cmp"></i></span>
-      <span class="n a"><i>–</i></span><span class="n b only-cmp"><i>–</i></span>
+      <span class="n a"><i>–</i><small></small></span><span class="n b only-cmp"><i>–</i><small></small></span>
       <span class="g only-cmp"><i></i></span><span class="sh only-solo">–</span></div>`;
   }).join('');
   // the default combo can only be trimmed once the kit says which abilities deal damage
@@ -406,6 +411,9 @@ function gap(el, a, b) {
   el.className = `g only-cmp ${d > 0 ? 'a' : d < 0 ? 'b' : ''}`;
   $('i', el).textContent = d ? '+' + nf(Math.abs(d)) : '';
 }
+const secs = s => `${+s.toFixed(1)}s`;
+/* "240/s · 15s": what a line's over-time part deals each second while it runs, and for how long. */
+const rate = l => l?.over && l.total.dealt ? `${nf(l.over.perSecond.dealt)}/s · ${secs(l.over.seconds)}` : '';
 function paintLines() {
   const A = S.res.a, B = S.compare ? S.res.b : null;
   const of = (r, k) => r?.combo.lines.find(l => l.key === k);
@@ -424,11 +432,17 @@ function paintLines() {
     bb.style.setProperty('--w', (vb / max * 100).toFixed(1) + '%');
     $('.n.a i', row).textContent = va ? nf(va) : '–';
     $('.n.b i', row).textContent = vb ? nf(vb) : '–';
+    // damage that takes time to land also shows its rate and how long it runs, under the total
+    $('.n.a small', row).textContent = rate(a);
+    $('.n.b small', row).textContent = rate(b);
     $('.n.a', row).classList.toggle('win', !B || va > vb);
     $('.n.b', row).classList.toggle('win', !!B && vb > va);
     gap($('.g', row), va, vb);
     $('.sh', row).textContent = va && A.combo.total.dealt ? Math.round(va / A.combo.total.dealt * 100) + '%' : '–';
-    const parts = [...a.parts.map(p => `A: ${p.label}${p.hits > 1 ? ' ×' + p.hits : ''} ${nf(p.total.dealt)}`), ...(b ? b.parts.map(p => `B: ${p.label}${p.hits > 1 ? ' ×' + p.hits : ''} ${nf(p.total.dealt)}`) : [])];
+    // one burn is often several parts (applied by an attack, refreshed by a spell), so only the line's rate is given
+    const part = (tag, p) => `${tag}: ${p.label}${p.hits > 1 ? ' ×' + p.hits : ''} ${nf(p.total.dealt)}${p.over ? ', over time' : ''}`;
+    const timed = (tag, l) => l.over && l.total.dealt ? [`${tag}: ${nf(l.over.perSecond.dealt)} per second for ${secs(l.over.seconds)} while it runs`] : [];
+    const parts = [...a.parts.map(p => part('A', p)), ...timed('A', a), ...(b ? [...b.parts.map(p => part('B', p)), ...timed('B', b)] : [])];
     $('.nm', row).title = parts.join('\n');
   }
   const ta = A.combo.total.dealt, tb = B ? B.combo.total.dealt : 0, tot = $('#total-row');
@@ -574,13 +588,47 @@ function paintQuality() {
 }
 
 function paintResults() {
-  paintHero(); paintLines(); paintSide(); renderStats(); paintTarget(); paintQuality();
+  paintHero(); paintLines(); paintOpts(); paintSide(); renderStats(); paintTarget(); paintQuality();
+}
+
+/* ---------- champion options ---------- */
+/* What a kit lets the user say about the fight: a form, stacks, seconds spent in an aura. Like the
+   breakdown rows they are built once per kit, so typing a number keeps its focus. */
+function renderOpts() {
+  const list = S.view?.options || [], el = $('#opts');
+  el.hidden = !list.length;
+  el.innerHTML = !list.length ? '' : `<div class="sec-head"><span class="lbl">${esc(S.champ.name)} options</span><button class="act" id="opts-reset" hidden>Reset</button></div>`
+    + list.map(o => `<label class="opt" data-o="${esc(o.id)}">${o.kind === 'bool'
+      ? `<input type="checkbox" data-o="${esc(o.id)}">`
+      : `<input type="number" data-o="${esc(o.id)}"${o.min !== undefined ? ` min="${o.min}"` : ''}${o.max !== undefined ? ` max="${o.max}"` : ''}>`}<span>${esc(o.label)}</span></label>`).join('');
+  paintOpts();
+}
+/* An option the user has not touched shows the default the calculation used for build A. */
+function paintOpts() {
+  const used = S.res?.a?.options || {};
+  for (const row of $$('#opts .opt')) {
+    const id = row.dataset.o, input = $('input', row), v = S.options[id] ?? used[id];
+    row.classList.toggle('set', id in S.options);
+    if (input.type === 'checkbox') input.checked = !!v;
+    else if (document.activeElement !== input) input.value = v ?? '';
+  }
+  const reset = $('#opts-reset');
+  if (reset) reset.hidden = !Object.keys(S.options).length;
+}
+function setOpt(input) {
+  const o = S.view?.options.find(x => x.id === input.dataset.o);
+  if (!o) return;
+  if (o.kind === 'bool') S.options[o.id] = input.checked ? 1 : 0;
+  else if (input.value.trim() === '' || !Number.isFinite(+input.value)) delete S.options[o.id];
+  else S.options[o.id] = Math.max(o.min ?? -1e6, Math.min(o.max ?? 1e6, Math.round(+input.value)));
+  paintOpts(); schedule();
 }
 
 /* ---------- share link ---------- */
 function encodeState() {
   const s = {c: S.champ.id, l: S.level, r: SLOTS.map(k => S.ranks[k]), o: S.order, a: S.builds.a, b: S.builds.b, n: [$('#name-a').value, $('#name-b').value],
-    m: S.compare ? 1 : 0, t: S.target, d: S.target === 'raw' ? S.dummy : readDials(), e: [S.enemy.id, S.enemy.level], q: ACTIONS.map(k => S.combo[k])};
+    m: S.compare ? 1 : 0, t: S.target, d: S.target === 'raw' ? S.dummy : readDials(), e: [S.enemy.id, S.enemy.level], q: ACTIONS.map(k => S.combo[k]),
+    ...(Object.keys(S.options).length && {x: S.options})};
   return btoa(unescape(encodeURIComponent(JSON.stringify(s)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 function decodeState() {
@@ -604,6 +652,8 @@ function applyState(s) {
   const e = Array.isArray(s.e) && S.champs.find(x => x.id === s.e[0]);
   if (e) S.enemy = {id: e.id, name: e.name, level: int(s.e[1], 1, 18, 13)};
   if (Array.isArray(s.q)) ACTIONS.forEach((k, i) => S.combo[k] = int(s.q[i], 0, 30, 0));
+  // ids are checked against the kit once it has loaded
+  if (s.x && typeof s.x === 'object') for (const [id, v] of Object.entries(s.x).slice(0, 24)) if (Number.isFinite(+v)) S.options[id] = Math.round(+v);
 }
 
 /* ---------- wiring ---------- */
@@ -636,6 +686,8 @@ function wire() {
     S.combo[k] = Math.max(0, Math.min(30, Math.round(+e.target.value) || 0));
     paintSub(); schedule();
   });
+  $('#opts').addEventListener('input', e => { if (e.target.matches('input[data-o]')) setOpt(e.target); });
+  $('#opts').addEventListener('click', e => { if (e.target.closest('#opts-reset')) { S.options = {}; paintOpts(); schedule(); } });
 
   const builds = $('#builds');
   builds.addEventListener('click', e => {

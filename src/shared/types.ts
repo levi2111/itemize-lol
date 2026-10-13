@@ -141,6 +141,8 @@ export interface Rule {
   amount: Expr;
   /** how many instances one firing deals to a single target */
   count?: Expr;
+  /** seconds one firing's instances are spread over (a burn, a channel, a zone); reported as damage per second next to the total */
+  over?: Expr;
   /** the rule only fires when this is non-zero */
   when?: Expr;
   /** amount of one instance when it critically strikes; makes the hit use expected crit value */

@@ -54,7 +54,17 @@ export interface SourceLine {
   total: Amount;
   byType: ByType;
   /** what the line is made of: one entry per rule that fired */
-  parts: { id: string; label: string; type: DamageType; hits: number; total: Amount }[];
+  parts: { id: string; label: string; type: DamageType; hits: number; total: Amount; over?: OverTime }[];
+  /** set when part of the line is not instant: those parts taken together */
+  over?: OverTime;
+}
+
+/** Damage that takes time to land: a burn, a channel, a zone the target stands in. */
+export interface OverTime {
+  /** how long it runs in this combo. Parts set off by one action run side by side; a second cast adds its own time */
+  seconds: number;
+  /** damage per second while it runs: `perSecond x seconds` is the damage dealt over time, so casting twice doubles the time, not the rate */
+  perSecond: Amount;
 }
 
 export interface StatLine {
@@ -106,6 +116,8 @@ export interface CalcResult {
   /** seconds of sustained basic attacks to kill from full health; null without a target or beyond the horizon */
   timeToKill: number | null;
   abilities: Record<Slot, ModelInfo>;
+  /** the value each of the champion's options had: what the caller set, or the default for this build */
+  options: Record<string, number>;
   items: ({ id: number } & ModelInfo)[];
   /** things the caller should tell the user: assumptions, and anything the engine could not evaluate */
   caveats: string[];

@@ -75,6 +75,10 @@ export class Fight {
   readonly sustained: boolean;
   readonly caveats = new Set<string>();
   readonly hits: Hit[] = [];
+  /** rules whose damage takes time to land, by `owner/rule`: the seconds it runs for, per action that set it off */
+  readonly spread = new Map<string, Map<number, number>>();
+  /** how many actions have been played; what a rule sets off within one action runs side by side */
+  private action = 0;
   stats!: StatBlock;
   time = 0;
 
@@ -335,6 +339,9 @@ export class Fight {
 
   get targetHp(): number | null { return this.target ? this.target.hp : null; }
 
+  /** Every option of the champion as this fight settled it: the caller's value, or the default worked out from the build. */
+  get optionValues(): Record<string, number> { return Object.fromEntries(this.options); }
+
   /** The target's resistance to this type right now, after shred and penetration. */
   private resistance(type: 'physical' | 'magic'): number {
     const t = this.target!, s = this.stats;
@@ -370,8 +377,9 @@ export class Fight {
     return raw;
   }
 
-  private deal(owner: Owner, rule: string, label: string, type: DamageType, amount: number): void {
-    if (!(amount > 0)) return;
+  /** Returns whether anything was dealt. */
+  private deal(owner: Owner, rule: string, label: string, type: DamageType, amount: number): boolean {
+    if (!(amount > 0)) return false;
     const raw = this.amplify(type, amount);
     const dealt = !this.target || type === 'true' ? raw : raw * damageMultiplier(this.resistance(type));
     if (this.target) this.target.hp = Math.max(0, this.target.hp - dealt);
@@ -383,6 +391,7 @@ export class Fight {
       this.hitType = type;
       try { this.trigger('damage'); } finally { this.hitType = undefined; }
     }
+    return true;
   }
 
   /** Fires one rule. Returns true if it fired, whether or not it did damage. */
@@ -402,8 +411,18 @@ export class Fight {
       if (rule.crit && this.stats.critChance > 0) amount += this.stats.critChance * (this.eval(rule.crit, owner) - amount);
       return amount * effectiveness;
     };
-    if (whole) for (let i = 0; i < count; i++) this.deal(owner, rule.id, label, rule.type, one());
-    else if (count > 0) this.deal(owner, rule.id, label, rule.type, one() * count);
+    let landed = false;
+    if (whole) for (let i = 0; i < count; i++) landed = this.deal(owner, rule.id, label, rule.type, one()) || landed;
+    else if (count > 0) landed = this.deal(owner, rule.id, label, rule.type, one() * count);
+    // the damage is still dealt at once and the fight's clock does not wait for it: the duration is only reported
+    if (landed && rule.over) {
+      const seconds = this.eval(rule.over, owner);
+      if (seconds > 0) {
+        const byAction = this.spread.get(key) ?? new Map<number, number>();
+        byAction.set(this.action, Math.max(byAction.get(this.action) ?? 0, seconds));
+        this.spread.set(key, byAction);
+      }
+    }
     for (const t of rule.then ?? []) {
       const k = owner.ns + t.counter;
       const v = this.eval(t.value, owner);
@@ -427,6 +446,7 @@ export class Fight {
   get attackPeriod(): number { return 1 / this.stats.attackSpeed.total; }
 
   act(action: Action): void {
+    this.action++;
     if (action === 'aa') {
       const s = this.stats;
       // crits are averaged: 25% crit chance at 2.0x is 1.25x on every attack

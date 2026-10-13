@@ -100,6 +100,7 @@ function bindRule(src: RuleSrc, index: number, defaultOn: Rule['on'] | undefined
   const rule: Rule = { id: src.id ?? `${on}${index}`, on, type: src.type, amount: b.expr(src.amount) };
   if (src.label) rule.label = src.label;
   if (src.count !== undefined) rule.count = b.expr(src.count);
+  if (src.over !== undefined) rule.over = b.expr(src.over);
   if (src.when !== undefined) rule.when = b.expr(src.when);
   if (src.crit !== undefined) rule.crit = b.expr(src.crit);
   if (src.appliesOnHit) rule.appliesOnHit = src.appliesOnHit === true ? 1 : src.appliesOnHit;
@@ -219,7 +220,7 @@ export function resolveChampion(champ: CompiledChampion, src: ChampionSrc | unde
       // every spell the model reads takes part in the fingerprint
       const touched = new Set([spell.id]);
       const exprs = [
-        ...rules.flatMap(r => [r.amount, r.count, r.when, r.crit, r.cooldown, ...(r.then ?? []).map(t => t.value)]),
+        ...rules.flatMap(r => [r.amount, r.count, r.over, r.when, r.crit, r.cooldown, ...(r.then ?? []).map(t => t.value)]),
         ...[...(model.statMods ?? []), ...(model.amps ?? []), ...(model.resists ?? [])].flatMap(s => [s.value, s.when]),
         ...Object.values(out.vars),
       ];

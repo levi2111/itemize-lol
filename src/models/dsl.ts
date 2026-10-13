@@ -19,6 +19,8 @@ export interface RuleSrc {
   type: DamageType;
   amount: Formula;
   count?: Formula;
+  /** seconds this damage takes to be dealt, for anything that is not instant: shown as damage per second next to the total */
+  over?: Formula;
   when?: Formula;
   /** damage of one instance when it crits; the engine then uses the crit-chance-weighted average */
   crit?: Formula;

@@ -1,4 +1,4 @@
-/* npm run data:<command> -- [--patch 16.20.1] [--champion Samira] [--item 3153] [--accept] [--force] */
+/* npm run data:<command> -- [--patch 16.20.1] [--champion Samira] [--draft] [--item 3153] [--accept] [--force] */
 import { fetchPatch } from './fetch.ts';
 
 const [command, ...rest] = process.argv.slice(2);
@@ -23,7 +23,7 @@ try {
     }
     case 'report': {
       const { printReport } = await import('./report.ts');
-      await printReport({ patch: arg('patch'), champion: arg('champion'), item: arg('item'), status: arg('status'), log });
+      await printReport({ patch: arg('patch'), champion: arg('champion'), item: arg('item'), status: arg('status'), draft: flag('draft'), log });
       break;
     }
     case 'crosscheck': {
