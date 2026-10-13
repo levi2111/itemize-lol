@@ -31,6 +31,7 @@ export default champion('Samira', {
     statMods: [{ stat: 'attackSpeed', value: 'BonusAttackSpeed', when: 'wildRush' }],
   },
   r: {
-    hits: [{ id: 'shots', type: 'physical', amount: 'DamageCalc', count: 10, crit: 'CriticalDamageCalc', note: 'All 10 shots of Inferno Trigger are counted.' }],
+    // the tooltip states the 2 seconds in prose, like the 10 shots
+    hits: [{ id: 'shots', type: 'physical', amount: 'DamageCalc', count: 10, over: 2, crit: 'CriticalDamageCalc', note: 'All 10 shots of Inferno Trigger are counted.' }],
   },
 });

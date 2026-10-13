@@ -1,5 +1,397 @@
 {
  "champions": {
+  "Aatrox": {
+   "p": "220b11a37f6ae0df",
+   "q": "b341d4eca62056db",
+   "w": "1cb5640368f3bc95",
+   "e": "4928386b515424bc",
+   "r": "8859865beb509ea4"
+  },
+  "Ahri": {
+   "p": "4250496f9161a627",
+   "q": "e1abb45b440afdf1",
+   "w": "d9437b6f62127da5",
+   "e": "8f50c5a18a38aa69",
+   "r": "be50c2bc11eb666d"
+  },
+  "Akali": {
+   "p": "aa0559dc28e526af",
+   "q": "a72da97046714e3a",
+   "w": "dee96dbfdb5266aa",
+   "e": "183d5f07befd7e4f",
+   "r": "2d9f3f42d050f0ee"
+  },
+  "Akshan": {
+   "p": "42567433ddc483d7",
+   "q": "f7c215ee11cc20b7",
+   "w": "19f7182128f0c33f",
+   "e": "49832f99c313448a",
+   "r": "4a0703d0aec4e917"
+  },
+  "Alistar": {
+   "p": "a643d35c3177f01e",
+   "q": "972c561cf0ca44cb",
+   "w": "301e9fe064f51a44",
+   "e": "25f1e7cf3a27dab6",
+   "r": "53f2869232baac84"
+  },
+  "Ambessa": {
+   "p": "bc31b299484c7e12",
+   "q": "6ee90679b492c7cd",
+   "w": "f14df96384efc50a",
+   "e": "1d6a7d55df106765",
+   "r": "f26554bef3b1afae"
+  },
+  "Amumu": {
+   "p": "9c5e07e984461d6f",
+   "q": "c8d02256872039e0",
+   "w": "87ee3b604a153dbb",
+   "e": "d692b02a5ee046e1",
+   "r": "dffdb3df23834245"
+  },
+  "Anivia": {
+   "p": "599e8b942ff71fb8",
+   "q": "79018d1e0ff8f817",
+   "w": "049867f0b8ea8465",
+   "e": "c82eed8ffbecdb68",
+   "r": "ed3105ac197fc3a0"
+  },
+  "Annie": {
+   "p": "3a14004a25621907",
+   "q": "8cadd9b51392b72f",
+   "w": "bcf33dd562b64db6",
+   "e": "2fa96ef519998344",
+   "r": "fc075b481031910e"
+  },
+  "Aphelios": {
+   "p": "0cfb7c3784f40d68",
+   "q": "818caca640c7298d",
+   "w": "9aac1d0519cbd486",
+   "e": "eabeb3e5a2c315b9",
+   "r": "c0ec2662a470f912"
+  },
+  "Ashe": {
+   "p": "8b60065b463493da",
+   "q": "9eef8b3eaa337032",
+   "w": "306b1e18eb43063c",
+   "e": "fac786702cf5662c",
+   "r": "680886ce0d9d5e1b"
+  },
+  "AurelionSol": {
+   "p": "7587dcd1bbe65d59",
+   "q": "ad2a837f32a657df",
+   "w": "279c4275ce7bbbfe",
+   "e": "2734bc3256fb882f",
+   "r": "0677df9195dfb87e"
+  },
+  "Aurora": {
+   "p": "4a5ddac594728885",
+   "q": "50d022ac97aa9412",
+   "w": "9a999a4b8f060319",
+   "e": "4784a36a0598d54a",
+   "r": "1027fbba6a06e498"
+  },
+  "Azir": {
+   "p": "41619a64d14d78ca",
+   "q": "0b74a91e6dbb8461",
+   "w": "8056d219d6699140",
+   "e": "6c04e9ce5cf8d42a",
+   "r": "c11bb7656b323f42"
+  },
+  "Bard": {
+   "p": "4305f990e0bffdbe",
+   "q": "db67d67ae416a234",
+   "w": "c4165cd772f3bb98",
+   "e": "3a356f8f9e26160f",
+   "r": "7638dea28b319bfe"
+  },
+  "Belveth": {
+   "p": "9dcc950c03efc6e3",
+   "q": "9e7f3cf5352baae7",
+   "w": "a9ef8500e46069ac",
+   "e": "8ad0d2f9260793c9",
+   "r": "0fb5e09a44672bc1"
+  },
+  "Blitzcrank": {
+   "p": "bbad5656708c4422",
+   "q": "88aa5107451af158",
+   "w": "c9f9df2be6e68e53",
+   "e": "3bba829834de2dcf",
+   "r": "322bc31be4843b60"
+  },
+  "Brand": {
+   "p": "0b865ed3537775c3",
+   "q": "30b52867cbc97d4b",
+   "w": "8dd123b28b9a537e",
+   "e": "3630071fddbc6b02",
+   "r": "58f02f7e74e988f0"
+  },
+  "Braum": {
+   "p": "44c84f0179ec93fd",
+   "q": "6bac36b243f593a4",
+   "w": "c1ee9a443b848367",
+   "e": "6f32e36882accdec",
+   "r": "892f33b2da71d6ac"
+  },
+  "Briar": {
+   "p": "d34c179b6c67d404",
+   "q": "43514fd18e387d9a",
+   "w": "bbcc1bf8bf6ff059",
+   "e": "206dacdf6b0308dd",
+   "r": "b3f62ab3bcfc97c0"
+  },
+  "Caitlyn": {
+   "p": "d75835328f2d7760",
+   "q": "a8bd97920fea89ee",
+   "w": "09538b0349a62ec6",
+   "e": "a78bcfe6796ad5bf",
+   "r": "caf9d253456c9bd5"
+  },
+  "Camille": {
+   "p": "c8db2228adfb001e",
+   "q": "0f76db531b9683ef",
+   "w": "2ac5b757c19f5fcd",
+   "e": "4fb8fc13143ba79d",
+   "r": "ccc6c70635c56f90"
+  },
+  "Cassiopeia": {
+   "p": "faa21acda23425c2",
+   "q": "f38c452f66dc59ed",
+   "w": "bb01756e99c92c30",
+   "e": "875a770284efc814",
+   "r": "1e826d0469201f7e"
+  },
+  "Chogath": {
+   "p": "65a27d1b6bdbb56c",
+   "q": "3442b6cc068711a8",
+   "w": "062aaabf235266ba",
+   "e": "1f926a643211182a",
+   "r": "fef2ff0d48fb02ac"
+  },
+  "Corki": {
+   "p": "4aa476ea4d27f132",
+   "q": "ae0459aaa565f05e",
+   "w": "fd1d8af6ccdf22de",
+   "e": "c856d37ac76254fe",
+   "r": "b2ec578d633dd188"
+  },
+  "Darius": {
+   "p": "7701e3f0a2e5a262",
+   "q": "5928bcd3e0c9055b",
+   "w": "96d56f19bb1aca54",
+   "e": "a9c7c98c95883bb7",
+   "r": "19fa93e8303d1834"
+  },
+  "Diana": {
+   "p": "4e7cfc7e2727c381",
+   "q": "b71c959547381c75",
+   "w": "f9c4593b0f218874",
+   "e": "732307542c562964",
+   "r": "a518e37b6d840e29"
+  },
+  "DrMundo": {
+   "p": "ce7ba393c7052e8f",
+   "q": "dba7c5a845212ba2",
+   "w": "e835c18a622b0e95",
+   "e": "d4b9fc94aa925f0c",
+   "r": "684f5722680db461"
+  },
+  "Draven": {
+   "p": "5410aa98e8b59244",
+   "q": "ce905f8b6feeaee7",
+   "w": "cdacf675b6991bb0",
+   "e": "e0e5b256317f69e7",
+   "r": "20bb8d08fe8f62dd"
+  },
+  "Ekko": {
+   "p": "1e5967c8174e6164",
+   "q": "e9fe4b9f701b37d1",
+   "w": "abc4943bcbc9ca6c",
+   "e": "cbef0c5774696031",
+   "r": "74efa00e9e21fbba"
+  },
+  "Elise": {
+   "p": "bc706cca4dd7628c",
+   "q": "bcc6ddf6a16e0d09",
+   "w": "e680911df14f4157",
+   "e": "68e8f3ee5a89fd7b",
+   "r": "cf18eb6ccdcfc6f6"
+  },
+  "Evelynn": {
+   "p": "4182eb8d070ccf41",
+   "q": "b945a397a72cea62",
+   "w": "f66f1be4146bff3f",
+   "e": "602b429279311886",
+   "r": "0030478718874b2a"
+  },
+  "Ezreal": {
+   "p": "3628f63e1d426b97",
+   "q": "9f9911b5e71ba7eb",
+   "w": "d9cffbf2b094824f",
+   "e": "8b8e04d860f23f0b",
+   "r": "4a71189bb1469daf"
+  },
+  "Fiddlesticks": {
+   "p": "08f14ede34748446",
+   "q": "770366a96511cb0f",
+   "w": "db758e07cbc48382",
+   "e": "8db1345fde6c61f6",
+   "r": "6ee1a7a28df0cd4a"
+  },
+  "Fiora": {
+   "p": "69acf3bdcb05cfcb",
+   "q": "38f37c8b22aa56e7",
+   "w": "94cb5871185b90ee",
+   "e": "93febd968a48a0f4",
+   "r": "8a10c7a273d9710c"
+  },
+  "Fizz": {
+   "p": "b2600327814838a0",
+   "q": "ce2ea90781ef4402",
+   "w": "8053cd965181b895",
+   "e": "c5b2ee1922abcd77",
+   "r": "a3d9ac5d81cc3814"
+  },
+  "Galio": {
+   "p": "637c8530a81f9d5a",
+   "q": "2a687a91bf1a7337",
+   "w": "7054cdaaa88248e3",
+   "e": "4e6d090b3313e175",
+   "r": "f9dc98db1cb3f163"
+  },
+  "Gangplank": {
+   "p": "282cfd4631e14c93",
+   "q": "3f7d3162e7c44a17",
+   "w": "8a82c359a6f14581",
+   "e": "66b56504613c904a",
+   "r": "c6a0cc7c8ef195ec"
+  },
+  "Garen": {
+   "p": "c4fc243400a9d7f6",
+   "q": "3a697f6fb7cc704d",
+   "w": "09d19f125270ddb8",
+   "e": "c9a79aa9406933e0",
+   "r": "b74b75b7566c2207"
+  },
+  "Gnar": {
+   "p": "a3b24139d71fd3f5",
+   "q": "72a7f52f6c8dd846",
+   "w": "8fecf2604487092d",
+   "e": "9aed3ebc2d3dbe17",
+   "r": "b91089c765c2addd"
+  },
+  "Gragas": {
+   "p": "817f571f3e4c28b9",
+   "q": "c71e7c8123483c1d",
+   "w": "73ceb83209dee799",
+   "e": "62c74d12df1be05a",
+   "r": "a9aef32131dd5c2b"
+  },
+  "Graves": {
+   "p": "1d881e0f308b2e93",
+   "q": "d59634cf134a9193",
+   "w": "f519b06778fcf6a9",
+   "e": "e0e8bf5c1ed77259",
+   "r": "0a788c45e1db2d03"
+  },
+  "Gwen": {
+   "p": "5c08fe818974aa6e",
+   "q": "e7ffd8b5d13b5800",
+   "w": "aaa0147df09c73fa",
+   "e": "168d68f6141c4efa",
+   "r": "52d36180a6d55a85"
+  },
+  "Hecarim": {
+   "p": "72d67bb37918b744",
+   "q": "4569d92e7a8f1923",
+   "w": "b5dab1bebc355dab",
+   "e": "97dde7784efffe18",
+   "r": "06ff66e3f24b9937"
+  },
+  "Heimerdinger": {
+   "p": "f6f56ca24e35d13f",
+   "q": "5bb76620e5bee57e",
+   "w": "254fa6d0fcbd2f46",
+   "e": "6fe7edae460d9863",
+   "r": "6bea1395c7f3ddf4"
+  },
+  "Hwei": {
+   "p": "9279b5fd9d53a31c",
+   "q": "1254bf9832b4b161",
+   "w": "2316d91725f5c62a",
+   "e": "b01e1723d5545ba9",
+   "r": "b8814b87958e02a2"
+  },
+  "Illaoi": {
+   "p": "78c20f89a6fc488c",
+   "q": "99047267e6a5028a",
+   "w": "852d325782b1b2ea",
+   "e": "3ca0cf9d86aa1875",
+   "r": "47fbc9074ba896b6"
+  },
+  "Irelia": {
+   "p": "a115dfd0c713464d",
+   "q": "8be31690e9acefce",
+   "w": "cab0974ec89852f8",
+   "e": "d742a52a154592a4",
+   "r": "fb8c1c9b022cda6e"
+  },
+  "Ivern": {
+   "p": "700426aa695743bc",
+   "q": "facd2492985cf0e2",
+   "w": "089cc387552586d6",
+   "e": "ff38e2c401455850",
+   "r": "28f20b1247d49935"
+  },
+  "Janna": {
+   "p": "b5a176ebd7ed2984",
+   "q": "06398fff3e6d0cb2",
+   "w": "2a475c1b5bfe11ad",
+   "e": "2e89c705239dde79",
+   "r": "f760850cf441d0f5"
+  },
+  "JarvanIV": {
+   "p": "4d3f5205f14df251",
+   "q": "70fbec4f7dd62b22",
+   "w": "a8b021d28c1107de",
+   "e": "b4d14a2d01c5e386",
+   "r": "ab6f1e8c8b69c944"
+  },
+  "Jax": {
+   "p": "813b189d89d77dc3",
+   "q": "9afb993be313107e",
+   "w": "71bc544eb069d20b",
+   "e": "d991acbaee155642",
+   "r": "58fafcbaa5c52481"
+  },
+  "Jayce": {
+   "p": "0fb7ff8dd7fbe128",
+   "q": "e2eb8c25e38b3d34",
+   "w": "4b642d4897a5912c",
+   "e": "6a727a92e18991ce",
+   "r": "66ea7a994fab0a28"
+  },
+  "Jhin": {
+   "p": "29fc8f9ee953c269",
+   "q": "440238b932bb529c",
+   "w": "71a0faff0e62347b",
+   "e": "9faf1800a324c77e",
+   "r": "1290b53f0239292c"
+  },
+  "Jinx": {
+   "p": "3d2f14d74f4e3d81",
+   "q": "ba647788dcd12cfd",
+   "w": "967ed640874ffb54",
+   "e": "6c3a2ab3c62691b7",
+   "r": "2906b0e20a17bbf3"
+  },
+  "KSante": {
+   "p": "3607f6be4785e1e1",
+   "q": "828cc1973f746f70",
+   "w": "8a135160a6a672c0",
+   "e": "5ef8636613a7eaa0",
+   "r": "e7acab91957f5b9f"
+  },
   "Kaisa": {
    "p": "23979c55049df645",
    "q": "f65518f452e135f8",
@@ -7,12 +399,816 @@
    "e": "4c99fa4b829a3e3e",
    "r": "68be37d81aae8bcb"
   },
+  "Kalista": {
+   "p": "f255f6b43d96a5e2",
+   "q": "83e15e80f50ceda9",
+   "w": "57e927cf8314afdc",
+   "e": "3668890b4f1c060f",
+   "r": "22b68f76922b98b5"
+  },
+  "Karma": {
+   "p": "cec9e86c9b3dffaa",
+   "q": "8d95c84bd1179720",
+   "w": "7b91fcd1eed430d5",
+   "e": "54fe3cd538e4b0e2",
+   "r": "07f1b9c2b947885e"
+  },
+  "Karthus": {
+   "p": "0b66b6674eb18510",
+   "q": "e0e8d186346aceb4",
+   "w": "5056951fd6c35137",
+   "e": "616e20fab1576ad7",
+   "r": "24b244cf4d849ae8"
+  },
+  "Kassadin": {
+   "p": "af65ec3647e520d3",
+   "q": "b20ee316020da0b6",
+   "w": "ac31e226b5fb329d",
+   "e": "e6819a1081c4440f",
+   "r": "6d7aade199176962"
+  },
+  "Katarina": {
+   "p": "be737702c58cd20e",
+   "q": "afeed0b32ed5fe7f",
+   "w": "f8e0720ca4edec68",
+   "e": "697b8ab7dba6798b",
+   "r": "91e461dad6a03350"
+  },
+  "Kayle": {
+   "p": "e48622b535c1c0a5",
+   "q": "21cba1dfaa0ca4ac",
+   "w": "b62dc3ef841aa90b",
+   "e": "7a3161fe66209b32",
+   "r": "c1b4c0b2235b5e07"
+  },
+  "Kayn": {
+   "p": "0367645af8a5fd71",
+   "q": "07d6d018abc80740",
+   "w": "3a341b426535dbb8",
+   "e": "c94fe12c8df7757c",
+   "r": "8f9cb94f8bcf0c0c"
+  },
+  "Kennen": {
+   "p": "77c6b31ebc930f50",
+   "q": "31dbdb73fceaf969",
+   "w": "8bebd484abf199c3",
+   "e": "dc919d36a0edcd4b",
+   "r": "e472a6fbd41aab4a"
+  },
+  "Khazix": {
+   "p": "1014532262ae2148",
+   "q": "c7eb352b04543e1a",
+   "w": "d47a9fb75b693800",
+   "e": "932ee6d5afd43e00",
+   "r": "fa9b5fb3acde3640"
+  },
+  "Kindred": {
+   "p": "89d0ac580e704f65",
+   "q": "817fb090f01eedf6",
+   "w": "d09076a2e7538db2",
+   "e": "769741c29c8d76f2",
+   "r": "f7a4c61b27de463d"
+  },
+  "Kled": {
+   "p": "5ccd85a96721146a",
+   "q": "3d8bef894823d74c",
+   "w": "d10b991b83912a9f",
+   "e": "455c4580e03f6ea0",
+   "r": "65bddcfc1763e42a"
+  },
+  "KogMaw": {
+   "p": "1a30aa254f931497",
+   "q": "b560060cb707a6e4",
+   "w": "6e9addecfddc7083",
+   "e": "961158a08c7bbc65",
+   "r": "86d4533a95670218"
+  },
+  "Leblanc": {
+   "p": "db245e85201aa7dd",
+   "q": "dada1c679325753e",
+   "w": "fb816ca385218b21",
+   "e": "56e5c65744fe7325",
+   "r": "8abca20ded737066"
+  },
+  "LeeSin": {
+   "p": "9a2996de406c450a",
+   "q": "09199aad427a117d",
+   "w": "0766d4452af8b9ff",
+   "e": "7b312dba716c8b7e",
+   "r": "00713a9f49a1dc40"
+  },
+  "Leona": {
+   "p": "a0ef67a74933456e",
+   "q": "61a03f4a567be3bc",
+   "w": "f7904809d185cd4d",
+   "e": "f556e6a1736d127e",
+   "r": "fa50ec2f4c3999ff"
+  },
+  "Lillia": {
+   "p": "3e6cc2064b8ac147",
+   "q": "a2dcb9fa1438c066",
+   "w": "4e1558e2f2947114",
+   "e": "25dff52674d41a0e",
+   "r": "0f33cb33600e33e4"
+  },
+  "Lissandra": {
+   "p": "d0e90baa7c3c1784",
+   "q": "48120aa79d9df837",
+   "w": "60024ad74dc349bb",
+   "e": "0170969e6b71f70d",
+   "r": "640d94f54fe555de"
+  },
+  "Locke": {
+   "p": "ad1ec5bb7b4f0347",
+   "q": "97e6c0aa4531eea5",
+   "w": "164f4be9e5c47dad",
+   "e": "9db76691e266b9f3",
+   "r": "a77ab936eaddd353"
+  },
+  "Lucian": {
+   "p": "dcabd48a34e494b4",
+   "q": "b62bde3a358ba2c8",
+   "w": "70811b03f0db55de",
+   "e": "21111159309076d2",
+   "r": "626cfc3f15514981"
+  },
+  "Lulu": {
+   "p": "d3c48437b29a0317",
+   "q": "cc8704ae8d5eea96",
+   "w": "43c31794284dbd43",
+   "e": "232949a5725019c0",
+   "r": "06a2423653d00918"
+  },
+  "Lux": {
+   "p": "1a78bc726f91069b",
+   "q": "e9cf4f81cfd783d5",
+   "w": "cf06a427137fd0c8",
+   "e": "b713e49d4ec3e427",
+   "r": "90331361ed7e2c9a"
+  },
+  "Malphite": {
+   "p": "fade60205c640552",
+   "q": "9644bf6f7d9018f7",
+   "w": "2fe291cce3f6b0ba",
+   "e": "968b333ad94ea1a1",
+   "r": "13e97fd861c4085c"
+  },
+  "Malzahar": {
+   "p": "93c6cc32466501dc",
+   "q": "cf47b654649dbd5a",
+   "w": "0067f2246bb6bb95",
+   "e": "9d27c58bfcbe3d37",
+   "r": "d9bf7aab48552c30"
+  },
+  "Maokai": {
+   "p": "75a03fdb2709cfd4",
+   "q": "78fb9c5515b1dc92",
+   "w": "9574808c5d0d228d",
+   "e": "67d63e637f126c0a",
+   "r": "962e849d3f27d61b"
+  },
+  "MasterYi": {
+   "p": "1446bba2797604a9",
+   "q": "ad8ab429aeb4562d",
+   "w": "b75d26c8936830b3",
+   "e": "7e6d1d4826ad7b3d",
+   "r": "20bc7adcf604e9ba"
+  },
+  "Mel": {
+   "p": "42dd143418febae4",
+   "q": "ebe9fe9885eb8c90",
+   "e": "ac8b5443405e7c33",
+   "r": "7360b9c241a73780"
+  },
+  "Milio": {
+   "p": "bb8283e2f394c96b",
+   "q": "056d264c554ad33e",
+   "w": "a9219a520a9e215a",
+   "e": "1ffc1176bdd468d4",
+   "r": "1652f860a7249151"
+  },
+  "MissFortune": {
+   "p": "3874d65c8d6a4cee",
+   "q": "806a65cf9dcab83b",
+   "w": "cc8f9201bee4312a",
+   "e": "c5768767cccd9c34",
+   "r": "ce3f07b3881397e3"
+  },
+  "MonkeyKing": {
+   "p": "16610b95c2c3484e",
+   "q": "78fe3aed5835c3ed",
+   "w": "b6ebcafc5b1250d6",
+   "e": "7d8cd2c612a4d241",
+   "r": "bb6caab4a4781d66"
+  },
+  "Mordekaiser": {
+   "p": "9fd4a549bd791d7c",
+   "q": "70944dee14509d8d",
+   "w": "416cb6791b8976de",
+   "e": "00938e8d3ace6365",
+   "r": "080ff8a300380aaa"
+  },
+  "Morgana": {
+   "p": "c9a6eb0292e75028",
+   "q": "d2df82c732e40562",
+   "w": "20dff0fed0027769",
+   "e": "066e2545a7e21853",
+   "r": "5f2078372256cdcf"
+  },
+  "Naafiri": {
+   "p": "033f04b2f64f4222",
+   "q": "6e31dfaa82da7572",
+   "w": "fb506d79c2d4d7c7",
+   "e": "22a15bf30d2da06d",
+   "r": "3728c6226d35a31c"
+  },
+  "Nami": {
+   "p": "31a6de60630dd9eb",
+   "q": "9d23da8692c40c78",
+   "w": "7d19e3db02a2a6c4",
+   "e": "0513db8a801b53f2",
+   "r": "a07db0a3b007f183"
+  },
+  "Nasus": {
+   "p": "1d12f789b9e4e46b",
+   "q": "a7eb7206bc27dc24",
+   "w": "cf7608e5fd07b57c",
+   "e": "5af8079493a7f85f",
+   "r": "f8cacf077a6b0457"
+  },
+  "Nautilus": {
+   "p": "f3f83632f0f1be70",
+   "q": "3fbfb340869337bb",
+   "w": "63da102317bd420c",
+   "e": "ce5efec93a4c2574",
+   "r": "ad1f497b62da2fe8"
+  },
+  "Neeko": {
+   "p": "633549a40dfdb08d",
+   "q": "c8e3c7fed3739ec0",
+   "w": "750d0a297f7dccdf",
+   "e": "407c42e9661c6ff8",
+   "r": "2316c04db871c4b3"
+  },
+  "Nidalee": {
+   "p": "d7ddd0037b319741",
+   "q": "79389a4b000f0d3e",
+   "w": "4fcad8bd5cd10220",
+   "e": "9c1112c09dc0d42c",
+   "r": "be832078d89c46e4"
+  },
+  "Nilah": {
+   "p": "d4b8524e5d0e5c50",
+   "q": "ca05491e2cf718e2",
+   "w": "7eae26b62be67abe",
+   "e": "59a51587d1dbdf7c",
+   "r": "0128ac027a727230"
+  },
+  "Nocturne": {
+   "p": "2b590a585fca1d83",
+   "q": "c88396ea7bf775f9",
+   "w": "f5d9f84fa3a4ed37",
+   "e": "9da6b27278333441",
+   "r": "d6559a6b03ce0009"
+  },
+  "Nunu": {
+   "p": "afcae332dac043c9",
+   "q": "883b8a61b0c225c9",
+   "w": "ae88bda177783688",
+   "e": "1240be1a8d8aeff0",
+   "r": "0af3574c753eedc7"
+  },
+  "Olaf": {
+   "p": "7cff87eb6418a508",
+   "q": "e42b7ef9186a5971",
+   "w": "96b8263b7d5b2da4",
+   "e": "848ee0bbeda2f60b",
+   "r": "2c075f21f5bc6f8b"
+  },
+  "Orianna": {
+   "p": "d493ba34b998265a",
+   "q": "27d8ba97aa6488d6",
+   "w": "3e40545a98041442",
+   "e": "9fa22bc6f0198c35",
+   "r": "a37021b8ae065157"
+  },
+  "Ornn": {
+   "p": "dd8641117e6b741e",
+   "q": "0ada48bef4442ad5",
+   "w": "cd5a32e974abaf4d",
+   "e": "0077093970d90b66",
+   "r": "cdb960a08e1ff21c"
+  },
+  "Pantheon": {
+   "p": "521c4047077cadb3",
+   "q": "6c4308a1f83680ab",
+   "w": "7ab3a4c123f50ca2",
+   "e": "312dee8c372220a2",
+   "r": "402aabf4ef1fd7cd"
+  },
+  "Poppy": {
+   "p": "bcf1ca1c3b4fec76",
+   "q": "5b833a03024025a6",
+   "w": "22ab828b5cfa03d7",
+   "e": "ac054c7a042eca7d",
+   "r": "76a38e11a2584d25"
+  },
+  "Pyke": {
+   "p": "a125a1d497f1c7ba",
+   "q": "ef0800ce1120b74a",
+   "w": "42d6b96ba871c8c6",
+   "e": "66c01d3011779f45",
+   "r": "daa8fa17f6a6cf9b"
+  },
+  "Qiyana": {
+   "p": "30339ba48a838829",
+   "q": "e8080ed7e9300cb9",
+   "w": "bea6b8c033b308f7",
+   "e": "c4f7c2172481e83f",
+   "r": "2e324b1784e7077d"
+  },
+  "Quinn": {
+   "p": "6731395fc1c712db",
+   "q": "34321ca96e4901dd",
+   "w": "e35a06495d8825f9",
+   "e": "1f8288686356349a",
+   "r": "ee82e97f5434bd12"
+  },
+  "Rakan": {
+   "p": "3a4128be53bf5e7c",
+   "q": "9339d669aa80f4f0",
+   "w": "c35df18e89f6926a",
+   "e": "df942567f33baa21",
+   "r": "c3b9454bf170d984"
+  },
+  "Rammus": {
+   "p": "651e84585ae0dfb0",
+   "q": "109aee6541a81527",
+   "w": "4de10b7e0baa37e2",
+   "e": "2b5a7701b6f7d7eb",
+   "r": "41b5b74ca4a7e14c"
+  },
+  "RekSai": {
+   "p": "4dbcf00d6b36bfda",
+   "q": "c40de2eb1472a719",
+   "w": "65520bd9300ee996",
+   "e": "5fcee31476b5155a",
+   "r": "e0caf54067ea29fa"
+  },
+  "Rell": {
+   "p": "33481fb6c8e0f93d",
+   "q": "50d470150009c064",
+   "w": "fcc0b19dafd9d9b4",
+   "e": "8be3262bc0e53bcc",
+   "r": "97afbf0c3980bec6"
+  },
+  "Renata": {
+   "p": "9d3e7ae8d77aaa74",
+   "q": "823d189f720abb09",
+   "w": "2b0e7b3792cffed9",
+   "e": "34759c9a647e3129",
+   "r": "e4fa4c98edad41f8"
+  },
+  "Renekton": {
+   "p": "7cf78db0ceeb4164",
+   "q": "c55c2ece0437d28b",
+   "w": "c94e1f03d6121e80",
+   "e": "f40ceac1afe15aa5",
+   "r": "c7049dc70496b317"
+  },
+  "Rengar": {
+   "p": "10a3d400a67cafe9",
+   "q": "1b5176a8aed0ce70",
+   "w": "43ed9bde95219305",
+   "e": "94cca3e494279884",
+   "r": "bbd65f2f76c17cff"
+  },
+  "Riven": {
+   "p": "d7aabd5d4da63520",
+   "q": "5d42e54b781fa03c",
+   "w": "9e8ba49acee633ce",
+   "e": "a03bc5cc41053c8e",
+   "r": "7504b33a7004a4bd"
+  },
+  "Rumble": {
+   "p": "e489b25485589e94",
+   "q": "b1fc64ffcf1d49a2",
+   "w": "4fdae3acf9b266df",
+   "e": "73a3ae4ffc9eec7c",
+   "r": "3c2afdf7fb2e4b16"
+  },
+  "Ryze": {
+   "p": "cebc30871513c54c",
+   "q": "b16c06a5c26ca1d7",
+   "w": "d302947015b821d4",
+   "e": "57d0932cc9544009",
+   "r": "6630d039e6dc8dbf"
+  },
   "Samira": {
    "p": "675475a33cbd4cf8",
    "q": "eb6ff8e085b790ec",
    "w": "77bc6caee4a7aaea",
    "e": "19adb5a94154549f",
-   "r": "da6bc33e0e14de37"
+   "r": "b9e1b6f679b2dd63"
+  },
+  "Sejuani": {
+   "p": "0ad721de39ca5992",
+   "q": "8d02099618462566",
+   "w": "d1e94c9f402d68e3",
+   "e": "25f83fa4bf90164a",
+   "r": "065db0be2370036c"
+  },
+  "Senna": {
+   "p": "9ba7ce650bfe33a1",
+   "q": "60d4827ae1fcf8ab",
+   "w": "d9ca2100041c20ee",
+   "e": "947c011f271b6fcc",
+   "r": "8c40687c2565b77f"
+  },
+  "Seraphine": {
+   "p": "7b7da77fc4c7b54d",
+   "q": "779e88d69d28743e",
+   "w": "0c52df6a4e7e8fc7",
+   "e": "3e4d1cf22c49a6c0",
+   "r": "326441e323d49548"
+  },
+  "Sett": {
+   "p": "a39f677a272d5302",
+   "q": "9ac7d42e153ecada",
+   "w": "b453775e8d7c478b",
+   "e": "c7f0a0e520af646a",
+   "r": "26308c2cafb8a821"
+  },
+  "Shaco": {
+   "p": "d3f38c0e38cd8aa0",
+   "q": "07a64838b6f4246f",
+   "w": "ebe40f7af8d8b044",
+   "e": "ec0045a8d67b5bd9",
+   "r": "9b0b4992aebb449f"
+  },
+  "Shen": {
+   "p": "7c3f0c7da2a3093b",
+   "q": "71b4d544ec00fc22",
+   "w": "320e0b78ffe9dbca",
+   "e": "2cc79c5db1df6e90",
+   "r": "e345a7ab174c56a4"
+  },
+  "Shyvana": {
+   "p": "a45f07e6ebbcc1b1",
+   "q": "10a7eb816acc646d",
+   "w": "f55ba674860ce59f",
+   "e": "2100bcc93644d06c",
+   "r": "9097bf9eff14c263"
+  },
+  "Singed": {
+   "p": "8fd0f1c1abf0872f",
+   "q": "80e63f391525f36c",
+   "w": "51af4c80aeb98fd3",
+   "e": "59cfb2746fd2929f",
+   "r": "c17a4593c517d337"
+  },
+  "Sion": {
+   "p": "d89b7c28f1f5dcca",
+   "q": "bf68d392d5ec6beb",
+   "w": "c9bfcfd9d7907136",
+   "e": "a1c51d023be810d5",
+   "r": "597b2198cbcba42c"
+  },
+  "Sivir": {
+   "p": "1d5d7424e8f5b9e7",
+   "q": "856ebfc0ce62ea08",
+   "w": "b2807a9dfa5d0213",
+   "e": "5dfbd35a7bd1f7d3",
+   "r": "693d7f16986d3212"
+  },
+  "Skarner": {
+   "p": "09e9c8d063b3c452",
+   "q": "12091ad522849145",
+   "w": "f31c2b1597fe8426",
+   "e": "a4c4f3f9919ac03b",
+   "r": "1e575c647cdffa16"
+  },
+  "Smolder": {
+   "p": "39eb897a2d966b0b",
+   "q": "0c7405253266c497",
+   "w": "9b38895f497d5033",
+   "e": "4ce191472e7ea867",
+   "r": "1e00f3dd854e2200"
+  },
+  "Sona": {
+   "p": "436afb7dd0d45f4f",
+   "q": "8ce4bbeb943abd3b",
+   "w": "cdc21fd6a2bd8702",
+   "e": "289842405efa4983",
+   "r": "7a77bd25850d28c2"
+  },
+  "Soraka": {
+   "p": "2e5879ad2375b39d",
+   "q": "ac827fb14fa71e6f",
+   "w": "9dfb830cd69e09ce",
+   "e": "e89d097de7fe669b",
+   "r": "ba8b568f63ae563c"
+  },
+  "Swain": {
+   "p": "e01768dd18a80762",
+   "q": "a991cfe0226f949d",
+   "w": "209d31c1d144b837",
+   "e": "9ed32f64560ab100",
+   "r": "e25eda4c93451bcf"
+  },
+  "Sylas": {
+   "p": "c0e3378a07390ee9",
+   "q": "8e5dadf77b1a4fc9",
+   "w": "07f927ba9d50fcf9",
+   "e": "7ff86a75eded1391",
+   "r": "9e8d3e93691c131c"
+  },
+  "Syndra": {
+   "p": "160c1976e4418914",
+   "q": "15f6ec25f6212b07",
+   "w": "8008d49d24cac5f0",
+   "e": "464525132d09b07f",
+   "r": "5f77d7cfb3a6c6ac"
+  },
+  "TahmKench": {
+   "p": "443c26cf1351ad01",
+   "q": "cef3bc431d1a416a",
+   "w": "06b4f80c4cb7927d",
+   "e": "3dcf61dd2d0fea03",
+   "r": "8e082f1437a0df44"
+  },
+  "Taliyah": {
+   "p": "fd500250fc37b24e",
+   "q": "8d38999c92d090e1",
+   "w": "7af42d311a6221d0",
+   "e": "9a5b84f77e0e3d8a",
+   "r": "7ab90bdb9ff491d2"
+  },
+  "Talon": {
+   "p": "1831de281f9b178f",
+   "q": "9cb419920aacef57",
+   "w": "3dbcc49944dce79a",
+   "e": "38c8687789311bfb",
+   "r": "594571afc88aa271"
+  },
+  "Taric": {
+   "p": "bf3d6704526aad67",
+   "q": "b79fb30ae03eacf7",
+   "w": "2d29c985f2b37e68",
+   "e": "1bb0916ab2a4ae19",
+   "r": "f10a673de20bd1f0"
+  },
+  "Teemo": {
+   "p": "1a3e3e6a0abc6a51",
+   "q": "7a6f82ae37f85716",
+   "w": "c71cf4e7a403e106",
+   "e": "78f994c16a3adb2f",
+   "r": "7eef8bf6065c4c98"
+  },
+  "Thresh": {
+   "p": "f5c239f0b7ddaa57",
+   "q": "b3a0d6bb4dc062d5",
+   "w": "dd0b810726b19980",
+   "e": "7b06f5e3ec299e46",
+   "r": "9fe678a7af55246d"
+  },
+  "Tristana": {
+   "p": "2e4533de49925500",
+   "q": "abb101dc194a04f2",
+   "w": "c1af429bcc25942b",
+   "e": "422b9b213e861697",
+   "r": "d8a35f6d8cbef48c"
+  },
+  "Trundle": {
+   "p": "b3d802d774c2b8d7",
+   "q": "db2f6c2d0c6c6e92",
+   "w": "3ebdd628284e4b53",
+   "e": "acc1dde0db36b4dd",
+   "r": "0b75e4b21545d5c9"
+  },
+  "Tryndamere": {
+   "p": "3f36a39209518a8e",
+   "q": "ad44298cc300a915",
+   "w": "11e9b9e5806dfd6c",
+   "e": "0d3dad5aca125585",
+   "r": "5718937c489bd7f1"
+  },
+  "TwistedFate": {
+   "p": "11c5a3f2b2139577",
+   "q": "0c3f6c655316e2ba",
+   "w": "70d444becfd0e1f1",
+   "e": "db4c5190838e93f1",
+   "r": "b1d4d719d962cc2b"
+  },
+  "Twitch": {
+   "p": "22a2d7c81b4c7d5c",
+   "q": "e2c16f6947be8ec1",
+   "w": "64790de895c4ff98",
+   "e": "8f572266fe422329",
+   "r": "120f3643cffb52c0"
+  },
+  "Udyr": {
+   "p": "a14778ebd0779d75",
+   "q": "4a050aa652aa0e97",
+   "w": "b2dae92ae7a5325f",
+   "e": "fd7674dadabd23fc",
+   "r": "07600d6b9a4a96a3"
+  },
+  "Urgot": {
+   "p": "bd38dadd43f31809",
+   "q": "2b6d5a70bf6bc2b5",
+   "w": "135c32b261be631e",
+   "e": "eaaf82dda6d4ab51",
+   "r": "840837f84d32107c"
+  },
+  "Varus": {
+   "p": "f36bf534bfa28981",
+   "q": "5da3bf1d11813dcb",
+   "w": "5dedbd75621221d1",
+   "e": "d9976143874b0714",
+   "r": "e0c0171ab4f86582"
+  },
+  "Vayne": {
+   "p": "3e9a6e10c158e0aa",
+   "q": "3c2a2356cdbd0bd5",
+   "w": "7ee2f5e0662c9684",
+   "e": "873f4da1955a45b9",
+   "r": "f22da82cc6c7cb7a"
+  },
+  "Veigar": {
+   "p": "c926a0c35ac3ca02",
+   "q": "26b28ff36efbc7ec",
+   "w": "5f480dd1d3d47543",
+   "e": "ef1ec7003b617803",
+   "r": "a4f204b70c768f5b"
+  },
+  "Velkoz": {
+   "p": "dc798edac4eb6739",
+   "q": "8820b1deef817c82",
+   "w": "43f39532749cf52b",
+   "e": "7405b422425b968c",
+   "r": "6d4743d11eba8016"
+  },
+  "Vex": {
+   "p": "ca8cb6b46b420a8a",
+   "q": "6b25d25bb12c6b34",
+   "w": "f545b178ab338e9f",
+   "e": "1a2b8462a42d3fe6",
+   "r": "a1c77d62249094fc"
+  },
+  "Vi": {
+   "p": "51dff60977461cb7",
+   "q": "bd66dcc7eba9917d",
+   "w": "eda695d130e95c6e",
+   "e": "431c7ac129fd331f",
+   "r": "4ac2935ebce5a2d2"
+  },
+  "Viego": {
+   "p": "4a7217905f87a5f2",
+   "q": "68aec324ba40a838",
+   "w": "21af154cc666ede4",
+   "e": "e4509275fd3e3eb8",
+   "r": "f03dffedd9cd6076"
+  },
+  "Viktor": {
+   "p": "bf11d9c117142891",
+   "q": "af0851911ed13024",
+   "w": "2a0a09a3f66c61d3",
+   "e": "19fd9a43e73883a9",
+   "r": "c075c14c426dfaec"
+  },
+  "Vladimir": {
+   "p": "45dfea7cc7ace92f",
+   "q": "2fb289eaf98b7066",
+   "w": "7930a7dd62412b1c",
+   "e": "1cd04b365334f97f",
+   "r": "9f9cb5e4a4195333"
+  },
+  "Volibear": {
+   "p": "d2bfae7896c9504c",
+   "q": "7d19b218d7bb2a77",
+   "w": "aeb44972f8323058",
+   "e": "e924ea65b71e80c7",
+   "r": "9b965009dd7de621"
+  },
+  "Warwick": {
+   "p": "c5a7ca0ff6a5c6dd",
+   "q": "eaf0ccd31a644ef4",
+   "w": "bc859f1b0141ef98",
+   "e": "ff8256c7ee659ea7",
+   "r": "90bffa92bb8944cf"
+  },
+  "Xayah": {
+   "p": "fa257fa9f144443d",
+   "q": "7da1747f5c4edd2b",
+   "w": "da32900354a8a1c6",
+   "e": "d00612dbb26c2dfa",
+   "r": "123744405ef8b425"
+  },
+  "Xerath": {
+   "p": "c25747e5a50c7a49",
+   "q": "5d3ff9f554d2af35",
+   "w": "0ed50f6dcc09f537",
+   "e": "97a44b1e63cbc40e",
+   "r": "e864a4afdd379107"
+  },
+  "XinZhao": {
+   "p": "e0aa7e9808c99f4d",
+   "q": "d65c99c63ab83ff2",
+   "w": "e23d74d9d30fd3a9",
+   "e": "20979b5a3002c06b",
+   "r": "905834cddefda2e5"
+  },
+  "Yasuo": {
+   "p": "2c3a2c6301b48fe4",
+   "q": "f83cb8f49c044b51",
+   "w": "5b3666782a699e7e",
+   "e": "26996b3dfb9ce746",
+   "r": "3304cbc2af595d90"
+  },
+  "Yone": {
+   "p": "5461a6c4236f09b8",
+   "q": "e98c9fb2e98d5d16",
+   "w": "187332f2eaf1b096",
+   "e": "245aac775f0c463b",
+   "r": "b62a91575d500b41"
+  },
+  "Yorick": {
+   "p": "bc6e464ba5acc887",
+   "q": "f0852e923a71c1b1",
+   "w": "c879bc2535838699",
+   "e": "ebf32d9605277a13",
+   "r": "b737176dd64ea29c"
+  },
+  "Yunara": {
+   "p": "f3d3c56efb9d0a35",
+   "q": "4ba582bc3b5576da",
+   "w": "f5926f9d1d22d5ab",
+   "e": "63f7825109531eca",
+   "r": "d88e64186ae4dc4e"
+  },
+  "Yuumi": {
+   "p": "7560cc58c9927310",
+   "q": "debcf284673ca8bc",
+   "w": "c3286564d82da2bd",
+   "e": "5481c70200936f83",
+   "r": "9a622ab433ba4f16"
+  },
+  "Zaahen": {
+   "p": "fa35788ba35f108c",
+   "q": "726abafca5ad1f4c",
+   "w": "5d8f5bbc6c9ec461",
+   "e": "679daf1c30eef433",
+   "r": "4df73de426933b5b"
+  },
+  "Zac": {
+   "p": "c4d65263ecb229b2",
+   "q": "9d1d36f05a8da0b7",
+   "w": "c7ece6a4a0c072f4",
+   "e": "f0b8838f433d5a0c",
+   "r": "188630b58bafb425"
+  },
+  "Zed": {
+   "p": "3594b8d9fb135af1",
+   "q": "1477630f90e0e022",
+   "w": "602b27168ededd4a",
+   "e": "07105090dc96dce6",
+   "r": "577ebcc3ea7d7f44"
+  },
+  "Zeri": {
+   "p": "e760b0d64b59826a",
+   "q": "f5a9453a66312118",
+   "w": "9e13294c938d12e0",
+   "e": "93468ca6b19cbf9c",
+   "r": "f3c0a4a1ec10b62a"
+  },
+  "Ziggs": {
+   "p": "fad72ab62ee7a2bd",
+   "q": "4e2757af851f8d34",
+   "w": "c5f56cf7ef3eda86",
+   "e": "633eb729891e4f94",
+   "r": "bd46b8abc37e1e10"
+  },
+  "Zilean": {
+   "p": "50f3e2bbf7e8781d",
+   "q": "3ffefb625563bbee",
+   "w": "ce2a1c8c40e6ba04",
+   "e": "0545ffacdd6631e9",
+   "r": "dcc1781439cd1979"
+  },
+  "Zoe": {
+   "p": "813488415255f47c",
+   "q": "b4204acc12f0d9d5",
+   "w": "fea15a28da3c0e34",
+   "e": "11382318e305eed3",
+   "r": "9d02d3c2d6b816ac"
+  },
+  "Zyra": {
+   "p": "48bbf38c2115cd07",
+   "q": "b5c8ee892150ddb5",
+   "w": "be91ad374de74f4d",
+   "e": "19812ed476271eb4",
+   "r": "63175c4f01cb450e"
   }
  },
  "items": {
@@ -27,7 +1223,7 @@
   "3153": "abf7345e5e5d33b8",
   "3302": "1bdabf2c92f26832",
   "4645": "b2af9dc6756f4a0f",
-  "6653": "b6d55d3103d73b4f",
+  "6653": "2f9036c628ac6f5b",
   "6655": "a9554ec7ab014350",
   "6672": "176cc25235da283d",
   "6676": "7f4b77ebeb3fe5f4"

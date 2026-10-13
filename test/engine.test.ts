@@ -107,6 +107,28 @@ test('on-hit items: every third attack procs Kraken Slayer; current-health damag
   assert.equal(line(none, 'items').total.raw, 0, 'no target, no current-health damage');
 });
 
+test('damage over time: the total is dealt, and its rate and duration are reported beside it', () => {
+  const r = data.champion('Renekton')!.spells.RenektonReignOfTheTyrant!;
+  const seconds = r.dataValues.BuffDuration![3]!;
+  const cast = (n: number, options = {}) => calculate(data, { build: { champion: 'Renekton', level: 18, ranks: { q: 5, w: 0, e: 0, r: 3 }, items: [], options }, target: null, combo: { counts: { r: n, q: 1 } } });
+
+  const one = cast(1), aura = line(one, 'r');
+  assert.equal(aura.over!.seconds, seconds);
+  near(aura.over!.perSecond.raw * seconds, aura.total.raw);
+  assert.deepEqual(aura.parts[0]!.over, aura.over);
+  // a second cast doubles the total and the time, not the rate
+  const two = line(cast(2), 'r');
+  near(two.total.raw, 2 * aura.total.raw);
+  assert.equal(two.over!.seconds, 2 * seconds);
+  near(two.over!.perSecond.raw, aura.over!.perSecond.raw);
+  // a shorter stay in the aura deals less at the same rate
+  const short = line(cast(1, { auraSeconds: 4 }), 'r');
+  assert.equal(short.over!.seconds, 4);
+  near(short.over!.perSecond.raw, aura.over!.perSecond.raw);
+  // instant damage carries no duration
+  assert.equal(line(one, 'q').over, undefined);
+});
+
 test('penetration and percent stat changes from items', () => {
   const voidStaff = data.item(3135)!, cap = data.item(3089)!;
   const res = calculate(data, req({ champion: 'Kaisa', items: [3135, 3089] }, {}));

@@ -19,11 +19,11 @@
  "coverage": {
   "abilities": {
    "verified": 0,
-   "curated": 10,
+   "curated": 864,
    "stale": 0,
-   "auto": 536,
-   "none": 207,
-   "unmodeled": 112
+   "auto": 0,
+   "none": 0,
+   "unmodeled": 1
   },
   "items": {
    "verified": 0,

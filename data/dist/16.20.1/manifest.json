@@ -1,7 +1,7 @@
 {
  "patch": "16.20.1",
  "displayPatch": "26.20",
- "builtAt": "2026-10-12T14:28:31.338Z",
+ "builtAt": "2026-10-13T08:16:24.870Z",
  "sources": {
   "ddragon": "16.20.1",
   "cdragon": {
@@ -13,10 +13,10 @@
  "items": 215,
  "coverage": {
   "verified": 0,
-  "curated": 10,
+  "curated": 864,
   "stale": 0,
-  "auto": 536,
-  "none": 207,
-  "unmodeled": 112
+  "auto": 0,
+  "none": 0,
+  "unmodeled": 1
  }
 }

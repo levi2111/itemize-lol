@@ -63,9 +63,11 @@ Then `npm test`, commit `data/dist/` and `web/art/`, and push: that deploys. `da
 
 ## Coverage today (patch 26.20)
 
-Hand-written: Kai'Sa and Samira, and 15 items with damage-changing passives. Everything else is automatic: 536 abilities estimated, 207 read as dealing no damage, 112 known to deal damage that is not counted (mostly champion passives), and 43 items whose stats count but whose passive does not.
+Every champion has a hand-written model: 864 of the 865 abilities and passives are `curated`, none are `verified` yet. The one left `unmodeled` is Mel's Rebuttal, whose damage is a share of whatever enemy projectile it reflects. Items: 15 with damage-changing passives are hand-written, 1 is estimated, and 43 have stats that count and a passive that does not. Items are the model-writing backlog now: `npm run data:report -- --status unmodeled`.
 
-`npm run data:crosscheck` currently lists 95 abilities where the wiki implies more hits than the estimate counts. That list, plus `npm run data:report -- --status unmodeled`, is the model-writing backlog.
+What `curated` does not promise: nobody has checked these against the live game. The weakest spots are the things the game data has no number for and a model had to assume, each behind an option with a note: how fast a pet, clone or turret attacks (Shaco's boxes, Heimerdinger's turrets, Malzahar's Voidlings, Yorick's Maiden, Zyra's plants, Kindred's Wolf), and how much of a long effect a target really sits through (Renekton's Dominus, Xerath's barrage).
+
+`npm run data:crosscheck` lists 46 abilities to review. It only compares a rule's repeat count with the wiki's, so it also flags models that write a second hit as its own rule (Ahri's orb going out and coming back) or use the game's total-damage calculation; at the time of writing all 46 are of that kind.
 
 ## API
 
@@ -92,6 +94,8 @@ All under `/api/v1`. Reads are cacheable and revalidate by ETag.
 ```
 
 Each result has computed stats, combo damage (raw and after mitigation, by type and by source, down to the rule that fired), sustained DPS, time to kill, and the assumptions behind the numbers. `src/engine/types.ts` is the contract.
+
+A champion's `options` (a form, stacks, seconds spent in an aura; listed by `GET /champions/:id`) go in the request as `"options": { "cougar": true, "auraSeconds": 4 }` and apply to every build; the result echoes the value each one had, defaults included. Damage that takes time to land (a burn, a channel, a zone) is still dealt in full, and its source line carries `over`: the seconds it runs and its damage per second. The site shows that under the total as `240/s · 15s`.
 
 The engine (`src/engine/`, `src/shared/`) has no Node dependencies and reads plain JSON, so it can also be bundled for the browser later.
 

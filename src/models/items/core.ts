@@ -106,7 +106,7 @@ export default [
     reviewed: P,
     rules: [{
       id: 'torment', label: 'Torment', on: 'spell', when: 'hasTarget', type: 'magic',
-      amount: 'BurnPercentHealthDamage * TickFrequency * target.maxHp', count: 'BurnDuration / TickFrequency', cooldown: 'BurnDuration',
+      amount: 'BurnPercentHealthDamage * TickFrequency * target.maxHp', count: 'BurnDuration / TickFrequency', over: 'BurnDuration', cooldown: 'BurnDuration',
     }],
     amps: [{ value: 'min(DamageIncreaseMax, DamageIncreasePerSecond * floor(time))' }],
     notes: ['Torment is counted as one full burn each time it is applied or refreshed after running out.'],
