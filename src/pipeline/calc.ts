@@ -2,6 +2,7 @@
 
    The format is undocumented. Everything here was derived from the data itself and is
    guarded by the canaries in anchors.ts, which fail the build if a patch changes it. */
+import { walk } from '../shared/expr.ts';
 import type { CalcData, DamageType, Expr, StatId, StatKind } from '../shared/types.ts';
 
 type Raw = Record<string, any>;
@@ -180,4 +181,22 @@ export function compileCalcs(raw: Record<string, Raw> | undefined, log: CompileL
   const out: Record<string, CalcData> = {};
   for (const [name, c] of Object.entries(raw ?? {})) out[name] = compileCalc(c, log);
   return out;
+}
+
+interface NamePools { calcs: Record<string, unknown>; dataValues: Record<string, unknown> }
+
+/* The game looks names up by hash, without regard to case, so a formula may say
+   rAPCoefficient where the value is declared RAPCoefficient. Everything downstream
+   compares names exactly: this respells each reference the way its target is declared.
+   `pools` returns the names of another spell, or of the formulas' own when given nothing. */
+export function matchNameCase(calcs: Record<string, CalcData>, pools: (spell?: string) => NamePools | undefined): void {
+  for (const c of Object.values(calcs)) {
+    for (const n of walk(c.expr)) {
+      if (n.k !== 'dv' && n.k !== 'calc') continue;
+      const pool = pools(n.spell)?.[n.k === 'dv' ? 'dataValues' : 'calcs'];
+      if (!pool || pool[n.name] !== undefined) continue;
+      const declared = Object.keys(pool).find(k => k.toLowerCase() === n.name.toLowerCase());
+      if (declared) n.name = declared;
+    }
+  }
 }

@@ -3,7 +3,7 @@
    compared against the game files; disagreements are reported, never silently resolved. */
 import type { BaseStats, ChampionData, Slot, SpellData } from '../shared/types.ts';
 import { CAST_SLOTS } from '../shared/types.ts';
-import { clean, compileCalcs, type CompileLog } from './calc.ts';
+import { clean, compileCalcs, matchNameCase, type CompileLog } from './calc.ts';
 import { expandTooltip, findDamageRefs, type NameResolver, type StringTable } from './tooltip.ts';
 
 type Raw = Record<string, any>;
@@ -132,6 +132,10 @@ export function compileChampion(dd: Raw, bin: Raw, table: StringTable, log: Comp
     if (!slot && !hasContent(spell)) continue;
     if (spells[sid]) { warnings.push(`two spell objects named ${sid}; kept the first`); continue; }
     spells[sid] = spell;
+  }
+
+  for (const spell of Object.values(spells)) {
+    matchNameCase(spell.calcs, other => other === undefined ? spell : Object.values(spells).find(s => lower(s.id) === lower(other)));
   }
 
   // ---- names, icons, max ranks from Data Dragon ----

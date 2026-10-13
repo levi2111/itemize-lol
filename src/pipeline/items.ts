@@ -2,7 +2,7 @@
    and gives names, prices and tags; the game files give complete stats (Data Dragon
    omits haste, lethality and penetration) and the passives' numbers. */
 import type { ItemData, StatModTarget } from '../shared/types.ts';
-import { clean, compileCalcs, type CompileLog } from './calc.ts';
+import { clean, compileCalcs, matchNameCase, type CompileLog } from './calc.ts';
 import { expandTooltip, findDamageRefs, type StringTable } from './tooltip.ts';
 
 type Raw = Record<string, any>;
@@ -76,6 +76,7 @@ export function compileItems(ddItems: Raw, bin: Raw, table: StringTable, log: Co
     const dataValues: Record<string, number> = {};
     for (const d of g.mDataValues ?? []) if (d?.mName && typeof d.mValue === 'number') dataValues[d.mName] = clean(d.mValue);
     const calcs = compileCalcs(g.mItemCalculations, log);
+    matchNameCase(calcs, other => other === undefined ? { calcs, dataValues } : undefined);
     const tooltip = expandTooltip(g.mItemDataClient?.mTooltipData?.mLocKeys?.keyTooltip, table);
     const find = (pool: Record<string, unknown>, name: string) => Object.keys(pool).find(k => k.toLowerCase() === name.toLowerCase());
 
