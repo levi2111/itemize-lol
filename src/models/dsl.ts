@@ -5,7 +5,7 @@
    the game files and says how they combine: how many times a hit lands, what it
    scales with on the target, what it adds to a basic attack. Balance patches then
    flow through untouched, and only mechanical reworks need a person. */
-import type { DamageType, Slot, StatModTarget, Trigger } from '../shared/types.ts';
+import type { DamageSource, DamageType, Slot, StatModTarget, Trigger } from '../shared/types.ts';
 
 /** A formula in the model language, or a plain number. */
 export type Formula = string | number;
@@ -30,6 +30,11 @@ export interface RuleSrc {
   /** counter updates: "plasma += 1", "plasma = 0" */
   then?: string | string[];
   note?: string;
+  /** items: the user can set how many times this fires in the combo, in place of what the combo sets off on its own.
+      `true` labels the control with the rule's label; a string is the control's own label */
+  procs?: boolean | string;
+  /** items, rules `on: 'use'` (an active): how many times it is used in the combo unless the user says; 1 when left out */
+  uses?: Formula;
 }
 
 export interface StatModSrc {
@@ -44,6 +49,8 @@ export interface AmpSrc {
   value: Formula;
   when?: Formula;
   types?: DamageType[];
+  /** only damage from these: `attack` (basic attacks), `ability` (Q W E R), `passive`, `item` */
+  from?: DamageSource[];
 }
 
 export interface ResistSrc {
@@ -83,8 +90,19 @@ export interface ChampionSrc extends Partial<Record<Slot, AbilitySrc>> {
   vars?: Record<string, Formula>;
   /** toggles and steppers the UI can expose; the default applies when the caller says nothing */
   options?: Record<string, OptionSrc>;
-  /** stacks tracked across a combo, starting at 0 */
-  counters?: Record<string, { max?: Formula }>;
+  /** stacks tracked across a combo, starting at 0 or at `start` */
+  counters?: Record<string, CounterSrc>;
+}
+
+export interface CounterSrc {
+  max?: Formula;
+  /** the value it starts the fight with; may read options */
+  start?: Formula;
+}
+
+export interface ItemOptionSrc extends Omit<OptionSrc, 'max'> {
+  /** a number, or a formula of the item's data values, so the game's number stays in the game data: "MaxStacks", "AttackCount - 1" */
+  max?: number | string;
 }
 
 export interface ItemSrc {
@@ -94,7 +112,9 @@ export interface ItemSrc {
   statMods?: StatModSrc[];
   amps?: AmpSrc[];
   resists?: ResistSrc[];
-  counters?: Record<string, { max?: Formula }>;
+  counters?: Record<string, CounterSrc>;
+  /** what the user can set about the item, by build: stacks already gained, a condition that holds. Read by name */
+  options?: Record<string, ItemOptionSrc>;
   notes?: string[];
 }
 

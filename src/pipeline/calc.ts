@@ -195,8 +195,17 @@ export function matchNameCase(calcs: Record<string, CalcData>, pools: (spell?: s
       if (n.k !== 'dv' && n.k !== 'calc') continue;
       const pool = pools(n.spell)?.[n.k === 'dv' ? 'dataValues' : 'calcs'];
       if (!pool || pool[n.name] !== undefined) continue;
-      const declared = Object.keys(pool).find(k => k.toLowerCase() === n.name.toLowerCase());
+      // a reference may also be the hash the game files keep instead of the name: {d62bdfef} is AbilityDamageRangeMod
+      const hashed = /^\{[0-9a-f]{8}\}$/.test(n.name);
+      const declared = Object.keys(pool).find(k => hashed ? `{${nameHash(k)}}` === n.name : k.toLowerCase() === n.name.toLowerCase());
       if (declared) n.name = declared;
     }
   }
+}
+
+/** The 32-bit FNV-1a hash of a name in lower case, as the game files write names they do not spell out. */
+export function nameHash(name: string): string {
+  let h = 0x811c9dc5;
+  for (const ch of name.toLowerCase()) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+  return h.toString(16).padStart(8, '0');
 }

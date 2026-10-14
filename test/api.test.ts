@@ -61,6 +61,17 @@ test('a build can bring its own ranks; the others use the shared ones', async ()
   assert.deepEqual(same.results[0].combo.total, same.results[1].combo.total);
 });
 
+test('items list what a page can let the user set, and a build takes it as itemOptions', async () => {
+  const items = await (await get('/items')).json() as any[];
+  const sheen = items.find(i => i.id === 3057);
+  assert.deepEqual(sheen.controls.map((c: any) => [c.id, c.kind, c.rule]), [['spellblade', 'procs', 'spellblade']]);
+  assert.deepEqual(sheen.effects.map((e: any) => e.label), ['Spellblade']);
+  const j = await (await calc({ ...KAISA, builds: [{ items: [3057], itemOptions: { 3057: { spellblade: 2 } } }], target: null })).json() as any;
+  assert.equal(j.results[0].items[0].settings.spellblade, 2);
+  assert.equal(j.results[0].items[0].effects[0].fired, 2);
+  assert.equal((await calc({ ...KAISA, builds: [{ items: [3057], itemOptions: { 3057: { nope: 1 } } }], target: null })).status, 400);
+});
+
 test('items say which shops sell them', async () => {
   const items = await (await get('/items')).json() as any[];
   const byId = new Map(items.map(i => [i.id, i]));

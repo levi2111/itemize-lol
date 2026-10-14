@@ -12,6 +12,8 @@ export interface BuildInput {
   items: (number | null)[];
   /** values for the champion's options (see ChampionData.options); omitted ones use their default */
   options?: Record<string, number | boolean>;
+  /** settings of the build's items, by item id and then the control's id (see ItemModel.controls); omitted ones use their default */
+  itemOptions?: Record<string, Record<string, number | boolean>>;
 }
 
 /** The enemy as plain numbers. `null` means raw output: no resistances, no health. */
@@ -92,6 +94,10 @@ export interface StatBlock {
   magicPenFlat: number;
   magicPenPct: number;
   abilityHaste: number;
+  /** ability haste for Q, W and E only, on top of abilityHaste */
+  basicHaste: number;
+  /** ability haste for R only, on top of abilityHaste */
+  ultHaste: number;
   lifeSteal: number;
   omnivamp: number;
   attackRange: number;
@@ -101,6 +107,33 @@ export interface StatBlock {
 export interface ModelInfo {
   status: ModelStatus;
   notes: string[];
+}
+
+/** One cast of an ability on its own, with this build, against the target at full health. */
+export interface AbilityInfo extends ModelInfo {
+  /** everything the cast sets off: its hits, on-hit and spell effects of items, the passive; null without a rank */
+  cast: (Amount & { byType: ByType }) | null;
+  /** seconds between casts: the game's number at this rank, the ability haste that applies to it, and the result */
+  cooldown: { base: number; haste: number; seconds: number } | null;
+}
+
+/** An item's named effect: what one firing deals and how often it fired in the combo. */
+export interface ItemEffect {
+  /** the rule's id; a `uses` or `procs` setting of the item has the same id */
+  id: string;
+  label: string;
+  type: DamageType;
+  /** one firing on its own against the target at full health, before what it sets off */
+  one: Amount;
+  /** firings in the combo */
+  fired: number;
+}
+
+export interface ItemInfo extends ModelInfo {
+  id: number;
+  /** the item's settings as this build used them: what the caller set, or the default. A proc left to the combo is null */
+  settings: Record<string, number | null>;
+  effects: ItemEffect[];
 }
 
 export interface CalcResult {
@@ -124,10 +157,11 @@ export interface CalcResult {
   dps: Amount;
   /** seconds of sustained basic attacks to kill from full health; null without a target or beyond the horizon */
   timeToKill: number | null;
-  abilities: Record<Slot, ModelInfo>;
+  /** the passive has no cast and no cooldown */
+  abilities: Record<Slot, AbilityInfo>;
   /** the value each of the champion's options had: what the caller set, or the default for this build */
   options: Record<string, number>;
-  items: ({ id: number } & ModelInfo)[];
+  items: ItemInfo[];
   /** things the caller should tell the user: assumptions, and anything the engine could not evaluate */
   caveats: string[];
 }

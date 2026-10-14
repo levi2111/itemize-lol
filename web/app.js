@@ -36,6 +36,8 @@ const S = {
   champs: [],
   res: null,                        // {a, b}: the last results, b null with one build
   options: {},                      // the champion's options the user has set, by id; the rest keep their defaults
+  // each build's item settings the user has set: item id -> control id -> value; the rest keep their defaults
+  itemOpts: {a: {}, b: {}},
 };
 
 const ITEM_FILTERS = [
@@ -121,12 +123,26 @@ function targetBody() {
   const v = readDials();
   return {hp: v.hp, armor: v.ar, mr: v.mr};
 }
+/* A build's item settings, kept only for items it holds and settings those items still have. */
+function itemOptsOf(k) {
+  const held = new Set(S.builds[k].filter(Boolean)), out = {};
+  for (const [id, set] of Object.entries(S.itemOpts[k])) {
+    const controls = S.items.get(+id)?.controls || [];
+    if (!held.has(+id)) { delete S.itemOpts[k][id]; continue; }
+    for (const c of Object.keys(set)) if (!controls.some(x => x.id === c)) delete set[c];
+    if (Object.keys(set).length) out[id] = set; else delete S.itemOpts[k][id];
+  }
+  return out;
+}
 async function recalc() {
   const mine = ++seq;
   document.body.classList.add('loading');
   const body = {
     champion: S.champ.id, level: S.level, ranks: S.ranks, options: S.options,
-    builds: (S.compare ? ['a', 'b'] : ['a']).map(k => ({items: S.builds[k].filter(Boolean), ...(k === 'b' && S.split && {ranks: S.ranksB})})),
+    builds: (S.compare ? ['a', 'b'] : ['a']).map(k => {
+      const io = itemOptsOf(k);
+      return {items: S.builds[k].filter(Boolean), ...(k === 'b' && S.split && {ranks: S.ranksB}), ...(Object.keys(io).length && {itemOptions: io})};
+    }),
     target: targetBody(), combo: {counts: S.combo, crits: S.crits},
   };
   try {
@@ -203,7 +219,7 @@ function renderSteps() {
     const face = k === 'aa' ? 'AA' : `<i class="ico kit ${k}"></i>`;
     const ctl = dead ? '<span class="none">no damage</span>'
       : `<button data-d="-1" aria-label="One fewer: ${esc(name)}">−</button><output></output><button data-d="1" aria-label="One more: ${esc(name)}">+</button>`;
-    return `<div class="step${dead ? ' dead' : ''}" data-k="${k}"><span class="sk">${face}</span><span class="nm">${esc(name)}${k === 'aa' ? '' : `<small>${k.toUpperCase()}</small>`}</span>${ctl}</div>`;
+    return `<div class="step${dead ? ' dead' : ''}" data-k="${k}"><span class="sk"${k === 'aa' ? '' : ` data-ab="${k}"`}>${face}</span><span class="nm"${k === 'aa' ? '' : ` data-ab="${k}"`}>${esc(name)}${k === 'aa' ? '' : `<small>${k.toUpperCase()}</small>`}</span>${ctl}</div>`;
   }).join('');
   paintSteps();
 }
@@ -241,8 +257,9 @@ function paintKit() {
   els.forEach(el => el.classList.remove('has-kit'));
   warm(url).then(() => { if (row.dataset.kit === url) put(); });
 }
+/* Each ability's icon shows its card on hover (see abilityCard). */
 function nameKit() {
-  for (const k of ['p', ...SLOTS]) $(`.skill[data-k="${k}"]`).title = S.view?.slots[k]?.name || '';
+  for (const k of ['p', ...SLOTS]) { const el = $(`.skill[data-k="${k}"]`); el.dataset.ab = k; el.removeAttribute('title'); }
 }
 async function loadKit() {
   const c = S.champ;
@@ -317,8 +334,8 @@ function paintSplit() {
   if (!S.split) { el.innerHTML = ''; return; }
   const options = $('#order').innerHTML;
   const row = (b, r, o, order) => `<div class="rrow ${b}"><span class="tag ${b} sm">${b.toUpperCase()}</span>
-      <div class="rs"><div class="ib" title="${esc(S.view?.slots.p?.name || 'Passive')}"><i class="ico kit p"></i></div></div>
-      ${SLOTS.map(k => `<div class="rs${r[k] !== o[k] ? ' diff' : ''}${!r[k] ? ' zero' : ''}" title="${esc(S.view?.slots[k]?.name || k.toUpperCase())}, rank ${r[k]}"><div class="ib"><i class="ico kit ${k}"></i><span class="k">${k.toUpperCase()}</span></div>`
+      <div class="rs"><div class="ib" data-ab="p"><i class="ico kit p"></i></div></div>
+      ${SLOTS.map(k => `<div class="rs${r[k] !== o[k] ? ' diff' : ''}${!r[k] ? ' zero' : ''}" data-ab="${k}"><div class="ib"><i class="ico kit ${k}"></i><span class="k">${k.toUpperCase()}</span></div>`
         + `<span class="pips">${Array.from({length: maxRank(k)}, (_, i) => `<button class="pip${i < r[k] ? ' on' : ''}" data-b="${b}" data-k="${k}" data-n="${i + 1}" aria-label="Build ${b.toUpperCase()}, ${k.toUpperCase()} rank ${i + 1}"></button>`).join('')}</span><b>${r[k]}</b></div>`).join('')}
       <div class="plan"><select data-ob="${b}" aria-label="Max order of build ${b.toUpperCase()}">${options}</select><span class="pts${r.q + r.w + r.e + r.r > S.level ? ' over' : ''}">${pointsText(r, true)}</span></div></div>`;
   el.innerHTML = row('a', S.ranks, S.ranksB, S.order) + row('b', S.ranksB, S.ranks, S.orderB);
@@ -372,7 +389,7 @@ function renderBuilds() {
       const sel = pick && pick.b === k && pick.i === i ? ' sel' : '';
       if (!id) return `<div class="slot empty${sel}" role="button" tabindex="0" data-b="${k}" data-i="${i}" aria-label="Build ${K}, slot ${i + 1}, empty"></div>`;
       const it = S.items.get(id), name = esc(it?.name || 'Item ' + id), shop = shopOf(it);
-      return `<div class="slot${other.has(id) ? '' : ' uniq'}${sel}" role="button" tabindex="0" data-b="${k}" data-i="${i}" title="${name}${shop ? `, ${SHOP[shop]} item` : ''}" aria-label="Build ${K}, slot ${i + 1}, ${name}">${itemIco(id)}${badge(it)}<button class="rm" data-rm aria-label="Remove ${name}">×</button></div>`;
+      return `<div class="slot${other.has(id) ? '' : ' uniq'}${sel}" role="button" tabindex="0" data-b="${k}" data-i="${i}" title="${name}${shop ? `, ${SHOP[shop]} item` : ''}" aria-label="Build ${K}, slot ${i + 1}, ${name}">${itemIco(id)}${badge(it)}${cfgBtn(k, i, it)}<button class="rm" data-rm aria-label="Remove ${name}">×</button></div>`;
     }).join('');
     $('.b-gold b', row).textContent = nf(S.builds[k].reduce((s, id) => s + (S.items.get(id)?.gold || 0), 0));
   }
@@ -401,6 +418,7 @@ function pickerLabel() {
   $('#picker-for').innerHTML = `<span class="tag ${pick.b} sm">${pick.b.toUpperCase()}</span>Slot ${pick.i + 1}`;
 }
 function openPicker(b, i) {
+  closeItemMenu();
   pick = {b, i};
   $('#picker').hidden = false;
   pickerLabel(); renderBuilds();
@@ -441,6 +459,218 @@ function choose(id) {
   if (next > -1) { pick.i = next; pickerLabel(); renderBuilds(); const q = $('#item-q'); q.select(); q.focus(); }
   else closePicker();
   schedule();
+}
+
+/* ---------- an item's settings ---------- */
+/* An item whose passive stacks, procs or has an active carries a small button on its slot. It opens a
+   menu with what one firing of each of its effects deals, as the last calculation found, and the item's
+   settings: a toggle, stacks, uses of the active, or a proc's count in the combo (left unset, the combo
+   decides). Settings are per build; the API takes them as itemOptions. */
+const GEAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>';
+const hasMenu = it => !!(it?.controls?.length || it?.effects?.length);
+function cfgBtn(k, i, it) {
+  if (!hasMenu(it)) return '';
+  const set = Object.keys(S.itemOpts[k][it.id] || {}).length, open = itemMenu && itemMenu.b === k && itemMenu.i === i;
+  const what = it.controls?.length ? 'Settings' : 'Effects';
+  return `<button class="cfg${it.controls?.length ? '' : ' info'}${set ? ' set' : ''}" data-cfg aria-haspopup="dialog" aria-expanded="${!!open}" aria-label="${what} of ${esc(it.name)}" title="${what}${set ? `, ${set} set` : ''}">${GEAR}</button>`;
+}
+let itemMenu = null;                // {b, i, id}: the slot whose menu is open
+function openItemMenu(b, i) {
+  const id = S.builds[b][i];
+  if (!hasMenu(S.items.get(id))) return;
+  closePicker();
+  itemMenu = {b, i, id};
+  renderBuilds(); paintItemMenu();
+  $('#item-menu').hidden = false;
+  placeItemMenu();
+  $('#item-menu button, #item-menu input')?.focus();
+}
+function closeItemMenu() {
+  if (!itemMenu) return;
+  itemMenu = null;
+  $('#item-menu').hidden = true;
+  renderBuilds();
+}
+/* Fixed to the window, under the slot, or over it when there is no room below. */
+function placeItemMenu() {
+  const el = $('#item-menu'), slot = itemMenu && $(`.slot[data-b="${itemMenu.b}"][data-i="${itemMenu.i}"]`);
+  if (!slot || el.hidden) return;
+  const r = slot.getBoundingClientRect(), m = el.getBoundingClientRect(), gap = 8;
+  const below = r.bottom + gap + m.height <= innerHeight - gap;
+  el.style.top = `${Math.max(gap, below ? r.bottom + gap : r.top - gap - m.height)}px`;
+  el.style.left = `${Math.max(gap, Math.min(r.left, innerWidth - m.width - gap))}px`;
+}
+const TYPE_NAME = {physical: 'physical', magic: 'magic', true: 'true'};
+/* One effect: what one firing deals after the target's resistances (before them in raw output), and how
+   often it fired in the combo. A proc the user counts has its stepper on the same line. */
+function effectRow(it, e, R, k) {
+  const raw = S.target === 'raw', shown = R?.items.find(x => x.id === it.id)?.effects.find(x => x.id === e.id);
+  const val = shown && (raw ? shown.one.raw : shown.one.dealt), ctl = it.controls?.find(c => c.rule === e.id);
+  const amount = val === undefined ? '–' : nf(val);
+  // what it added up to in the combo: a burn kept alive pays per second, so this is not always one firing times the count
+  const part = R?.combo.lines.find(l => l.key === 'items')?.parts.filter(p => p.id === `item:${it.id}/${e.id}`);
+  const total = part?.reduce((s, p) => s + (raw ? p.total.raw : p.total.dealt), 0) || 0;
+  const sum = shown ? `${ctl ? '' : `${shown.fired}× · `}${total ? nf(total) : '0'} in the combo` : '';
+  // a share of missing health, an execute: nothing against a target at full health
+  const note = shown && val === 0 ? '<em>nothing against a target at full health</em>' : '';
+  return `<div class="ie"><div class="ie-h"><b>${esc(e.label)}</b><span class="ie-t ${e.type}">${TYPE_NAME[e.type] || e.type}</span></div>
+    <div class="ie-v"><span class="ie-n"><i>${amount}</i>each${ctl?.kind === 'uses' ? ' use' : ''}, ${raw ? 'raw' : 'after resistances'}</span>
+    <span class="ie-f">${sum}</span>${note}</div>
+    ${ctl ? controlRow(it, ctl, R, k, shown) : ''}</div>`;
+}
+/* A setting. Its value is what the user set, else what the last calculation used (a default can depend on the build). */
+function controlRow(it, c, R, k, effect) {
+  const mine = S.itemOpts[k][it.id]?.[c.id], used = R?.items.find(x => x.id === it.id)?.settings?.[c.id];
+  const v = mine ?? used, id = `io-${k}-${it.id}-${c.id}`;
+  if (c.kind === 'bool') {
+    return `<label class="ic" for="${id}"><span>${esc(c.label)}</span><input type="checkbox" id="${id}" data-c="${esc(c.id)}"${v ? ' checked' : ''}></label>`;
+  }
+  const auto = c.kind === 'procs' && mine === undefined, n = auto ? (effect?.fired ?? 0) : (v ?? 0);
+  const label = c.kind === 'procs' ? 'In the combo' : c.kind === 'uses' ? 'Uses in the combo' : esc(c.label);
+  // a count of procs or uses has a cap only to keep requests small; stacks have the game's own limit
+  const max = c.kind === 'int' && c.max !== undefined ? `<small>of ${c.max}</small>` : '';
+  return `<div class="ic${auto ? ' auto' : ''}"><span>${label}</span><span class="stp">
+      <button data-c="${esc(c.id)}" data-d="-1" aria-label="One fewer: ${esc(c.label)}"${n <= (c.min ?? 0) ? ' disabled' : ''}>−</button>
+      <output>${auto ? `<em>auto</em>${n}` : n}</output>
+      <button data-c="${esc(c.id)}" data-d="1" aria-label="One more: ${esc(c.label)}"${c.max !== undefined && n >= c.max ? ' disabled' : ''}>+</button>${max}</span>
+    ${c.kind === 'procs' || c.kind === 'uses' ? (mine === undefined ? '' : `<button class="act" data-reset="${esc(c.id)}" title="${c.kind === 'procs' ? 'Let the combo decide' : 'Back to the default'}">${c.kind === 'procs' ? 'Auto' : 'Reset'}</button>`) : ''}</div>`;
+}
+function paintItemMenu() {
+  const el = $('#item-menu');
+  if (!itemMenu || !el) return;
+  const {b: k, id} = itemMenu, it = S.items.get(id), R = S.res?.[k];
+  if (!it) return closeItemMenu();
+  const states = (it.controls || []).filter(c => !c.rule);
+  // an effect without a firing in this build is still listed: its proc may be set by hand
+  const effects = (it.effects || []).map(e => effectRow(it, e, R, k)).join('');
+  const lone = (it.controls || []).filter(c => c.rule && !(it.effects || []).some(e => e.id === c.rule));
+  const set = Object.keys(S.itemOpts[k][id] || {}).length;
+  el.innerHTML = `<div class="im-head"><span class="im-ico">${itemIco(id)}</span><div><b>${esc(it.name)}</b>
+      <span class="hint">${S.compare ? `<span class="tag ${k} xs">${k.toUpperCase()}</span> ` : ''}Slot ${itemMenu.i + 1}${R ? '' : ', calculating…'}</span></div>
+      <button class="esc" data-close aria-label="Close">Esc</button></div>
+    ${effects ? `<div class="im-sec"><span class="lbl">Effects</span>${effects}</div>` : ''}
+    ${lone.length ? `<div class="im-sec">${lone.map(c => controlRow(it, c, R, k)).join('')}</div>` : ''}
+    ${states.length ? `<div class="im-sec"><span class="lbl">Going into the combo</span>${states.map(c => controlRow(it, c, R, k)).join('')}</div>` : ''}
+    ${it.notes?.length ? `<div class="im-notes">${it.notes.map(n => `<p>${esc(n)}</p>`).join('')}</div>` : ''}
+    ${set ? '<div class="im-foot"><button class="act" data-reset-all>Reset all</button></div>' : ''}`;
+  placeItemMenu();
+}
+function setItemOpt(c, v) {
+  const {b: k, id} = itemMenu, set = S.itemOpts[k][id] ??= {};
+  if (v === undefined) delete set[c.id];
+  else set[c.id] = c.kind === 'bool' ? (v ? 1 : 0) : Math.max(c.min ?? 0, Math.min(c.max ?? 99, Math.round(v)));
+  if (!Object.keys(set).length) delete S.itemOpts[k][id];
+  renderBuilds(); paintItemMenu(); schedule();
+}
+function wireItemMenu() {
+  const el = $('#item-menu');
+  const control = id => S.items.get(itemMenu?.id)?.controls?.find(c => c.id === id);
+  el.addEventListener('click', e => {
+    if (!itemMenu) return;
+    if (e.target.closest('[data-close]')) { const slot = $(`.slot[data-b="${itemMenu.b}"][data-i="${itemMenu.i}"] [data-cfg]`); closeItemMenu(); slot?.focus(); return; }
+    if (e.target.closest('[data-reset-all]')) { delete S.itemOpts[itemMenu.b][itemMenu.id]; renderBuilds(); paintItemMenu(); schedule(); return; }
+    const r = e.target.closest('[data-reset]');
+    if (r) { const c = control(r.dataset.reset); if (c) setItemOpt(c, undefined); return; }
+    const b = e.target.closest('button[data-d]');
+    if (!b) return;
+    const c = control(b.dataset.c);
+    if (!c) return;
+    // a stepper starts from what is shown: the user's value, the default the calculation used, or the combo's own count
+    const R = S.res?.[itemMenu.b], mine = S.itemOpts[itemMenu.b][itemMenu.id]?.[c.id];
+    const from = mine ?? (c.kind === 'procs' ? R?.items.find(x => x.id === itemMenu.id)?.effects.find(x => x.id === c.rule)?.fired : R?.items.find(x => x.id === itemMenu.id)?.settings?.[c.id]) ?? 0;
+    setItemOpt(c, from + +b.dataset.d);
+  });
+  el.addEventListener('change', e => {
+    const input = e.target.closest('input[type="checkbox"][data-c]');
+    const c = input && control(input.dataset.c);
+    if (c) setItemOpt(c, input.checked);
+  });
+  document.addEventListener('mousedown', e => {
+    if (itemMenu && !e.target.closest('#item-menu') && !e.target.closest('[data-cfg]')) closeItemMenu();
+  });
+  addEventListener('resize', placeItemMenu);
+  document.addEventListener('scroll', placeItemMenu, true);
+}
+
+/* ---------- an ability's card ---------- */
+/* Pointing at an ability (its icon among the ranks, its step in the combo, its row in the breakdown)
+   shows a card: its name, what one cast deals with each build, and its cooldown after ability haste.
+   One cast is played on its own against the target at full health, with whatever its build's items and
+   their settings add (Shojin's stacks, Luden's Echo, a Spellblade it arms and spends itself). */
+let tipAt = null;                   // the element the card is showing for
+const sec = s => `${+s.toFixed(s < 10 ? 1 : 0)} s`;
+function abilityCard(k) {
+  const v = S.view?.slots[k], name = v?.name || lineLabel(k)[1], raw = S.target === 'raw';
+  const ks = S.res ? (S.compare && S.res.b ? ['a', 'b'] : ['a']) : [], two = ks.length > 1;
+  const ranks = b => b === 'b' && S.split ? S.ranksB : S.ranks;
+  const head = `<div class="tip-h"><span class="k">${k.toUpperCase()}</span><b>${esc(name)}</b>`
+    + (k === 'p' ? '<span class="hint">passive</span>' : two && S.split && ranks('a')[k] !== ranks('b')[k]
+      ? `<span class="hint">rank ${ranks('a')[k]} / ${ranks('b')[k]}</span>` : `<span class="hint">rank ${ranks('a')[k]} of ${maxRank(k)}</span>`) + '</div>';
+  if (!ks.length) return head;
+  const cols = two ? `<span></span>${ks.map(b => `<span class="tag ${b} xs">${b.toUpperCase()}</span>`).join('')}` : '';
+  const row = (label, cells, sub) => `<span class="tl">${label}</span>${cells.join('')}${sub ? `<span class="ts">${sub}</span>` : ''}`;
+  const cell = (b, text, win) => `<span class="tv ${b}${win ? ' win' : ''}">${text}</span>`;
+  let body = '';
+  if (k === 'p') {
+    const line = b => S.res[b].combo.lines.find(l => l.key === 'p');
+    const val = b => line(b) ? (raw ? line(b).total.raw : line(b).total.dealt) : 0;
+    body = row('In the combo', ks.map(b => cell(b, val(b) ? nf(val(b)) : '–', two && val(b) > val(b === 'a' ? 'b' : 'a'))));
+  } else {
+    const info = b => S.res[b].abilities[k], dead = v && !v.damaging;
+    const dmg = b => info(b).cast ? (raw ? info(b).cast.raw : info(b).cast.dealt) : null;
+    const cd = b => info(b).cooldown;
+    const typeOf = b => {
+      const t = info(b).cast?.byType; if (!t) return '';
+      const used = ['physical', 'magic', 'true'].filter(x => t[x].raw > 0);
+      return used.length === 1 ? used[0] : used.length ? 'mixed' : '';
+    };
+    const other = b => b === 'a' ? 'b' : 'a';
+    // an ability that deals no damage still has its cooldown to show
+    body = dead ? row('One cast', ks.map(b => cell(b, info(b).cast ? 'no damage' : 'not learned')))
+      : row('One cast', ks.map(b => cell(b, dmg(b) === null ? 'not learned' : nf(dmg(b)), two && dmg(b) > (dmg(other(b)) ?? 0))),
+        ks.map(b => typeOf(b)).filter((t, i, all) => t && all.indexOf(t) === i).join(' / ') + (raw ? ', before resistances' : ', after resistances'));
+    const why = ks.map(b => cd(b) && `${two ? b.toUpperCase() + ': ' : ''}${cd(b).base} s, ${Math.round(cd(b).haste)} haste`).filter(Boolean);
+    body += row('Cooldown', ks.map(b => cell(b, cd(b) ? sec(cd(b).seconds) : '–', two && cd(b) && cd(other(b)) && cd(b).seconds < cd(other(b)).seconds - 0.005)),
+      [...new Set(why)].join(' · '));
+    // the line's own total in the combo, when the combo casts it
+    const line = b => S.res[b].combo.lines.find(l => l.key === k);
+    if (!dead && ks.some(b => line(b)?.qty)) body += row(`In the combo, ${line('a')?.qty || 0}×`, ks.map(b => cell(b, line(b)?.total.dealt ? nf(raw ? line(b).total.raw : line(b).total.dealt) : '–')));
+  }
+  // what the combo's line is made of, as the breakdown row's tooltip used to say, when it is more than one thing
+  const of = b => S.res[b].combo.lines.find(l => l.key === k);
+  const parts = ks.some(b => (of(b)?.parts.length || 0) > 1) ? lineParts(of('a'), two ? of('b') : null) : '';
+  return `${head}<div class="tip-g${two ? ' two' : ''}">${cols}${body}</div>${parts ? `<div class="tip-p">${esc(parts).replace(/\n/g, '<br>')}</div>` : ''}`;
+}
+function showTip(el) {
+  const k = el.dataset.ab, tip = $('#tip');
+  if (!tip || !k) return;
+  tipAt = el;
+  tip.innerHTML = abilityCard(k);
+  tip.hidden = false;
+  const r = el.getBoundingClientRect(), m = tip.getBoundingClientRect(), gap = 8;
+  // inside a dropdown the card sits beside it, so the rest of the list stays in view
+  const menuBox = el.closest('.menu')?.getBoundingClientRect();
+  if (menuBox) {
+    const right = menuBox.right + gap + m.width <= innerWidth - gap;
+    tip.style.left = `${right ? menuBox.right + gap : Math.max(gap, menuBox.left - gap - m.width)}px`;
+    tip.style.top = `${Math.max(gap, Math.min(r.top, innerHeight - m.height - gap))}px`;
+    return;
+  }
+  const below = r.bottom + gap + m.height <= innerHeight - gap;
+  tip.style.top = `${Math.max(gap, below ? r.bottom + gap : r.top - gap - m.height)}px`;
+  tip.style.left = `${Math.max(gap, Math.min(r.left + r.width / 2 - m.width / 2, innerWidth - m.width - gap))}px`;
+}
+function hideTip() { tipAt = null; const tip = $('#tip'); if (tip) tip.hidden = true; }
+function paintTip() { if (tipAt?.isConnected) showTip(tipAt); else hideTip(); }
+function wireTip() {
+  document.addEventListener('mouseover', e => {
+    const el = e.target.closest('[data-ab]');
+    if (el && el !== tipAt) showTip(el); else if (!el && tipAt) hideTip();
+  });
+  document.addEventListener('focusin', e => { const el = e.target.closest('[data-ab]'); if (el) showTip(el); else if (tipAt) hideTip(); });
+  document.addEventListener('scroll', hideTip, true);
+  // clicking a rank pip keeps the card, which then shows the new rank's numbers
+  document.addEventListener('mousedown', e => { if (tipAt && !tipAt.contains(e.target)) hideTip(); });
 }
 
 /* ---------- champion picker ---------- */
@@ -535,6 +765,7 @@ function setCompare(on) {
   document.body.dataset.compare = on ? 'on' : 'off';
   $$('#cmp-seg button').forEach(b => b.setAttribute('aria-checked', (b.dataset.cmp === 'on') === on));
   if (!on && pick && pick.b === 'b') closePicker();
+  if (!on && itemMenu?.b === 'b') closeItemMenu();
   renderBuilds(); schedule();
 }
 
@@ -555,15 +786,16 @@ function renderLines() {
       : `<label class="q"><input type="number" data-q="${k}" value="${S.combo[k]}" min="0" max="30" aria-label="Number of ${k === 'aa' ? 'auto attacks' : k.toUpperCase() + ' casts'}"><span>×</span></label>`;
     const word = slot && STATUS_WORD[slot.status];
     // on the receipt a line has one short note: its status if it has one, else what paintReceipt finds to say
+    const ab = k === 'p' || SLOTS.includes(k) ? ` data-ab="${k}"` : '';
     if (RECEIPT) return `<div class="r-row r-line" data-k="${k}">${qty}
-      <span class="src"><span class="k">${key}</span><span class="nm">${esc(name)}</span><span class="note" data-fixed="${word || (dead ? 'no damage' : '')}"${word ? ` title="${esc(slot.notes.join(' ') || word)}"` : ''}></span></span>
+      <span class="src"${ab}><span class="k">${key}</span><span class="nm">${esc(name)}</span><span class="note" data-fixed="${word || (dead ? 'no damage' : '')}"${word ? ` title="${esc(slot.notes.join(' ') || word)}"` : ''}></span></span>
       <span class="n a"><i>–</i><small></small></span><span class="n b only-cmp"><i>–</i><small></small></span>
       <span class="n sh only-solo">–</span></div>`;
     const status = word ? ` <span class="est" title="${esc(slot.notes.join(' ') || word)}">${word}</span>` : '';
     // under a line that can crit: one hit without a crit, with one, and on average (filled in by paintLines)
     const crit = castable ? `<div class="critrow" data-k="${k}" hidden><span></span><div class="cr"><span class="cr-l" title="The line's total in each way of counting crits, divided by its count">One hit</span><span class="cr-b a"></span><span class="cr-b b only-cmp"></span></div></div>` : '';
     return `<div class="row line" data-k="${k}">${qty}
-      <span class="src"><span class="k">${key}</span><span class="nm">${esc(name)}</span>${status}</span><span class="ty none"></span>
+      <span class="src"${ab}><span class="k">${key}</span><span class="nm">${esc(name)}</span>${status}</span><span class="ty none"></span>
       <span class="bars"><i class="a"></i><i class="b only-cmp"></i></span>
       <span class="n a"><i>–</i><small></small></span><span class="n b only-cmp"><i>–</i><small></small></span>
       <span class="g only-cmp"><i></i></span><span class="sh only-solo">–</span></div>${crit}`;
@@ -616,7 +848,8 @@ function paintLines() {
     $('.n.b', row).classList.toggle('win', !!B && vb > va);
     gap($('.g', row), va, vb);
     $('.sh', row).textContent = va && A.combo.total.dealt ? Math.round(va / A.combo.total.dealt * 100) + '%' : '–';
-    $('.nm', row).title = lineParts(a, b);
+    // an ability's row has its card instead (abilityCard), which lists the same parts
+    if (!$('.src[data-ab]', row)) $('.nm', row).title = lineParts(a, b);
     const cr = $(`.critrow[data-k="${k}"]`);
     if (!cr) continue;
     const ca = critCells(k, 'a', a, A), cb = B ? critCells(k, 'b', b, B) : '';
@@ -810,7 +1043,7 @@ function paintReceipt() {
     // a line with nothing else to say gives the rate of its damage over time, per build when they differ
     const note = $('.note', row), ra = rate(a), rb = rate(b);
     note.textContent = note.dataset.fixed || (!B || ra === rb ? ra : [ra && 'A ' + ra, rb && 'B ' + rb].filter(Boolean).join(', '));
-    $('.nm', row).title = lineParts(a, b);
+    if (!$('.src[data-ab]', row)) $('.nm', row).title = lineParts(a, b);
   }
   const ta = A.combo.total.dealt, tb = B ? B.combo.total.dealt : 0, tot = $('#total-row');
   put($('.n.a', tot), nf(ta), !B || ta > tb);
@@ -976,7 +1209,7 @@ function paintQuality() {
 function paintResults() {
   if (RECEIPT) { paintReceipt(); renderLedger(); reprint(); }
   else { paintHero(); paintLines(); paintSide(); renderStats(); }
-  paintOpts(); paintTarget(); paintQuality();
+  paintOpts(); paintTarget(); paintQuality(); paintItemMenu(); paintTip();
 }
 
 /* ---------- champion options ---------- */
@@ -1047,6 +1280,8 @@ function encodeState() {
     ...(S.crits !== 'average' && {k: S.crits}),
     ...(S.split && {rb: SLOTS.map(k => S.ranksB[k]), ob: S.orderB}),
     ...(ADDABLE.some(m => S.shops[m]) && {sh: ADDABLE.filter(m => S.shops[m])})};
+  const io = {a: itemOptsOf('a'), b: itemOptsOf('b')};
+  if (Object.keys(io.a).length || Object.keys(io.b).length) s.io = io;
   return btoa(unescape(encodeURIComponent(JSON.stringify(s)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 /* A build arrives in the link, or from the other layout's page when the visitor has just swapped. */
@@ -1083,10 +1318,21 @@ function applyState(s) {
     if (typeof s.ob === 'string' && $(`#order option[value="${CSS.escape(s.ob)}"]`)) S.orderB = s.ob;
   }
   if (Array.isArray(s.sh)) for (const m of ADDABLE) S.shops[m] = s.sh.includes(m);
+  // item settings are checked against the items' controls; anything else in the link is dropped
+  for (const k of ['a', 'b']) {
+    const given = s.io?.[k];
+    if (!given || typeof given !== 'object') continue;
+    for (const [id, set] of Object.entries(given).slice(0, 6)) {
+      const it = S.items.get(+id);
+      if (!it || !set || typeof set !== 'object') continue;
+      for (const c of it.controls || []) if (Number.isFinite(+set[c.id])) (S.itemOpts[k][id] ??= {})[c.id] = Math.round(+set[c.id]);
+    }
+  }
 }
 
 /* ---------- wiring ---------- */
 function wire() {
+  wireTip();
   $('.tabs')?.addEventListener('click', e => { const t = e.target.closest('.tab'); if (t) setTab(t.dataset.tab); });
   document.addEventListener('click', e => {
     const b = e.target.closest('.menu-btn');
@@ -1096,8 +1342,8 @@ function wire() {
   $('#cmp-seg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setCompare(b.dataset.cmp === 'on'); });
   $('#add-b').addEventListener('click', () => setCompare(true));
   $('#rm-b').addEventListener('click', () => setCompare(false));
-  $('#copy-a').addEventListener('click', () => { S.builds.b = [...S.builds.a]; renderBuilds(); schedule(); });
-  $('#clear-a').addEventListener('click', () => { S.builds.a = Array(6).fill(null); renderBuilds(); schedule(); });
+  $('#copy-a').addEventListener('click', () => { S.builds.b = [...S.builds.a]; S.itemOpts.b = structuredClone(S.itemOpts.a); closeItemMenu(); renderBuilds(); schedule(); });
+  $('#clear-a').addEventListener('click', () => { S.builds.a = Array(6).fill(null); S.itemOpts.a = {}; closeItemMenu(); renderBuilds(); schedule(); });
   $('#name-a').addEventListener('input', paintNames);
   $('#name-b').addEventListener('input', paintNames);
   document.addEventListener('click', e => { const b = e.target.closest('button[data-t]'); if (b) setTarget(b.dataset.t); });
@@ -1137,9 +1383,12 @@ function wire() {
     if (e.target.closest('#shop-now')) { openPicker('a', Math.max(0, S.builds.a.findIndex(v => !v))); return; }
     const slot = e.target.closest('.slot'); if (!slot) return;
     const b = slot.dataset.b, i = +slot.dataset.i;
+    if (e.target.closest('[data-cfg]')) { itemMenu && itemMenu.b === b && itemMenu.i === i ? closeItemMenu() : openItemMenu(b, i); return; }
+    if (itemMenu && itemMenu.b === b && itemMenu.i === i) closeItemMenu();
     if (e.target.closest('[data-rm]')) { S.builds[b][i] = null; renderBuilds(); schedule(); return; }
     openPicker(b, i);
   });
+  wireItemMenu();
   builds.addEventListener('keydown', e => {
     const slot = e.target.closest('.slot');
     if (slot && e.target === slot && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openPicker(slot.dataset.b, +slot.dataset.i); }
@@ -1210,7 +1459,8 @@ function wire() {
   });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-      if (menu) { const b = menu; setMenu(null); b.focus(); }
+      if (itemMenu) { const k = itemMenu; closeItemMenu(); $(`.slot[data-b="${k.b}"][data-i="${k.i}"] [data-cfg]`)?.focus(); }
+      else if (menu) { const b = menu; setMenu(null); b.focus(); }
       else if (!$('#champ-modal').hidden) closeChamps(); else closePicker();
       return;
     }

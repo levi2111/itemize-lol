@@ -130,7 +130,9 @@ export type Trigger =
   /** every single instance of damage, with hit.physical / hit.magic / hit.true saying which type it was */
   | 'damage'
   /** after every action, for reactions to counters crossing a threshold */
-  | 'after';
+  | 'after'
+  /** an item's active, used at the start of the combo as many times as its `uses` control says (items only) */
+  | 'use';
 
 export interface Rule {
   id: string;
@@ -163,7 +165,12 @@ export interface Amp {
   when?: Expr;
   /** damage types it applies to; all when omitted */
   types?: DamageType[];
+  /** what the damage has to come from; all when omitted */
+  from?: DamageSource[];
 }
+/** Who dealt a piece of damage: a basic attack, an ability (Q W E R), the champion's passive, or an item. */
+export type DamageSource = 'attack' | 'ability' | 'passive' | 'item';
+export const DAMAGE_SOURCES: readonly DamageSource[] = ['attack', 'ability', 'passive', 'item'];
 
 /** Changes the target's resistance for as long as its condition holds, e.g. armor shred that builds with hits. */
 export interface ResistMod {
@@ -184,7 +191,15 @@ export interface StatMod {
 }
 export type StatModTarget =
   | 'ad' | 'ap' | 'hp' | 'mana' | 'armor' | 'mr' | 'attackSpeed' | 'critChance' | 'critDamage' | 'abilityHaste'
+  /** ability haste for Q, W and E only, and for R only */
+  | 'basicHaste' | 'ultHaste'
   | 'lethality' | 'armorPenPct' | 'magicPenFlat' | 'magicPenPct' | 'moveSpeed' | 'movePct' | 'lifeSteal' | 'omnivamp';
+
+/** A stack counter's limit, and its value when a fight starts (0 when left out). */
+export interface CounterDef {
+  max?: Expr;
+  start?: Expr;
+}
 
 export interface OptionDef {
   id: string;
@@ -237,7 +252,7 @@ export interface ChampionData {
   /** named helper formulas shared by this champion's rules */
   vars: Record<string, Expr>;
   options: OptionDef[];
-  counters: Record<string, { max?: Expr }>;
+  counters: Record<string, CounterDef>;
   models: Record<Slot, AbilityModel>;
   /** places where the sources disagreed while compiling */
   warnings: string[];
@@ -272,8 +287,28 @@ export interface ItemModel {
   statMods: StatMod[];
   amps?: Amp[];
   resists?: ResistMod[];
-  counters: Record<string, { max?: Expr }>;
+  counters: Record<string, CounterDef>;
+  /** what the caller can set about the item: stacks, a toggle, how often an effect fires in the combo */
+  controls?: ItemControl[];
   notes: string[];
+}
+
+/** One thing about an item the caller can set, by build. Formulas of the item read a `bool` or `int` by its id. */
+export interface ItemControl {
+  id: string;
+  label: string;
+  /**
+   * `bool`, `int`: a state the fight starts in, such as stacks already gained or a condition that holds.
+   * `uses`: how many times the active (the rule `rule`, on `use`) is used at the start of the combo.
+   * `procs`: how many times the rule `rule` fires in the combo, replacing what the combo would set off
+   * on its own. It has no default: left unset, the combo decides.
+   */
+  kind: 'bool' | 'int' | 'uses' | 'procs';
+  /** evaluated against the build when the caller does not set it; never set for `procs` */
+  default?: Expr;
+  min?: number;
+  max?: number;
+  rule?: string;
 }
 
 export interface DatasetManifest {

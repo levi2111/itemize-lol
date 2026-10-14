@@ -107,7 +107,10 @@ export function compileItems(ddItems: Raw, bin: Raw, table: StringTable, log: Co
     for (const d of g.mDataValues ?? []) if (d?.mName && typeof d.mValue === 'number') dataValues[d.mName] = clean(d.mValue);
     const calcs = compileCalcs(g.mItemCalculations, log);
     matchNameCase(calcs, other => other === undefined ? { calcs, dataValues } : undefined);
-    const tooltip = expandTooltip(g.mItemDataClient?.mTooltipData?.mLocKeys?.keyTooltip, table);
+    // an active is described under a key of its own; it follows the passives, marked so its damage reads as the active's
+    const keys = g.mItemDataClient?.mTooltipData?.mLocKeys;
+    const passive = expandTooltip(keys?.keyTooltip, table), active = expandTooltip(keys?.keyActive, table);
+    const tooltip = active ? `${passive ? passive + '<br>' : ''}<spellActive>Active</spellActive> ${active}` : passive;
     const find = (pool: Record<string, unknown>, name: string) => Object.keys(pool).find(k => k.toLowerCase() === name.toLowerCase());
 
     const item: CompiledItem = {

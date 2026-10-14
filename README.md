@@ -64,7 +64,7 @@ Then `npm test`, commit `data/dist/` and `web/art/`, and push: that deploys. `da
 
 ## Coverage today (patch 26.20)
 
-Every champion has a hand-written model: 864 of the 865 abilities and passives are `curated`, none are `verified` yet. The one left `unmodeled` is Mel's Rebuttal, whose damage is a share of whatever enemy projectile it reflects. Summoner's Rift items: 15 with damage-changing passives are hand-written, 1 is estimated, and 42 have stats that count and a passive that does not. ARAM's and Arena's copies of a Rift item use the Rift item's model when it binds; Arena changed the passives of 9 of its copies, which are marked `stale` for that. Arena's own items are mostly unmodeled. Items are the model-writing backlog now: `npm run data:report -- --status unmodeled`.
+Every champion has a hand-written model: 864 of the 865 abilities and passives are `curated`, none are `verified` yet. The one left `unmodeled` is Mel's Rebuttal, whose damage is a share of whatever enemy projectile it reflects. Summoner's Rift items: 72 are hand-written, every fighter, marksman and mage item whose passive or active changes damage among them, and 57 of those have settings the site lets the user change (stacks, a condition, uses of an active, procs counted by hand). 11 have stats that count and a passive that does not: the Doran's items, Tear of the Goddess, Bramble Vest, and support and tank items (Zeke's Convergence, Redemption, Ardent Censer, Bloodsong and the other support quest items). ARAM's and Arena's copies of a Rift item use the Rift item's model when it binds; Arena changed the passives of 39 of its copies, which are marked `stale` for that. Arena's own items are mostly unmodeled. Items are the model-writing backlog now: `npm run data:report -- --status unmodeled`.
 
 What `curated` does not promise: nobody has checked these against the live game. The weakest spots are the things the game data has no number for and a model had to assume, each behind an option with a note: how fast a pet, clone or turret attacks (Shaco's boxes, Heimerdinger's turrets, Malzahar's Voidlings, Yorick's Maiden, Zyra's plants, Kindred's Wolf), and how much of a long effect a target really sits through (Renekton's Dominus, Xerath's barrage).
 
@@ -80,7 +80,7 @@ All under `/api/v1`. Reads are cacheable and revalidate by ETag.
 | `GET /champions` | Every champion: id, name, tags, base stats, model status per ability. |
 | `GET /champions/:id` | One kit: ability names, icons, max ranks, status, notes, options. |
 | `GET /champions/:id/target?level=` | That champion's health, armor and magic resist at a level, for using it as the target. |
-| `GET /items` | The items of three shops, Summoner's Rift, ARAM and Arena: name, gold, tags, the shops that sell each (`shops`), stats, status, notes. |
+| `GET /items` | The items of three shops, Summoner's Rift, ARAM and Arena: name, gold, tags, the shops that sell each (`shops`), stats, status, notes, and what a page can let the user set about each (`controls`) and its named effects (`effects`). |
 | `POST /calc` | The calculation. One or two builds against one target. |
 
 ```jsonc
@@ -98,7 +98,9 @@ A build's own `ranks` replace the shared ones for that build. `crits` is how the
 
 Each result has computed stats, combo damage (raw and after mitigation, by type and by source, down to the rule that fired), sustained DPS, time to kill, and the assumptions behind the numbers. `src/engine/types.ts` is the contract.
 
-A champion's `options` (a form, stacks, seconds spent in an aura; listed by `GET /champions/:id`) go in the request as `"options": { "cougar": true, "auraSeconds": 4 }` and apply to every build; the result echoes the value each one had, defaults included. Damage that takes time to land (a burn, a channel, a zone) is still dealt in full, and its source line carries `over`: the seconds it runs and its damage per second. The site shows that under the total as `240/s · 15s`.
+A champion's `options` (a form, stacks, seconds spent in an aura; listed by `GET /champions/:id`) go in the request as `"options": { "cougar": true, "auraSeconds": 4 }` and apply to every build; the result echoes the value each one had, defaults included.
+
+An item's settings (its `controls` in `GET /items`) belong to a build: `"builds": [{ "items": [3078, 3161], "itemOptions": { "3161": { "stacks": 4 }, "3078": { "spellblade": 3 } } }]`. There are four kinds: `bool` and `int` are a state the fight starts in (stacks already gained, a condition), `uses` is how many times an active is used at the start of the combo, and `procs` is how many times an effect fires in the combo in place of what the combo sets off on its own (left out, the combo decides). Each result's `items` echo the settings used (a proc left to the combo is `null`) and list the item's named `effects`: what one firing deals against the target at full health, and how often it fired. Each result's `abilities` carry one cast of the ability on its own (`cast`, everything it sets off) and its `cooldown` after ability haste; that is what the site shows when an ability is pointed at. Damage that takes time to land (a burn, a channel, a zone) is still dealt in full, and its source line carries `over`: the seconds it runs and its damage per second. The site shows that under the total as `240/s · 15s`.
 
 The engine (`src/engine/`, `src/shared/`) has no Node dependencies and reads plain JSON, so it can also be bundled for the browser later.
 
@@ -112,7 +114,8 @@ src/engine/     stats, mitigation, the fight simulation, the calculation
 src/server/     HTTP API, and the Node server that also serves the site
 src/worker/     the same API as a Cloudflare Worker
 web/            the site, wired to the API: two layouts, one page each (index.html the tabs, receipt.html the receipt), one app.js for both.
-                The tabs page alone has the Crits switch, ranks per build and the shops in the item picker
+                The tabs page alone has the Crits switch, ranks per build and the shops in the item picker. Both have each item's
+                settings menu (the button on its slot) and the card an ability shows when pointed at
 scripts/        calc.ts (one calculation from the command line), outliers.ts (sanity scan), bundle.ts (packs the dataset for the Worker)
 ```
 

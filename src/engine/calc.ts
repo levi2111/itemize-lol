@@ -3,7 +3,7 @@
 import type { CastSlot, ChampionData, DamageType, ItemData, Slot } from '../shared/types.ts';
 import { CAST_SLOTS, SLOTS } from '../shared/types.ts';
 import { defaultSequence, Fight, type Hit } from './sim.ts';
-import { CalcError, CRIT_MODES, type Action, type Amount, type BuildInput, type ByType, type CalcRequest, type CalcResult, type CritMode, type DataSource, type SourceLine, type TargetInput } from './types.ts';
+import { CalcError, CRIT_MODES, type AbilityInfo, type Action, type Amount, type BuildInput, type ByType, type CalcRequest, type CalcResult, type CritMode, type DataSource, type ItemInfo, type SourceLine, type TargetInput } from './types.ts';
 
 export const LIMITS = {
   items: 6,
@@ -68,6 +68,20 @@ function check(data: DataSource, req: CalcRequest): Checked {
     if (typeof v !== 'number' && typeof v !== 'boolean') throw new CalcError('build.options', `option "${k}" must be a number or true/false`);
     options[k] = v;
   }
+  const itemOptions: Record<string, Record<string, number | boolean>> = {};
+  if (b.itemOptions !== undefined && (typeof b.itemOptions !== 'object' || b.itemOptions === null || Array.isArray(b.itemOptions))) {
+    throw new CalcError('build.itemOptions', 'build.itemOptions must be an object keyed by item id');
+  }
+  for (const [id, set] of Object.entries(b.itemOptions ?? {})) {
+    const it = items.find(i => String(i.id) === id);
+    if (!it) throw new CalcError('build.itemOptions', `item ${id} is not in the build`);
+    if (!set || typeof set !== 'object') throw new CalcError('build.itemOptions', `the settings of item ${id} must be an object`);
+    for (const [k, v] of Object.entries(set)) {
+      if (!it.model.controls?.some(c => c.id === k)) throw new CalcError('build.itemOptions', `${it.name} has no setting "${k}"`);
+      if ((typeof v !== 'number' || !Number.isFinite(v)) && typeof v !== 'boolean') throw new CalcError('build.itemOptions', `setting "${k}" of ${it.name} must be a number or true/false`);
+    }
+    itemOptions[id] = { ...set };
+  }
 
   let target: TargetInput | null = null;
   if (req.target !== null && req.target !== undefined) {
@@ -92,7 +106,7 @@ function check(data: DataSource, req: CalcRequest): Checked {
   }
   const crits = c.crits ?? 'average';
   if (!CRIT_MODES.includes(crits)) throw new CalcError('combo.crits', `combo.crits must be one of ${CRIT_MODES.join(', ')}`);
-  return { champ, items, build: { champion: champ.id, level, ranks, items: ids, options }, target, sequence, crits };
+  return { champ, items, build: { champion: champ.id, level, ranks, items: ids, options, itemOptions }, target, sequence, crits };
 }
 
 function lines(champ: ChampionData, hits: Hit[], spread: Fight['spread'], sequence: Action[]): SourceLine[] {
@@ -171,11 +185,46 @@ function sustain(c: Checked): { dps: Amount; timeToKill: number | null; caveats:
   return { dps: { raw: total.raw / t, dealt: total.dealt / t }, timeToKill: null, caveats: f.caveats };
 }
 
+/** One cast of each ranked ability on a fresh fight, and its cooldown: what the page shows when an ability is pointed at. */
+function abilityInfo(c: Checked, crits: CritMode): CalcResult['abilities'] {
+  const out = {} as CalcResult['abilities'];
+  const any = new Fight(c.champ, c.items, c.build, c.target, { crits });
+  for (const slot of SLOTS as readonly Slot[]) {
+    const m = c.champ.models[slot], info: AbilityInfo = { status: m.status, notes: m.notes, cast: null, cooldown: null };
+    out[slot] = info;
+    if (slot === 'p' || c.build.ranks[slot] < 1) continue;
+    const f = new Fight(c.champ, c.items, c.build, c.target, { crits });
+    f.act(slot);
+    const cast = { ...zero(), byType: byType() };
+    for (const h of f.hits) { cast.raw += h.raw; cast.dealt += h.dealt; cast.byType[h.type].raw += h.raw; cast.byType[h.type].dealt += h.dealt; }
+    round(cast);
+    for (const t of TYPES) round(cast.byType[t]);
+    info.cast = cast;
+    const cd = any.cooldown(slot);
+    info.cooldown = cd && { base: cd.base, haste: r2(cd.haste), seconds: r2(cd.seconds) };
+  }
+  return out;
+}
+
+/** Each item's settings as the combo used them, and its named effects: one firing on a fresh fight, and how often it fired. */
+function itemInfo(c: Checked, fight: Fight, crits: CritMode): ItemInfo[] {
+  return c.items.map(it => ({
+    id: it.id, status: it.model.status, notes: it.model.notes, settings: fight.itemSettings(it.id),
+    effects: it.model.rules.filter(r => r.label && !(r.amount.k === 'num' && r.amount.v === 0)).map(r => ({
+      id: r.id, label: r.label!, type: r.type,
+      one: round(new Fight(c.champ, c.items, c.build, c.target, { crits }).preview(it.id, r.id)),
+      fired: fight.fired.get(`item:${it.id}/${r.id}`) ?? 0,
+    })),
+  }));
+}
+
 export function calculate(data: DataSource, req: CalcRequest): CalcResult {
   const c = check(data, req);
   const play = (crits: CritMode) => {
     const f = new Fight(c.champ, c.items, c.build, c.target, { crits });
+    f.begin();
     for (const a of c.sequence) f.act(a);
+    f.end();
     return f;
   };
   const fight = play(c.crits);
@@ -206,8 +255,6 @@ export function calculate(data: DataSource, req: CalcRequest): CalcResult {
 
   const st = fight.stats;
   const sl = (l: { total: number; base: number; bonus: number }) => ({ total: r4(l.total), base: r4(l.base), bonus: r4(l.bonus) });
-  const abilities = {} as CalcResult['abilities'];
-  for (const slot of SLOTS as readonly Slot[]) abilities[slot] = { status: c.champ.models[slot].status, notes: c.champ.models[slot].notes };
 
   return {
     patch: data.patch,
@@ -215,6 +262,7 @@ export function calculate(data: DataSource, req: CalcRequest): CalcResult {
       level: st.level, hp: sl(st.hp), mana: sl(st.mana), ad: sl(st.ad), ap: sl(st.ap), armor: sl(st.armor), mr: sl(st.mr), moveSpeed: sl(st.moveSpeed),
       attackSpeed: sl(st.attackSpeed), critChance: r4(st.critChance), critDamage: r4(st.critDamage), lethality: r4(st.lethality),
       armorPenPct: r4(st.armorPenPct), magicPenFlat: r4(st.magicPenFlat), magicPenPct: r4(st.magicPenPct), abilityHaste: r4(st.abilityHaste),
+      basicHaste: r4(st.basicHaste), ultHaste: r4(st.ultHaste),
       lifeSteal: r4(st.lifeSteal), omnivamp: r4(st.omnivamp), attackRange: st.attackRange, gold: st.gold,
     },
     sequence: c.sequence,
@@ -229,9 +277,9 @@ export function calculate(data: DataSource, req: CalcRequest): CalcResult {
     },
     dps: round(s.dps),
     timeToKill: s.timeToKill === null ? null : r2(s.timeToKill),
-    abilities,
+    abilities: abilityInfo(c, c.crits),
     options: fight.optionValues,
-    items: c.items.map(i => ({ id: i.id, status: i.model.status, notes: i.model.notes })),
+    items: itemInfo(c, fight, c.crits),
     caveats: [...caveats],
   };
 }

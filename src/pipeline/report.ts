@@ -40,8 +40,15 @@ const showRule = (r: Rule) => `${r.on} ${r.type} ${r.count ? `${formatExpr(r.cou
   + `${r.then ? `  then ${r.then.map(t => `${t.counter} ${t.op === 'add' ? '+=' : '='} ${formatExpr(t.value)}`).join(', ')}` : ''}`;
 const showModel = (m: AbilityModel | ItemModel, out: string[]) => {
   out.push(`  model: ${m.status}`);
-  for (const r of m.rules) out.push(`    ${r.id}: ${showRule(r)}`);
+  for (const r of m.rules) out.push(`    ${r.id}${r.label ? ` "${r.label}"` : ''}: ${showRule(r)}`);
   for (const s of m.statMods ?? []) out.push(`    stat ${s.stat} ${s.phase} ${formatExpr(s.value)}${s.when ? ` when ${formatExpr(s.when)}` : ''}`);
+  for (const a of m.amps ?? []) out.push(`    amp +${formatExpr(a.value)}${a.types ? ` to ${a.types.join('/')}` : ''}${a.from ? ` from ${a.from.join('/')}` : ''}${a.when ? ` when ${formatExpr(a.when)}` : ''}`);
+  for (const r of m.resists ?? []) out.push(`    ${r.stat} ${r.kind} ${formatExpr(r.value)}${r.when ? ` when ${formatExpr(r.when)}` : ''}`);
+  if ('counters' in m) for (const [id, c] of Object.entries(m.counters)) out.push(`    counter ${id}${c.max ? ` max ${formatExpr(c.max)}` : ''}${c.start ? ` start ${formatExpr(c.start)}` : ''}`);
+  if ('controls' in m) for (const c of m.controls ?? []) {
+    const range = c.kind === 'bool' ? '' : ` ${c.min ?? 0}..${c.max ?? '∞'}`;
+    out.push(`    control ${c.id} [${c.kind}${range}] "${c.label}"${c.default ? ` default ${formatExpr(c.default)}` : c.kind === 'procs' ? ' default: what the combo sets off' : ''}`);
+  }
   for (const n of m.notes) out.push(`    note: ${n}`);
 };
 
@@ -86,7 +93,7 @@ function itemReport(i: ItemData): string[] {
 
 export interface ReportOptions {
   patch?: string; champion?: string; item?: string; status?: string;
-  /** show the champion with its model file as it is on disk now, not as last built */
+  /** show the champion, or the item, with its model file as it is on disk now, not as last built */
   draft?: boolean;
   log?: (msg: string) => void;
 }
@@ -110,7 +117,17 @@ export async function printReport(opts: ReportOptions = {}): Promise<void> {
     log(championReport(await readJson(join(dir, 'champions', `${hit.id}.json`))).join('\n'));
     return;
   }
-  const items: ItemData[] = await readJson(join(dir, 'items.json'));
+  let items: ItemData[] = await readJson(join(dir, 'items.json'));
+  if (opts.item && opts.draft) {
+    const { draftItems } = await import('./draft.ts');
+    const d = await draftItems(opts.patch);
+    items = d.items;
+    const q = opts.item.toLowerCase(), shown = (id: number) => { const it = items.find(i => i.id === id); return !!it && (String(id) === q || it.name.toLowerCase().includes(q)); };
+    // another item's model, half written, is not this report's business; a file that cannot be loaded is
+    const mine = d.issues.filter(i => i.item === undefined || shown(i.item));
+    for (const i of mine) log(`MODEL DOES NOT BIND  ${i.where}: ${i.message}`);
+    if (mine.length) process.exitCode = 1;
+  }
   if (opts.item) {
     const q = opts.item.toLowerCase();
     const hits = items.filter(i => String(i.id) === q || i.name.toLowerCase().includes(q));

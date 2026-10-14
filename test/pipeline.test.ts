@@ -3,12 +3,12 @@ import { test } from 'node:test';
 import { parseExpr } from '../src/models/parse.ts';
 import { checkAnchors } from '../src/pipeline/anchors.ts';
 import { autoAbilityModel } from '../src/pipeline/automodel.ts';
-import { clean, compileCalc, newLog } from '../src/pipeline/calc.ts';
-import { resolveChampion } from '../src/pipeline/models.ts';
+import { clean, compileCalc, matchNameCase, nameHash, newLog } from '../src/pipeline/calc.ts';
+import { resolveChampion, resolveItem } from '../src/pipeline/models.ts';
 import { findDamageRefs } from '../src/pipeline/tooltip.ts';
 import { Dataset } from '../src/server/dataset.ts';
 import { evaluate, formatExpr, type EvalEnv, type Scope } from '../src/shared/expr.ts';
-import type { Expr } from '../src/shared/types.ts';
+import type { CalcData, Expr } from '../src/shared/types.ts';
 
 const env = (over: Partial<EvalEnv> = {}): EvalEnv => ({
   level: 1, ranged: false, stat: () => 0, scope: () => undefined, variable: () => undefined, stacks: () => 0, itemCount: () => 0,
@@ -126,6 +126,34 @@ test('automatic models read a stated hit count but refuse to guess one', () => {
   assert.equal(kaisaQ.rules[0]!.count, undefined);
   // passives are never guessed
   assert.equal(autoAbilityModel(samira, 'p').status, 'unmodeled');
+});
+
+test('a calculation naming a data value by its hash finds it', () => {
+  assert.equal(nameHash('AbilityDamageRangeMod'), 'd62bdfef');
+  const calcs: Record<string, CalcData> = { C: { expr: { k: 'mul', parts: [{ k: 'num', v: 2 }, { k: 'dv', name: `{${nameHash('RangeModifier')}}` }] } } };
+  matchNameCase(calcs, () => ({ calcs, dataValues: { RangeModifier: 0.8 } }));
+  assert.deepEqual(calcs.C!.expr, { k: 'mul', parts: [{ k: 'num', v: 2 }, { k: 'dv', name: 'RangeModifier' }] });
+});
+
+test('an item model gives the user settings: options, counted procs, actives', () => {
+  const sheen = data.item(3057)!, { model: _, ...bare } = sheen;
+  const src = {
+    reviewed: 'x', options: { primed: { label: 'Primed', default: true }, count: { label: 'Count', default: 0, max: 'SpellbladeCooldown * 2' } },
+    counters: { blade: { max: 1, start: 'primed' } },
+    rules: [
+      { id: 'proc', label: 'Spellblade', on: 'onhit' as const, when: 'blade', type: 'physical' as const, amount: 'SpellbladeDamage', procs: true },
+      { id: 'zap', label: 'Zap', on: 'use' as const, type: 'magic' as const, amount: 'SpellbladeDamage', uses: 2 },
+    ],
+  };
+  const { model, issues } = resolveItem(bare, src, { champions: {}, items: {} });
+  assert.deepEqual(issues, []);
+  assert.deepEqual(model.controls!.map(c => [c.id, c.kind, c.max ?? null, c.rule ?? null]),
+    [['primed', 'bool', null, null], ['count', 'int', sheen.dataValues.SpellbladeCooldown! * 2, null], ['proc', 'procs', 20, 'proc'], ['zap', 'uses', 20, 'zap']]);
+  // a limit can only read the item's data values, and a champion's rules cannot be counted by hand
+  assert.match(resolveItem(bare, { ...src, options: { ...src.options, n: { label: 'N', default: 0, max: 'ad' } } }, { champions: {}, items: {} }).issues[0]!.message, /can only use the item's data values/);
+  const samira = data.champion('Samira')!;
+  const champ = resolveChampion(samira, { reviewed: 'x', q: { hits: [{ type: 'physical', amount: 'DamageCalc', procs: true }] } }, { champions: {}, items: {} });
+  assert.match(champ.issues[0]!.message, /only items can have/);
 });
 
 test('a model naming something the patch no longer has falls back and is reported', () => {

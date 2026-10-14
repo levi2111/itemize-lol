@@ -6,11 +6,11 @@
    read zeros. A model that still binds but whose spell changed shape since it was
    last accepted is kept and marked stale. */
 import { createHash } from 'node:crypto';
-import { walk } from '../shared/expr.ts';
+import { evaluate, walk, type EvalEnv } from '../shared/expr.ts';
 import { BUILTIN_VARS, CAST_VARS, HIT_VARS, RANK_VARS, STAT_ALIASES, TARGET_VARS } from '../shared/names.ts';
-import type { AbilityModel, Amp, CalcData, ChampionData, Expr, ItemModel, OptionDef, ResistMod, Rule, Slot, SpellData, StatMod } from '../shared/types.ts';
-import { SLOTS } from '../shared/types.ts';
-import type { AmpSrc, ChampionSrc, Formula, ItemSrc, ResistSrc, RuleSrc, StatModSrc } from '../models/dsl.ts';
+import type { AbilityModel, Amp, CalcData, ChampionData, CounterDef, Expr, ItemControl, ItemModel, OptionDef, ResistMod, Rule, Slot, SpellData, StatMod } from '../shared/types.ts';
+import { DAMAGE_SOURCES, SLOTS } from '../shared/types.ts';
+import type { AmpSrc, ChampionSrc, CounterSrc, Formula, ItemSrc, ResistSrc, RuleSrc, StatModSrc } from '../models/dsl.ts';
 import { parseExpr, type Resolve, type ResolveQuoted } from '../models/parse.ts';
 import { autoAbilityModel, autoItemModel } from './automodel.ts';
 import type { CompiledChampion } from './champion.ts';
@@ -123,11 +123,24 @@ const bindStatMod = (s: StatModSrc, b: Binder): StatMod => ({
   ...(s.when !== undefined && { when: b.expr(s.when) }),
 });
 
-const bindAmp = (a: AmpSrc, b: Binder): Amp => ({
-  value: b.expr(a.value),
-  ...(a.when !== undefined && { when: b.expr(a.when) }),
-  ...(a.types && { types: a.types }),
+const bindAmp = (a: AmpSrc, b: Binder): Amp => {
+  for (const f of a.from ?? []) if (!DAMAGE_SOURCES.includes(f)) throw new Error(`amp "from" names "${f}"; it can be ${DAMAGE_SOURCES.join(', ')}`);
+  return {
+    value: b.expr(a.value),
+    ...(a.when !== undefined && { when: b.expr(a.when) }),
+    ...(a.types && { types: a.types }),
+    ...(a.from?.length && { from: a.from }),
+  };
+};
+const bindCounter = (c: CounterSrc, b: Binder): CounterDef => ({
+  ...(c.max !== undefined && { max: b.expr(c.max) }),
+  ...(c.start !== undefined && { start: b.expr(c.start) }),
 });
+/** `procs` and `uses` give the user a control over an item's rule; a champion's rules have their options instead. */
+const itemOnly = (r: RuleSrc) => {
+  if (r.on === 'use') throw new Error(`rule ${r.id ?? ''} is on "use", which only an item's active can be`);
+  if (r.procs !== undefined || r.uses !== undefined) throw new Error(`rule ${r.id ?? ''} has "procs" or "uses", which only items can have`);
+};
 const bindResist = (r: ResistSrc, b: Binder): ResistMod => ({
   stat: r.stat, kind: r.kind, value: b.expr(r.value),
   ...(r.when !== undefined && { when: b.expr(r.when) }),
@@ -186,7 +199,7 @@ export function resolveChampion(champ: CompiledChampion, src: ChampionSrc | unde
     } catch (e) { sharedOk = false; fail(`options.${id}`, e); }
   }
   for (const [id, c] of Object.entries(src.counters ?? {})) {
-    try { out.counters[id] = c.max !== undefined ? { max: shared.expr(c.max) } : {}; } catch (e) { sharedOk = false; fail(`counters.${id}`, e); }
+    try { out.counters[id] = bindCounter(c, shared); } catch (e) { sharedOk = false; fail(`counters.${id}`, e); }
   }
   if (!sharedOk) {
     out.vars = {}; out.options = []; out.counters = {};
@@ -207,6 +220,7 @@ export function resolveChampion(champ: CompiledChampion, src: ChampionSrc | unde
       if (!spell) throw new Error(`spell "${spellId}" does not exist`);
       const b = binder(spellScope(spell), spell.id, others, locals);
       if (slot === 'p' && a.hits?.length) throw new Error('a passive cannot be cast: use "rules" with a trigger');
+      [...(a.hits ?? []), ...(a.rules ?? [])].forEach(itemOnly);
       const rules = [
         ...(a.hits ?? []).map((r, i) => bindRule(r, i, 'cast', b, counters)),
         ...(a.rules ?? []).map((r, i) => bindRule(r, i, undefined, b, counters)),
@@ -242,6 +256,51 @@ export function resolveChampion(champ: CompiledChampion, src: ChampionSrc | unde
   return out;
 }
 
+/** How many times a combo can use an active or count an effect by hand. */
+const MAX_COUNTED = 20;
+
+/** The item's options, then a count for each active and each rule marked `procs`, in rule order. */
+function itemControls(item: CompiledItem, src: ItemSrc, rules: Rule[], b: Binder): ItemControl[] {
+  const out: ItemControl[] = [];
+  const ids = new Set<string>();
+  const add = (c: ItemControl) => {
+    if (ids.has(c.id)) throw new Error(`"${c.id}" names both an option and a rule the user can count; rename one`);
+    ids.add(c.id); out.push(c);
+  };
+  // a limit may be a formula of data values ("AttackCount - 1"): the game's numbers, read once here, as an
+  // item's data values do not change with rank. Anything that depends on the fight is refused.
+  const limit = (v: number | string | undefined, what: string): number | undefined => {
+    if (v === undefined || typeof v === 'number') return v;
+    const refuse = (name: string) => { throw new Error(`${what} "${v}" reads ${name}; a limit can only use the item's data values`); };
+    const env: EvalEnv = {
+      level: 1, ranged: false, stat: s => refuse(s), scope: () => undefined, variable: n => refuse(n),
+      stacks: () => 0, itemCount: () => 0, unknown: w => refuse(w),
+    };
+    const scope = { id: `item ${item.id}`, dv: (n: string) => item.dataValues[n], eff: () => undefined, calc: () => undefined };
+    return evaluate(b.expr(v), env, scope);
+  };
+  for (const [id, o] of Object.entries(src.options ?? {})) {
+    const kind = o.kind ?? (typeof o.default === 'boolean' ? 'bool' : 'int');
+    const c: ItemControl = { id, label: o.label, kind, default: b.expr(o.default) };
+    if (kind === 'int') { c.min = o.min ?? 0; const max = limit(o.max, `option ${id}'s max`); if (max !== undefined) c.max = max; }
+    add(c);
+  }
+  const seen = new Set<string>();
+  for (const [i, r] of (src.rules ?? []).entries()) {
+    const rule = rules[i]!;
+    if (seen.has(rule.id)) throw new Error(`two rules are called "${rule.id}"`);
+    seen.add(rule.id);
+    const label = (fallback: string) => typeof r.procs === 'string' ? r.procs : rule.label ?? fallback;
+    if (rule.on === 'use') {
+      if (r.procs !== undefined) throw new Error(`rule ${rule.id} is an active: its count is its uses, so it takes "uses" and not "procs"`);
+      if (!rule.label) throw new Error(`active ${rule.id} needs a label: it names the control`);
+      add({ id: rule.id, label: rule.label, kind: 'uses', default: b.expr(r.uses ?? 1), min: 0, max: MAX_COUNTED, rule: rule.id });
+    } else if (r.uses !== undefined) throw new Error(`rule ${rule.id} has "uses" but is not on "use"`);
+    else if (r.procs) add({ id: rule.id, label: label(rule.id), kind: 'procs', min: 0, max: MAX_COUNTED, rule: rule.id });
+  }
+  return out;
+}
+
 /** `original` is set for another shop's copy of a Rift item, bound with the Rift item's model: the copy
     is then checked against what was reviewed for the original. Its stats are the copy's own and do
     not count; a passive or tooltip that differs marks it stale. */
@@ -249,16 +308,19 @@ export function resolveItem(item: CompiledItem, src: ItemSrc | undefined, lock: 
   if (!src) return { model: autoItemModel(item), issues: [] };
   try {
     const counters = new Set(Object.keys(src.counters ?? {}));
-    const b = binder({ calcs: item.calcs, dataValues: item.dataValues, effects: 0 }, `item ${item.id}`, () => undefined, counters);
+    const locals = new Set([...counters, ...Object.keys(src.options ?? {})]);
+    const b = binder({ calcs: item.calcs, dataValues: item.dataValues, effects: 0 }, `item ${item.id}`, () => undefined, locals);
     const model: ItemModel = {
       status: src.verified ? 'verified' : 'curated',
       rules: (src.rules ?? []).map((r, i) => bindRule(r, i, undefined, b, counters)),
       statMods: (src.statMods ?? []).map(s => bindStatMod(s, b)),
-      counters: Object.fromEntries(Object.entries(src.counters ?? {}).map(([id, c]) => [id, c.max !== undefined ? { max: b.expr(c.max) } : {}])),
+      counters: Object.fromEntries(Object.entries(src.counters ?? {}).map(([id, c]) => [id, bindCounter(c, b)])),
       notes: [...(src.notes ?? [])],
     };
     if (src.amps?.length) model.amps = src.amps.map(x => bindAmp(x, b));
     if (src.resists?.length) model.resists = src.resists.map(x => bindResist(x, b));
+    const controls = itemControls(item, src, model.rules, b);
+    if (controls.length) model.controls = controls;
     for (const r of model.rules) if (r.note) model.notes.push(r.note);
     const fingerprint = hash([shape(item, (original ?? item).stats), src]);
     const locked = lock.items[String((original ?? item).id)];

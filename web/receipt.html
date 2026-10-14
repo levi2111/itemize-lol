@@ -416,6 +416,62 @@ body:not(.has-items) .slot:not(.empty),#skill-row:not(.has-kit) .skill-ico{anima
 @keyframes wait{to{background-color:var(--rule)}}
 @media (prefers-reduced-motion:reduce){.slot,.skill-ico{animation:none!important}}
 .loading .r-total .n,.loading .pop{opacity:.55}
+
+/* ---------- an item's settings: a button on its slot and the menu it opens ---------- */
+.slot .cfg{position:absolute;right:-.4rem;bottom:-.4rem;width:1.3rem;height:1.3rem;display:grid;place-items:center;border:1px solid var(--chalk-faint);border-radius:50%;background:var(--mat-deep);color:var(--chalk-dim);z-index:1}
+.slot .cfg svg{width:.75rem;height:.75rem}
+.slot .cfg:hover,.slot .cfg[aria-expanded="true"]{border-color:var(--chalk);color:var(--chalk)}
+.slot .cfg.set{background:var(--chalk);border-color:var(--chalk);color:var(--ink)}
+.slot .cfg.info{display:none}
+.slot:hover .cfg.info,.slot:focus-within .cfg.info,.slot .cfg.info[aria-expanded="true"]{display:grid}
+.imenu{position:fixed;z-index:45;width:20.5rem;max-height:calc(100vh - 1rem);overflow:auto;display:grid;gap:.75rem;padding:.8rem .85rem .85rem;background:#081d1c;border:1px solid var(--chalk);border-radius:3px;box-shadow:0 1.2rem 2.5rem rgba(0,0,0,.55);font-size:.8rem;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.imenu .lbl{font-family:var(--font-mono);font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--chalk-dim)}
+.im-head{display:grid;grid-template-columns:2.4rem minmax(0,1fr) auto;gap:.65rem;align-items:center}
+.im-head b{display:block;font-family:var(--font-display);font-stretch:75%;font-size:1.05rem;font-weight:800;line-height:1.1}
+.im-head .hint{display:flex;align-items:center;gap:.3rem;font-family:var(--font-mono);font-size:.66rem}
+.im-ico{width:2.4rem;height:2.4rem;border:1px solid var(--rule);border-radius:2px;overflow:hidden}
+.im-sec{display:grid;gap:.5rem;padding-top:.65rem;border-top:1px solid var(--rule)}
+.ie{display:grid;gap:.3rem}
+.ie-h{display:flex;align-items:baseline;justify-content:space-between;gap:.6rem}
+.ie-h b{font-size:.84rem;font-weight:700}
+.ie-t{font-family:var(--font-mono);font-size:.66rem;color:var(--chalk-dim)}
+.ie-t.physical{color:#f29a4a} .ie-t.magic{color:#6fb6f2}
+.ie-v{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:.6rem;font-size:.72rem;color:var(--chalk-faint)}
+.ie-n i{font-style:normal;font-family:var(--font-mono);font-size:1rem;font-weight:600;color:var(--chalk);margin-right:.4rem}
+.ie-v em{flex-basis:100%;font-style:normal}
+.ic{display:flex;align-items:center;gap:.6rem;min-height:1.75rem;color:var(--chalk-dim)}
+.ic>span:first-child{flex:1;min-width:0}
+label.ic{cursor:pointer}
+.ic input[type="checkbox"]{width:.95rem;height:.95rem;margin:0;accent-color:var(--chalk)}
+.stp{display:inline-flex;align-items:center;gap:.3rem}
+.stp button{width:1.4rem;height:1.4rem;display:grid;place-items:center;border:1px solid var(--rule);border-radius:2px;font-family:var(--font-mono);font-size:.88rem;color:var(--chalk-dim)}
+.stp button:hover:not(:disabled){color:var(--ink);background:var(--chalk);border-color:var(--chalk)}
+.stp button:disabled{opacity:.35;cursor:default}
+.stp output{min-width:2.6rem;text-align:center;font-family:var(--font-mono);font-size:.9rem;font-weight:700;color:var(--chalk)}
+.stp output em{font-style:normal;font-weight:400;font-size:.62rem;color:var(--chalk-faint);margin-right:.3rem}
+.stp small{font-family:var(--font-mono);font-size:.64rem;color:var(--chalk-faint);margin-left:.15rem}
+.ic.auto .stp output{color:var(--chalk-dim)}
+.im-notes{display:grid;gap:.3rem;padding-top:.6rem;border-top:1px solid var(--rule);font-size:.72rem;color:var(--chalk-faint)}
+.im-notes p{margin:0}
+.im-foot{display:flex;justify-content:flex-end}
+
+/* ---------- an ability's card, on hover ---------- */
+.tip{position:fixed;z-index:60;min-width:15rem;max-width:22rem;display:grid;gap:.55rem;padding:.65rem .75rem .7rem;background:#081d1c;border:1px solid var(--chalk);border-radius:3px;box-shadow:0 .8rem 1.6rem rgba(0,0,0,.55);pointer-events:none;font-size:.78rem}
+.tip-h{display:flex;align-items:center;gap:.5rem}
+.tip-h .k{flex:none;display:inline-grid;place-items:center;min-width:1.4rem;height:1.35rem;padding:0 .15rem;border:1px solid var(--chalk-faint);border-radius:2px;font-family:var(--font-mono);font-size:.64rem;font-weight:700;color:var(--chalk-dim)}
+.tip-h b{font-family:var(--font-display);font-stretch:75%;font-size:1rem;font-weight:800}
+.tip-h .hint{margin-left:auto;font-family:var(--font-mono);font-size:.66rem;white-space:nowrap}
+.tip-g{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:1rem;row-gap:.15rem;align-items:baseline}
+.tip-g.two{grid-template-columns:minmax(0,1fr) auto auto}
+.tip-g>.tag{justify-self:end}
+.tl{color:var(--chalk-dim)}
+.tv{justify-self:end;font-family:var(--font-mono);font-size:.9rem;font-weight:600;color:var(--chalk);white-space:nowrap}
+.tip-g.two .tv{color:var(--chalk-dim)}
+.tip-g.two .tv.win{color:var(--c);font-weight:700}
+.ts{grid-column:1/-1;margin:-.05rem 0 .3rem;font-family:var(--font-mono);font-size:.64rem;color:var(--chalk-faint)}
+.tip-p{padding-top:.5rem;border-top:1px solid var(--rule);font-family:var(--font-mono);font-size:.66rem;line-height:1.45;color:var(--chalk-faint)}
+[data-ab]{cursor:help}
+.skill[data-ab] .pip{cursor:pointer}
 </style>
 </head>
 <body data-compare="on" data-target="dummy">
@@ -695,6 +751,9 @@ body:not(.has-items) .slot:not(.empty),#skill-row:not(.has-kit) .skill-ico{anima
     <div class="cm-grid" id="champ-grid"></div>
   </div>
 </div>
+
+<div class="imenu" id="item-menu" role="dialog" aria-label="Item settings" hidden></div>
+<div class="tip" id="tip" role="tooltip" hidden></div>
 
 <script src="/app.js" defer></script>
 </body>

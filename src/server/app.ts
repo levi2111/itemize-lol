@@ -36,6 +36,11 @@ const championView = (c: ChampionData) => ({
 const itemView = (i: ItemData) => ({
   id: i.id, name: i.name, gold: i.gold, tags: i.tags, plaintext: i.plaintext, shops: i.shops, component: i.component, stats: i.stats,
   status: i.model.status, notes: i.model.notes,
+  // what a page can let the user set about the item; defaults depend on the build, so a calculation reports them
+  controls: (i.model.controls ?? []).map(c => ({
+    id: c.id, label: c.label, kind: c.kind, ...(c.min !== undefined && { min: c.min }), ...(c.max !== undefined && { max: c.max }), ...(c.rule && { rule: c.rule }),
+  })),
+  effects: i.model.rules.filter(r => r.label && !(r.amount.k === 'num' && r.amount.v === 0)).map(r => ({ id: r.id, label: r.label, type: r.type })),
 });
 
 function fixedWindow(perMinute: number) {
@@ -124,7 +129,7 @@ export function createApp(data: ServedData, opts: AppOptions = {}) {
         if (!b || typeof b !== 'object') throw new CalcError(`builds[${i}]`, 'each build must be an object');
         // a build's own ranks, when it has them, replace the shared ones
         return calculate(data, {
-          build: { champion: body.champion, level: body.level, ranks: b.ranks ?? body.ranks ?? {}, options: body.options, items: b.items ?? [] },
+          build: { champion: body.champion, level: body.level, ranks: b.ranks ?? body.ranks ?? {}, options: body.options, items: b.items ?? [], itemOptions: b.itemOptions },
           target, combo: body.combo ?? {},
         });
       });

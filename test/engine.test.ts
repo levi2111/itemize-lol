@@ -149,6 +149,55 @@ test('damage over time: the total is dealt, and its rate and duration are report
   assert.equal(line(one, 'q').over, undefined);
 });
 
+test('item settings: a proc counted by hand fires that many times and never on its own', () => {
+  const run = (itemOptions?: Record<string, Record<string, number>>) =>
+    calculate(data, req({ champion: 'Garen', ranks: { q: 5, w: 3, e: 5, r: 2 }, items: [3057], itemOptions }, { counts: { aa: 3, q: 1, e: 1 } }));
+  const blade = (r: ReturnType<typeof calculate>) => r.items[0]!.effects.find(e => e.id === 'spellblade')!;
+  const auto = run(), four = run({ 3057: { spellblade: 4 } }), none = run({ 3057: { spellblade: 0 } });
+  assert.ok(blade(auto).fired >= 1, 'left alone, the combo sets it off');
+  assert.equal(auto.items[0]!.settings.spellblade, null);
+  assert.equal(blade(four).fired, 4);
+  assert.equal(four.items[0]!.settings.spellblade, 4);
+  assert.equal(blade(none).fired, 0);
+  // one proc is the item's own calculation, base attack damage, and the line holds exactly the counted procs
+  near(blade(four).one.raw, four.stats.ad.base);
+  near(line(four, 'items').total.raw, 4 * four.stats.ad.base);
+  assert.equal(line(none, 'items').total.raw, 0);
+  // sustained damage is not the combo: a count there changes nothing
+  assert.deepEqual(four.dps, none.dps);
+});
+
+test('item settings: stacks the fight starts with, an amp for abilities only, haste for basic abilities only', () => {
+  const shojin = data.item(3161)!, garen = data.champion('Garen')!;
+  const run = (stacks?: number) => calculate(data, req({ champion: 'Garen', ranks: { q: 5, w: 3, e: 5, r: 2 }, items: [3161], ...(stacks !== undefined && { itemOptions: { 3161: { stacks } } }) }, { counts: { aa: 1, q: 1 } }));
+  const zero = run(), four = run(4);
+  near(four.abilities.q.cast!.raw, zero.abilities.q.cast!.raw * (1 + 4 * shojin.dataValues.SpellDamageIncrease!));
+  near(line(four, 'aa').total.raw, line(zero, 'aa').total.raw);
+  assert.equal(run(99).items[0]!.settings.stacks, shojin.dataValues.StackCount, 'stacks stop at the game\'s limit');
+  // Dragonforce's haste shortens Q and leaves R alone
+  const cd = (s: 'q' | 'r') => garen.spells[garen.slots[s].spell]!.cooldown![s === 'q' ? 5 : 2]!;
+  near(zero.abilities.q.cooldown!.seconds, cd('q') * 100 / (100 + shojin.dataValues.AHBase!));
+  near(zero.abilities.r.cooldown!.seconds, cd('r'));
+  assert.equal(zero.abilities.p.cast, null);
+  assert.equal(run().abilities.w.cooldown!.haste, shojin.dataValues.AHBase);
+});
+
+test('item settings: an active is used at the start of the combo, as often as set, and never in sustained damage', () => {
+  const run = (bolt?: number) => calculate(data, req({ champion: 'Akali', items: [3146], ...(bolt !== undefined && { itemOptions: { 3146: { bolt } } }) }, { counts: { aa: 1 } }));
+  const part = (r: ReturnType<typeof calculate>) => line(r, 'items').parts.find(p => p.id === 'item:3146/bolt');
+  const one = run(), none = run(0), two = run(2);
+  assert.equal(part(one)!.hits, 1);
+  assert.equal(part(none), undefined);
+  near(part(two)!.total.raw, 2 * part(one)!.total.raw);
+  assert.deepEqual(one.dps, none.dps);
+});
+
+test('an effect\'s preview is one firing on its own, not what it sets off again', () => {
+  const res = calculate(data, req({ champion: 'Jax', items: [3145] }, { counts: { aa: 3, q: 1 } }));
+  const revved = res.items[0]!.effects.find(e => e.id === 'revved')!, part = line(res, 'items').parts.find(p => p.id === 'item:3145/revved')!;
+  near(revved.one.raw, part.total.raw / part.hits);
+});
+
 test('penetration and percent stat changes from items', () => {
   const voidStaff = data.item(3135)!, cap = data.item(3089)!;
   const res = calculate(data, req({ champion: 'Kaisa', items: [3135, 3089] }, {}));
@@ -185,6 +234,9 @@ test('bad requests are rejected with the offending field', () => {
   bad(req({}, { counts: { aa: 500 } }), 'combo.counts.aa');
   bad(req({}, { sequence: ['x' as 'aa'] }), 'combo.sequence');
   bad(req({}, {}, { hp: -5, armor: 0, mr: 0 }), 'target.hp');
+  bad(req({ items: [3161], itemOptions: { 3057: { spellblade: 1 } } }, {}), 'build.itemOptions');
+  bad(req({ items: [3161], itemOptions: { 3161: { nothing: 1 } } }, {}), 'build.itemOptions');
+  bad(req({ items: [3161], itemOptions: { 3161: { stacks: 'four' as unknown as number } } }, {}), 'build.itemOptions');
 });
 
 test('every champion computes without a crash or a NaN', () => {

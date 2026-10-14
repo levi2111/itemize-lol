@@ -70,6 +70,7 @@ A rule with `amount: 0` deals nothing and exists for its `then` or `appliesOnHit
 | `spell` | Once per cast that dealt damage. For burns, echoes and the like. |
 | `damage` | After every single instance of damage. `hit.physical`, `hit.magic`, `hit.true` say which type. |
 | `after` | After every action. For reacting to a counter crossing a threshold. |
+| `use` | An item's active, used at the start of the combo (items only, see "What the user can set"). |
 
 Within one action the champion's rules run first, passive then Q W E R, then items in build order.
 
@@ -116,7 +117,7 @@ vars: {
 
 They have no spell of their own, so game names in them are always written `Spell.Name`.
 
-**Counters** are stacks that live for one fight and start at 0. Declare them, change them in `then`, read them by name. `max` clamps.
+**Counters** are stacks that live for one fight and start at 0, or at `start` (a formula, which may read an option). Declare them, change them in `then`, read them by name. `max` clamps.
 
 ```ts
 counters: { plasma: {} },
@@ -134,7 +135,7 @@ options: { melee: { label: 'Fighting in melee range', default: false } },
 
 **Stat changes**: `statMods: [{ stat: 'attackSpeed', value: 'BonusAttackSpeed', when: 'wildRush' }]`. `phase: 'percent'` multiplies the stat's total (`value: 'APAmp'` for +30% AP); `phase: 'convert'` runs last and can read the finished stats.
 
-**Damage amplification**: `amps: [{ value: 'SpellItemDamageAmp', when: 'hasTarget && target.hpPct < HealthThreshold', types: ['magic', 'true'] }]`. `value` is the bonus: 0.2 means 20% more.
+**Damage amplification**: `amps: [{ value: 'SpellItemDamageAmp', when: 'hasTarget && target.hpPct < HealthThreshold', types: ['magic', 'true'] }]`. `value` is the bonus: 0.2 means 20% more. `from: ['ability', 'passive']` limits it to damage from those sources (`attack`, `ability`, `passive`, `item`).
 
 **Shred and penetration that builds during a fight**: `resists: [{ stat: 'armor', kind: 'reducePct', value: 'carve * ShredPerStack' }]`. Kinds are `reducePct`, `reduceFlat`, `penPct`, `penFlat`. Permanent penetration is a stat and needs no model.
 
@@ -157,7 +158,38 @@ The total is unchanged. The result additionally carries the rule's damage per se
 
 ## Items
 
-`src/models/items/*.ts` export a list of `item(id, name, { … })` with the same `rules`, `statMods`, `amps`, `resists`, `counters` and `notes`. Every rule needs `on`. Item stats come from game data; an item needs a model only when its passive changes damage. An item with a model and no rules states that its passive adds nothing against a single target.
+`src/models/items/*.ts` export a list of `item(id, name, { … })` with the same `rules`, `statMods`, `amps`, `resists`, `counters` and `notes`. Every rule needs `on`. Item stats come from game data; an item needs a model only when its passive changes damage. An item with a model and no rules states that its passive adds nothing against a single target. The files are grouped by kind of item (`spellblade.ts`, `onhit.ts`, `mage.ts`, …); an item is modeled in one file only.
+
+`npm run data:report -- --item 3078 --draft` and `npm run calc -- Garen --draft --items 3078` bind every item file as it is on disk, in memory, like `--draft` for a champion.
+
+### What the user can set
+
+Anything about an item that a fight cannot know by itself (stacks gained before it started, a condition, how often a proc lands, an active being used) is a setting. The site shows an item's settings in a menu on its slot, with what one firing of each of its named effects deals; the API takes them per build as `itemOptions: { "3161": { "stacks": 4 } }`.
+
+| | Written as | The setting |
+| --- | --- | --- |
+| A state the fight starts in | `options: { stacks: { label, default, max } }` | `bool` or `int`, read by name in the item's formulas. `max` may be one of the item's data values or a formula of them (`max: 'StackCount'`, `max: 'AttackCount - 1'`), so the game's number stays in the game data. `min` is 0 unless given. |
+| An active | a rule `on: 'use'`, with a `label` | How many times it is used. The actives are used at the start of the combo, in build order, before the first action; each use skips the cooldown but not `when`. `uses` is the default (1 when left out). They are never used in sustained damage. |
+| A proc counted by hand | `procs: true` on any rule | How many times it fires. Left unset, the combo decides as it always has. Set to n, the rule never fires on its trigger in the combo; it fires n times at the end of the combo instead, skipping `when` and `cooldown`. Sustained damage ignores it. A string instead of `true` labels the control. |
+
+A counter can start where a setting says: `counters: { will: { max: 'StackCount', start: 'stacks' } }`. That is the usual way to write stacks: the user says how many there are when the combo starts, and the rules keep adding to them.
+
+```ts
+item(3161, 'Spear of Shojin', {
+  reviewed: '16.20.1',
+  options: { stacks: { label: 'Focused Will stacks when the combo starts', default: 0, max: 'StackCount' } },
+  counters: { will: { max: 'StackCount', start: 'stacks' } },
+  statMods: [{ stat: 'basicHaste', value: 'AHBase' }],
+  rules: [{ id: 'stack', on: 'spell', type: 'physical', amount: 0, then: 'will += 1' }],
+  amps: [{ value: 'will * SpellDamageIncrease * if(ranged, RangedMod, 1)', from: ['ability', 'passive'] }],
+}),
+```
+
+- **Named effects.** Every rule with a `label` and an amount that is not 0 is one of the item's effects: the menu shows what one firing deals (on a fresh fight, against the target at full health, its own damage only) and how often it fired in the combo. Give a label to what a player would call the effect, and none to bookkeeping rules.
+- **Which rules get `procs`.** Effects whose real count depends on things a list of actions cannot know: energized attacks, Spellblade, every-third-attack procs, effects on a cooldown of their own, a burn applied by abilities. Not plain on-hit damage that rides every attack.
+- **Defaults.** Stacks that build during a fight (on hits, casts, seconds in combat) start at 0: the combo builds them. Stacks that grow over a game by time or mana default to what a finished item usually has, and say so in the label. Stacks that need takedowns default to 0. A condition defaults to what holds in an ordinary trade, for example the attacker above half health (the engine assumes full health) and the target in melee range.
+- **`amps` `from`** limits an amp to damage from some sources: `attack` (basic attacks), `ability` (Q W E R, including their hits on attacks), `passive`, `item`. Leave it out for "all damage".
+- **Haste by kind**: `statMods` can add `basicHaste` (Q W E only) or `ultHaste` (R only). Ability haste only changes the cooldowns the site shows; it does not change how many casts the combo has.
 
 ## Conventions
 

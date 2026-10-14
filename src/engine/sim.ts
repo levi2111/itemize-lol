@@ -4,7 +4,7 @@
    the fight goes on. */
 import { evaluate, growth, type EvalEnv, type Scope } from '../shared/expr.ts';
 import type {
-  Amp, CastSlot, ChampionData, DamageType, Expr, ItemData, ResistMod, Rule, Slot, SpellData, StatId, StatKind, StatMod, StatModTarget, Trigger,
+  Amp, CastSlot, ChampionData, CounterDef, DamageSource, DamageType, Expr, ItemControl, ItemData, ResistMod, Rule, Slot, SpellData, StatId, StatKind, StatMod, StatModTarget, Trigger,
 } from '../shared/types.ts';
 import { CAST_SLOTS, SLOTS } from '../shared/types.ts';
 import type { Action, BuildInput, CritMode, StatBlock, StatLine, TargetInput } from './types.ts';
@@ -29,17 +29,25 @@ interface Owner {
   line: 'aa' | Slot | 'items';
   label: string;
   slot?: Slot;
+  /** what an amp limited to some sources sees this owner's damage as */
+  source: DamageSource;
   rules: Rule[];
   statMods: StatMod[];
   amps: Amp[];
   resists: ResistMod[];
-  counterMax: Record<string, { max?: Expr }>;
+  counterMax: Record<string, CounterDef>;
   scope: Scope;
-  /** prefix that keeps one item's counters apart from another's */
+  /** prefix that keeps one item's counters and settings apart from another's */
   ns: string;
   /** the champion's own rules also see its options and helper formulas */
   champion: boolean;
+  /** an item's settings the caller can change */
+  controls: ItemControl[];
+  itemId?: number;
 }
+
+/** How a rule is being fired: by its trigger, as an active being used, or as a proc the caller counted by hand. */
+type FireMode = 'trigger' | 'use' | 'proc';
 
 export interface Hit {
   line: Owner['line'];
@@ -56,10 +64,10 @@ export interface Hit {
 
 const NO_SCOPE: Scope = { id: '(none)', dv: () => undefined, eff: () => undefined, calc: () => undefined };
 const AUTO_ATTACK: Owner = {
-  key: 'aa', line: 'aa', label: 'Auto attack', rules: [], statMods: [], amps: [], resists: [], counterMax: {}, scope: NO_SCOPE, ns: '', champion: false,
+  key: 'aa', line: 'aa', label: 'Auto attack', source: 'attack', rules: [], statMods: [], amps: [], resists: [], counterMax: {}, scope: NO_SCOPE, ns: '', champion: false, controls: [],
 };
 const ZERO_MODS = (): Record<StatModTarget, number> => ({
-  ad: 0, ap: 0, hp: 0, mana: 0, armor: 0, mr: 0, attackSpeed: 0, critChance: 0, critDamage: 0, abilityHaste: 0, lethality: 0,
+  ad: 0, ap: 0, hp: 0, mana: 0, armor: 0, mr: 0, attackSpeed: 0, critChance: 0, critDamage: 0, abilityHaste: 0, basicHaste: 0, ultHaste: 0, lethality: 0,
   armorPenPct: 0, magicPenFlat: 0, magicPenPct: 0, moveSpeed: 0, movePct: 0, lifeSteal: 0, omnivamp: 0,
 });
 const line = (base: number, bonus: number): StatLine => ({ base, bonus, total: base + bonus });
@@ -82,12 +90,18 @@ export class Fight {
   readonly hits: Hit[] = [];
   /** rules whose damage takes time to land, by `owner/rule`: the seconds it runs for, per action that set it off */
   readonly spread = new Map<string, Map<number, number>>();
+  /** how many times each rule fired, by `owner/rule`, whether or not it dealt damage */
+  readonly fired = new Map<string, number>();
   /** how many actions have been played; what a rule sets off within one action runs side by side */
   private action = 0;
   stats!: StatBlock;
   time = 0;
 
   private readonly options = new Map<string, number>();
+  /** items' settings as this fight settled them, by the item's namespace and the control's id */
+  private readonly settings = new Map<string, number>();
+  /** `owner/rule` of procs the caller counted by hand: they fire that many times at the end of the combo, and never on their own */
+  private readonly counted = new Set<string>();
   private readonly counters = new Map<string, number>();
   private readonly lastFired = new Map<string, number>();
   private readonly owners: Owner[] = [];
@@ -99,6 +113,8 @@ export class Fight {
   private hitType: DamageType | undefined;
   /** the ability whose cast is being played */
   private casting: CastSlot | undefined;
+  /** a preview is being played: one rule on its own, setting nothing else off */
+  private quiet = false;
   /** stats are worked out; from here on a formula reading crit chance means the chance that a hit crits */
   private settled = false;
 
@@ -126,23 +142,24 @@ export class Fight {
       const model = champ.models[slot];
       const spell = champ.spells[model.spell];
       this.owners.push({
-        key: slot, line: slot, label: champ.slots[slot].name, slot, rules: model.rules,
+        key: slot, line: slot, label: champ.slots[slot].name, slot, source: slot === 'p' ? 'passive' : 'ability', rules: model.rules,
         statMods: model.statMods ?? [], amps: model.amps ?? [], resists: model.resists ?? [], counterMax: champ.counters,
-        scope: spell ? this.scopeOf(spell) : NO_SCOPE, ns: '', champion: true,
+        scope: spell ? this.scopeOf(spell) : NO_SCOPE, ns: '', champion: true, controls: [],
       });
     }
     for (const it of items) {
       const m = it.model;
       this.owners.push({
-        key: `item:${it.id}`, line: 'items', label: it.name, rules: m.rules,
+        key: `item:${it.id}`, line: 'items', label: it.name, source: 'item', rules: m.rules,
         statMods: m.statMods, amps: m.amps ?? [], resists: m.resists ?? [], counterMax: m.counters,
         scope: { id: `item ${it.id}`, dv: n => it.dataValues[n], eff: () => undefined, calc: n => it.calcs[n] },
-        ns: `item:${it.id}:`, champion: false,
+        ns: `item:${it.id}:`, champion: false, controls: m.controls ?? [], itemId: it.id,
       });
     }
 
     this.computeStats(build);
     this.settled = true;
+    this.startCounters();
   }
 
   /** The share of hits that can crit that do: the crit chance, or none or all of them when the caller asks. */
@@ -247,7 +264,12 @@ export class Fight {
     if (name.startsWith('rank.')) return this.rankOf(name.slice(5) as Slot);
     if (owner && name in owner.counterMax) return this.counters.get(owner.ns + name) ?? 0;
     // helper formulas are evaluated without an owner but still belong to the champion
-    if (owner && !owner.champion) return undefined;
+    if (owner && !owner.champion) {
+      const v = this.settings.get(owner.ns + name);
+      if (v !== undefined) return v;
+      // a setting being settled may read another one that is not settled yet
+      return owner.controls.some(c => c.id === name) ? 0 : undefined;
+    }
     if (name in this.champ.counters) return this.counters.get(name) ?? 0;
     const opt = this.options.get(name);
     if (opt !== undefined) return opt;
@@ -300,6 +322,8 @@ export class Fight {
         magicPenFlat: mods.magicPenFlat,
         magicPenPct: 1 - magicKept,
         abilityHaste: mods.abilityHaste,
+        basicHaste: mods.basicHaste,
+        ultHaste: mods.ultHaste,
         lifeSteal: mods.lifeSteal,
         omnivamp: mods.omnivamp,
         attackRange: b.attackRange,
@@ -333,6 +357,18 @@ export class Fight {
       else v = Math.round(Math.min(o.max ?? Infinity, Math.max(o.min ?? -Infinity, v)));
       this.options.set(o.id, Number.isFinite(v) ? v : 0);
     }
+    // items' settings, the same way. A proc nobody counted has no value: the combo decides how often it fires
+    for (const owner of this.owners) {
+      for (const c of owner.controls) {
+        const given = build.itemOptions?.[String(owner.itemId)]?.[c.id];
+        if (c.kind === 'procs' && given === undefined) continue;
+        let v = given === undefined ? (c.default ? this.eval(c.default, owner) : 0) : Number(given);
+        if (c.kind === 'bool') v = v ? 1 : 0;
+        else v = Math.round(Math.min(c.max ?? Infinity, Math.max(c.min ?? 0, v)));
+        this.settings.set(owner.ns + c.id, Number.isFinite(v) ? v : 0);
+        if (c.kind === 'procs' && c.rule && !this.sustained) this.counted.add(`${owner.key}/${c.rule}`);
+      }
+    }
 
     for (const phase of ['flat', 'percent', 'convert'] as const) {
       const pending: [StatModTarget, number][] = [];
@@ -351,12 +387,31 @@ export class Fight {
     }
   }
 
+  /** Counters with a `start` begin there, once options and settings are known: stacks gained before the fight. */
+  private startCounters(): void {
+    const start = (owner: Owner | undefined, ns: string, defs: Record<string, CounterDef>) => {
+      for (const [name, c] of Object.entries(defs)) {
+        if (!c.start) continue;
+        const v = this.eval(c.start, owner);
+        this.counters.set(ns + name, c.max ? Math.min(v, this.eval(c.max, owner)) : v);
+      }
+    };
+    start(undefined, '', this.champ.counters);
+    for (const owner of this.owners) if (!owner.champion) start(owner, owner.ns, owner.counterMax);
+  }
+
   // ---------- dealing damage ----------
 
   get targetHp(): number | null { return this.target ? this.target.hp : null; }
 
   /** Every option of the champion as this fight settled it: the caller's value, or the default worked out from the build. */
   get optionValues(): Record<string, number> { return Object.fromEntries(this.options); }
+
+  /** One item's settings as this fight settled them; a proc left to the combo is null. */
+  itemSettings(itemId: number): Record<string, number | null> {
+    const owner = this.owners.find(o => o.itemId === itemId);
+    return Object.fromEntries((owner?.controls ?? []).map(c => [c.id, this.settings.get(owner!.ns + c.id) ?? null]));
+  }
 
   /** The target's resistance to this type right now, after shred and penetration. */
   private resistance(type: 'physical' | 'magic'): number {
@@ -381,11 +436,13 @@ export class Fight {
     return resistAfterPen(resist, 1 - keptByPen, flatPen);
   }
 
-  private amplify(type: DamageType, raw: number): number {
+  /** `from` is whoever deals the damage: an amp can be limited to some sources (abilities only, say). */
+  private amplify(from: DamageSource, type: DamageType, raw: number): number {
     for (const owner of this.owners) {
       if (!this.active(owner)) continue;
       for (const a of owner.amps) {
         if (a.types && !a.types.includes(type)) continue;
+        if (a.from && !a.from.includes(from)) continue;
         if (a.when && !this.eval(a.when, owner)) continue;
         raw *= 1 + this.eval(a.value, owner);
       }
@@ -396,7 +453,7 @@ export class Fight {
   /** Returns whether anything was dealt. */
   private deal(owner: Owner, rule: string, label: string, type: DamageType, amount: number, crit = false): boolean {
     if (!(amount > 0)) return false;
-    const raw = this.amplify(type, amount);
+    const raw = this.amplify(owner.source, type, amount);
     const dealt = !this.target || type === 'true' ? raw : raw * damageMultiplier(this.resistance(type));
     if (this.target) this.target.hp = Math.max(0, this.target.hp - dealt);
     const last = this.hits.at(-1);
@@ -410,11 +467,13 @@ export class Fight {
     return true;
   }
 
-  /** Fires one rule. Returns true if it fired, whether or not it did damage. */
-  private fire(owner: Owner, rule: Rule, effectiveness = 1): boolean {
-    if (rule.when && !this.eval(rule.when, owner)) return false;
+  /** Fires one rule. Returns true if it fired, whether or not it did damage. An active being used skips its
+      cooldown; a proc the caller counted by hand skips its condition as well, and never fires on its trigger. */
+  private fire(owner: Owner, rule: Rule, effectiveness = 1, mode: FireMode = 'trigger'): boolean {
     const key = `${owner.key}/${rule.id}`;
-    if (rule.cooldown) {
+    if (mode === 'trigger' && (rule.on === 'use' || this.counted.has(key))) return false;
+    if (mode !== 'proc' && rule.when && !this.eval(rule.when, owner)) return false;
+    if (mode === 'trigger' && rule.cooldown) {
       const last = this.lastFired.get(key);
       if (last !== undefined && this.time - last < this.eval(rule.cooldown, owner) - 1e-9) return false;
     }
@@ -449,11 +508,49 @@ export class Fight {
       this.counters.set(k, max ? Math.min(next, this.eval(max, owner)) : next);
     }
     this.lastFired.set(key, this.time);
+    this.fired.set(key, (this.fired.get(key) ?? 0) + 1);
     if (rule.appliesOnHit) this.trigger('onhit', rule.appliesOnHit);
     return true;
   }
 
+  /** Item rules fired a set number of times: actives (`use`) at the start of the combo, counted procs at the end. */
+  private fireCounted(which: 'use' | 'proc'): void {
+    if (this.sustained) return;
+    for (const owner of this.owners) {
+      for (const rule of owner.rules) {
+        const counted = which === 'use' ? rule.on === 'use' : this.counted.has(`${owner.key}/${rule.id}`);
+        if (!counted) continue;
+        const n = this.settings.get(owner.ns + rule.id) ?? 0;
+        for (let i = 0; i < n; i++) {
+          this.action++;
+          this.fire(owner, rule, 1, which);
+          this.trigger('after');
+        }
+      }
+    }
+  }
+  /** Before the combo's first action: the items' actives. */
+  begin(): void { this.fireCounted('use'); }
+  /** After its last: the procs the caller counted by hand. */
+  end(): void { this.fireCounted('proc'); }
+
+  /** What one firing of an item's rule deals as the fight stands, its own damage only: on a fresh fight, one proc
+      against the target at full health. Its condition and cooldown are skipped. */
+  preview(itemId: number, ruleId: string): { raw: number; dealt: number } {
+    const owner = this.owners.find(o => o.itemId === itemId), rule = owner?.rules.find(r => r.id === ruleId);
+    const out = { raw: 0, dealt: 0 };
+    if (!owner || !rule) return out;
+    const from = this.hits.length;
+    this.action++;
+    // nothing reacts to it: a rule on `damage` would otherwise set itself off again, its cooldown not yet started
+    this.quiet = true;
+    try { this.fire(owner, rule, 1, 'proc'); } finally { this.quiet = false; }
+    for (const h of this.hits.slice(from)) if (h.owner === owner.key && h.rule === rule.id) { out.raw += h.raw; out.dealt += h.dealt; }
+    return out;
+  }
+
   private trigger(on: Trigger, effectiveness = 1): void {
+    if (this.quiet) return;
     for (const owner of this.owners) {
       if (!this.active(owner)) continue;
       for (const rule of owner.rules) if (rule.on === on) this.fire(owner, rule, effectiveness);
@@ -462,6 +559,16 @@ export class Fight {
 
   /** Seconds one basic attack takes. */
   get attackPeriod(): number { return 1 / this.stats.attackSpeed.total; }
+
+  /** An ability's cooldown at its rank: the game's number and what ability haste (all of it, plus the basic or
+      ultimate kind) makes of it. Null when it has no rank or the game data gives none. */
+  cooldown(slot: CastSlot): { base: number; haste: number; seconds: number } | null {
+    const cd = this.champ.spells[this.champ.slots[slot].spell]?.cooldown, rank = this.rankOf(slot);
+    const base = cd?.[Math.min(rank, cd.length - 1)];
+    if (rank < 1 || base === undefined) return null;
+    const haste = this.stats.abilityHaste + (slot === 'r' ? this.stats.ultHaste : this.stats.basicHaste);
+    return { base, haste, seconds: base * 100 / (100 + haste) };
+  }
 
   act(action: Action): void {
     this.action++;

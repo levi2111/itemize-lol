@@ -82,7 +82,8 @@ export async function buildDataset(opts: BuildOptions = {}): Promise<BuildReport
   const lock: Lock = existsSync(LOCK_PATH) ? await readJson(LOCK_PATH) : { champions: {}, items: {} };
 
   const championModels = new Map((await loadModels<ChampionModelFile>('champions')).map(m => [m.id, m.src]));
-  const itemModels = new Map((await loadModels<ItemModelFile>('items')).map(m => [m.id, m]));
+  const itemModelList = await loadModels<ItemModelFile>('items');
+  const itemModels = new Map(itemModelList.map(m => [m.id, m]));
 
   const clog = newLog();
   const report: BuildReport = {
@@ -91,6 +92,10 @@ export async function buildDataset(opts: BuildOptions = {}): Promise<BuildReport
     coverage: { abilities: emptyCoverage(), items: emptyCoverage() },
   };
   const newLock: Lock = { champions: {}, items: {} };
+  if (itemModels.size < itemModelList.length) {
+    const twice = itemModelList.filter((m, i) => itemModelList.findIndex(x => x.id === m.id) !== i);
+    for (const m of twice) report.modelIssues.push({ where: `item ${m.id} ${m.name}`, message: 'modeled in two places; only the last one read is used' });
+  }
   const mismatch = (w: string) => {
     const m = /^Data Dragon (\w+)=/.exec(w) ?? /Data Dragon (\w+)=/.exec(w);
     if (m) report.sourceMismatches[m[1]!] = (report.sourceMismatches[m[1]!] ?? 0) + 1;

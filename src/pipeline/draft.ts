@@ -1,20 +1,21 @@
-/* Binds one champion's model file against the mirrored patch, in memory.
+/* Binds one champion's model file, or the item model files, against the patch, in memory.
 
    `data:build` compiles everything and rewrites data/dist/, which is slow to wait
    for and cannot be done by several writers at once. This reads the same raw files
    and the one model file, and hands back what the build would have written for
-   that champion, so a model can be checked while it is being written. */
+   that champion, so a model can be checked while it is being written. Items are
+   compiled data already, so their drafts start from the last build's items.json. */
 import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { ChampionModelFile } from '../models/dsl.ts';
-import type { ChampionData } from '../shared/types.ts';
+import type { ChampionModelFile, ItemModelFile } from '../models/dsl.ts';
+import type { ChampionData, ItemData } from '../shared/types.ts';
 import { latestMirroredPatch } from './build.ts';
 import { newLog } from './calc.ts';
 import { compileChampion } from './champion.ts';
-import { resolveChampion, type Lock, type ModelIssue } from './models.ts';
-import { rawDir, ROOT } from './paths.ts';
+import { resolveChampion, resolveItem, type Lock, type ModelIssue } from './models.ts';
+import { DATA_DIR, distDir, rawDir, ROOT } from './paths.ts';
 
 const MODELS_DIR = join(ROOT, 'src', 'models');
 const readJson = async (path: string) => JSON.parse(await readFile(path, 'utf8'));
@@ -54,4 +55,44 @@ export async function draftChampion(name: string, patch?: string): Promise<Draft
     issues,
     modeled: !!model,
   };
+}
+
+export interface ItemDraft {
+  /** every item of the last build, those with a model file bound to the files as they are on disk now */
+  items: ItemData[];
+  /** what the build would print as MODEL DOES NOT BIND; `item` says whose, and a file that cannot be loaded has none */
+  issues: (ModelIssue & { item?: number })[];
+}
+
+export async function draftItems(patch?: string): Promise<ItemDraft> {
+  const latest = join(DATA_DIR, 'dist', 'latest.json');
+  const built: ItemData[] = await readJson(join(distDir(patch ?? (await readJson(latest)).patch), 'items.json'));
+  const dir = join(MODELS_DIR, 'items');
+  const models = new Map<number, ItemModelFile>();
+  const issues: ItemDraft['issues'] = [];
+  for (const f of (await readdir(dir)).filter(f => f.endsWith('.ts')).sort()) {
+    let exported: unknown;
+    // the query string gets past the module cache, so a long-running caller sees edits
+    try { exported = (await import(`${pathToFileURL(join(dir, f)).href}?t=${Date.now()}`)).default; }
+    catch (e) { issues.push({ where: `src/models/items/${f}`, message: `cannot be loaded: ${e instanceof Error ? e.message : String(e)}` }); continue; }
+    for (const m of (Array.isArray(exported) ? exported : [exported]) as ItemModelFile[]) {
+      if (!m?.src) continue;
+      if (models.has(m.id)) issues.push({ where: `item ${m.id} ${m.name}`, message: `${f} models it again; the build would keep only one`, item: m.id });
+      models.set(m.id, m);
+    }
+  }
+  const lockPath = join(MODELS_DIR, 'models.lock.json');
+  const lock: Lock = existsSync(lockPath) ? await readJson(lockPath) : { champions: {}, items: {} };
+  const bare = ({ model: _, ...rest }: ItemData) => rest;
+  // ARAM's and Arena's copies of a Rift item use the Rift item's model, as in the build
+  const riftByName = new Map(built.filter(i => i.shops.includes('sr')).map(i => [i.name, i]));
+  const items = built.map(it => {
+    const own = models.get(it.id), original = own ? undefined : riftByName.get(it.name);
+    const src = own?.src ?? (original && models.get(original.id)?.src);
+    if (!src) return it;
+    const r = resolveItem(bare(it), src, lock, original && bare(original));
+    if (own) issues.push(...r.issues.map(i => ({ ...i, item: it.id })));
+    return { ...it, model: r.model };
+  });
+  return { items, issues };
 }

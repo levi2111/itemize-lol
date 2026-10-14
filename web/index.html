@@ -512,6 +512,64 @@ img.wait{opacity:0}
 body:not(.has-items) .slot:not(.empty),#skill-row:not(.has-kit) .skill-ico{animation:wait .7s ease-in-out infinite alternate}
 @keyframes wait{to{background-color:var(--rule)}}
 @media (prefers-reduced-motion:reduce){.slot,.skill-ico{animation:none!important}}
+
+/* ---------- an item's settings: a button on its slot and the menu it opens ---------- */
+.slot .cfg{position:absolute;right:-.4rem;bottom:-.4rem;width:1.35rem;height:1.35rem;display:grid;place-items:center;border:1px solid var(--faint);border-radius:50%;background:var(--well);color:var(--dim);z-index:1}
+.slot .cfg svg{width:.78rem;height:.78rem}
+.slot .cfg:hover,.slot .cfg[aria-expanded="true"]{border-color:var(--text);color:var(--text)}
+.slot .cfg.set{background:var(--text);border-color:var(--text);color:var(--ink)}
+/* an item with effects to show and nothing to set: the button appears on hover */
+.slot .cfg.info{display:none}
+.slot:hover .cfg.info,.slot:focus-within .cfg.info,.slot .cfg.info[aria-expanded="true"]{display:grid}
+.imenu{position:fixed;z-index:45;width:20.5rem;max-height:calc(100vh - 1rem);overflow:auto;display:grid;gap:.75rem;padding:.8rem .85rem .85rem;background:var(--well);border:1px solid var(--faint);border-radius:4px;box-shadow:0 1rem 2rem rgba(0,0,0,.55);scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.im-head{display:grid;grid-template-columns:2.4rem minmax(0,1fr) auto;gap:.65rem;align-items:center}
+.im-head b{display:block;font-size:.98rem;font-weight:800;line-height:1.15}
+.im-head .hint{display:flex;align-items:center;gap:.3rem;font-size:.74rem}
+.im-ico{width:2.4rem;height:2.4rem;border:1px solid var(--rule);border-radius:3px;overflow:hidden}
+.im-sec{display:grid;gap:.5rem;padding-top:.65rem;border-top:1px solid var(--rule)}
+.ie{display:grid;gap:.3rem}
+.ie-h{display:flex;align-items:baseline;justify-content:space-between;gap:.6rem}
+.ie-h b{font-size:.86rem;font-weight:700}
+.ie-t{font-size:.74rem;font-weight:600;color:var(--dim)}
+.ie-t.physical{color:var(--phys)} .ie-t.magic{color:var(--magic)}
+.ie-v{display:flex;align-items:baseline;justify-content:space-between;gap:.6rem;font-size:.76rem;color:var(--faint)}
+.ie-n i{font-style:normal;font-family:var(--font-mono);font-size:1rem;font-weight:600;color:var(--text);margin-right:.4rem}
+.ie-v em{flex-basis:100%;font-style:normal;color:var(--faint)}
+.ie-v{flex-wrap:wrap}
+.ic{display:flex;align-items:center;gap:.6rem;min-height:1.75rem;font-size:.82rem;color:var(--dim);cursor:default}
+.ic>span:first-child{flex:1;min-width:0}
+label.ic{cursor:pointer}
+.ic input[type="checkbox"]{width:.95rem;height:.95rem;margin:0;accent-color:var(--text)}
+.stp{display:inline-flex;align-items:center;gap:.3rem}
+.stp button{width:1.45rem;height:1.45rem;display:grid;place-items:center;border:1px solid var(--rule);border-radius:2px;font-family:var(--font-mono);font-size:.9rem;color:var(--dim)}
+.stp button:hover:not(:disabled){color:var(--ink);background:var(--text);border-color:var(--text)}
+.stp button:disabled{opacity:.35;cursor:default}
+.stp output{min-width:2.6rem;text-align:center;font-family:var(--font-mono);font-size:.92rem;font-weight:700;color:var(--text)}
+.stp output em{font-style:normal;font-weight:400;font-size:.66rem;color:var(--faint);margin-right:.3rem}
+.stp small{font-family:var(--font-mono);font-size:.68rem;color:var(--faint);margin-left:.15rem}
+.ic.auto .stp output{color:var(--dim)}
+.ic .act{height:1.45rem}
+.im-notes{display:grid;gap:.3rem;padding-top:.6rem;border-top:1px solid var(--rule);font-size:.74rem;color:var(--faint)}
+.im-notes p{margin:0}
+.im-foot{display:flex;justify-content:flex-end}
+
+/* ---------- an ability's card, on hover ---------- */
+.tip{position:fixed;z-index:60;min-width:15rem;max-width:22rem;display:grid;gap:.55rem;padding:.65rem .75rem .7rem;background:var(--well);border:1px solid var(--faint);border-radius:4px;box-shadow:0 .8rem 1.6rem rgba(0,0,0,.55);pointer-events:none;font-size:.8rem}
+.tip-h{display:flex;align-items:center;gap:.5rem}
+.tip-h .k{flex:none;display:inline-grid;place-items:center;min-width:1.4rem;height:1.35rem;padding:0 .15rem;border:1px solid var(--faint);border-radius:2px;font-family:var(--font-mono);font-size:.66rem;font-weight:700;color:var(--dim)}
+.tip-h b{font-size:.92rem;font-weight:800}
+.tip-h .hint{margin-left:auto;font-size:.72rem;white-space:nowrap}
+.tip-g{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:1rem;row-gap:.15rem;align-items:baseline}
+.tip-g.two{grid-template-columns:minmax(0,1fr) auto auto}
+.tip-g>.tag{justify-self:end}
+.tl{color:var(--dim)}
+.tv{justify-self:end;font-family:var(--font-mono);font-size:.92rem;font-weight:600;color:var(--text);white-space:nowrap}
+.tip-g.two .tv{color:var(--dim)}
+.tip-g.two .tv.win{color:var(--c);font-weight:700}
+.ts{grid-column:1/-1;margin:-.05rem 0 .3rem;font-size:.7rem;color:var(--faint)}
+.tip-p{padding-top:.5rem;border-top:1px solid var(--rule);font-size:.72rem;line-height:1.4;color:var(--faint)}
+[data-ab]{cursor:help}
+.skill[data-ab] .pip{cursor:pointer}
 </style>
 </head>
 <body data-compare="on" data-target="dummy">
@@ -805,6 +863,9 @@ body:not(.has-items) .slot:not(.empty),#skill-row:not(.has-kit) .skill-ico{anima
     <div class="cm-grid" id="champ-grid"></div>
   </div>
 </div>
+
+<div class="imenu" id="item-menu" role="dialog" aria-label="Item settings" hidden></div>
+<div class="tip" id="tip" role="tooltip" hidden></div>
 
 <script src="/app.js" defer></script>
 </body>
