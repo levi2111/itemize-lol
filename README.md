@@ -58,12 +58,13 @@ Read the summary it prints:
 - `MODEL DOES NOT BIND …` — a name changed. Fix the model in `src/models/`.
 - `stale models: …` — the spell changed shape. Re-read it with `npm run data:report -- --champion <id>`, fix the model if needed, then `npm run data:accept`.
 - `ANCHOR FAILED …` — the data format itself changed. Fix `src/pipeline/calc.ts` before trusting anything.
+- `stat icons changed on texticons.png …` (from the art step) — the game's sheet of stat icons changed. The site shows seven of them beside the totals, and nothing says where on the sheet each one sits, so `src/pipeline/stat-icons.json` records it by hand. Look at the sheet, fix a position if an icon moved, then `npm run data:art -- --accept`.
 
 Then `npm test`, commit `data/dist/` and `web/art/`, and push: that deploys. `data/raw/` is a cache and stays out of git.
 
 ## Coverage today (patch 26.20)
 
-Every champion has a hand-written model: 864 of the 865 abilities and passives are `curated`, none are `verified` yet. The one left `unmodeled` is Mel's Rebuttal, whose damage is a share of whatever enemy projectile it reflects. Items: 15 with damage-changing passives are hand-written, 1 is estimated, and 43 have stats that count and a passive that does not. Items are the model-writing backlog now: `npm run data:report -- --status unmodeled`.
+Every champion has a hand-written model: 864 of the 865 abilities and passives are `curated`, none are `verified` yet. The one left `unmodeled` is Mel's Rebuttal, whose damage is a share of whatever enemy projectile it reflects. Summoner's Rift items: 15 with damage-changing passives are hand-written, 1 is estimated, and 42 have stats that count and a passive that does not. ARAM's and Arena's copies of a Rift item use the Rift item's model when it binds; Arena changed the passives of 9 of its copies, which are marked `stale` for that. Arena's own items are mostly unmodeled. Items are the model-writing backlog now: `npm run data:report -- --status unmodeled`.
 
 What `curated` does not promise: nobody has checked these against the live game. The weakest spots are the things the game data has no number for and a model had to assume, each behind an option with a note: how fast a pet, clone or turret attacks (Shaco's boxes, Heimerdinger's turrets, Malzahar's Voidlings, Yorick's Maiden, Zyra's plants, Kindred's Wolf), and how much of a long effect a target really sits through (Renekton's Dominus, Xerath's barrage).
 
@@ -79,7 +80,7 @@ All under `/api/v1`. Reads are cacheable and revalidate by ETag.
 | `GET /champions` | Every champion: id, name, tags, base stats, model status per ability. |
 | `GET /champions/:id` | One kit: ability names, icons, max ranks, status, notes, options. |
 | `GET /champions/:id/target?level=` | That champion's health, armor and magic resist at a level, for using it as the target. |
-| `GET /items` | The Summoner's Rift shop: name, gold, tags, stats, status, notes. |
+| `GET /items` | The items of three shops, Summoner's Rift, ARAM and Arena: name, gold, tags, the shops that sell each (`shops`), stats, status, notes. |
 | `POST /calc` | The calculation. One or two builds against one target. |
 
 ```jsonc
@@ -87,11 +88,13 @@ All under `/api/v1`. Reads are cacheable and revalidate by ETag.
 {
   "champion": "Kaisa", "level": 13,
   "ranks": { "q": 5, "w": 1, "e": 5, "r": 2 },
-  "builds": [{ "items": [6672, 3006, 3124, 3115] }, { "items": [6655, 3020, 3115, 4645] }],
+  "builds": [{ "items": [6672, 3006, 3124, 3115] }, { "items": [6655, 3020, 3115, 4645], "ranks": { "q": 3, "w": 1, "e": 5, "r": 2 } }],
   "target": { "hp": 2400, "armor": 80, "mr": 50 },     // or { "champion": "Ornn", "level": 13 }, or null for raw output
-  "combo": { "counts": { "aa": 3, "q": 1, "w": 1 } }   // or { "sequence": ["aa", "q", "aa", "w", "aa"] }
+  "combo": { "counts": { "aa": 3, "q": 1, "w": 1 }, "crits": "average" }   // or { "sequence": ["aa", "q", "aa", "w", "aa"] }
 }
 ```
+
+A build's own `ranks` replace the shared ones for that build. `crits` is how the combo counts critical strikes: `average` (at the build's crit chance, the default), `never` or `always`; DPS and time to kill always use the average. A source line that can crit carries `crits`: its total in each of the three, so a page can show a hit with and without one.
 
 Each result has computed stats, combo damage (raw and after mitigation, by type and by source, down to the rule that fired), sustained DPS, time to kill, and the assumptions behind the numbers. `src/engine/types.ts` is the contract.
 
@@ -108,7 +111,8 @@ src/shared/     dataset types, formula evaluator
 src/engine/     stats, mitigation, the fight simulation, the calculation
 src/server/     HTTP API, and the Node server that also serves the site
 src/worker/     the same API as a Cloudflare Worker
-web/            the site, wired to the API: two layouts, one page each (index.html the tabs, receipt.html the receipt), one app.js for both
+web/            the site, wired to the API: two layouts, one page each (index.html the tabs, receipt.html the receipt), one app.js for both.
+                The tabs page alone has the Crits switch, ranks per build and the shops in the item picker
 scripts/        calc.ts (one calculation from the command line), outliers.ts (sanity scan), bundle.ts (packs the dataset for the Worker)
 ```
 

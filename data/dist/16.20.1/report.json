@@ -6,12 +6,24 @@
   "passed": 13
  },
  "modelIssues": [],
- "stale": [],
+ "stale": [
+  "item 223085 Runaan's Hurricane (arena copy of 3085)",
+  "item 223091 Wit's End (arena copy of 3091)",
+  "item 223115 Nashor's Tooth (arena copy of 3115)",
+  "item 223124 Guinsoo's Rageblade (arena copy of 3124)",
+  "item 223153 Blade of The Ruined King (arena copy of 3153)",
+  "item 223302 Terminus (arena copy of 3302)",
+  "item 224645 Shadowflame (arena copy of 4645)",
+  "item 226672 Kraken Slayer (arena copy of 6672)",
+  "item 226676 The Collector (arena copy of 6676)"
+ ],
  "unlocked": [],
  "unknownParts": {
   "PercentageOfBuffNameElapsed": 3
  },
- "unknownStats": {},
+ "unknownStats": {
+  "19": 1
+ },
  "sourceMismatches": {
   "attackdamageperlevel": 172
  },
@@ -27,11 +39,11 @@
   },
   "items": {
    "verified": 0,
-   "curated": 15,
-   "stale": 0,
+   "curated": 18,
+   "stale": 9,
    "auto": 1,
-   "none": 156,
-   "unmodeled": 43
+   "none": 271,
+   "unmodeled": 87
   }
  }
 }

@@ -34,7 +34,7 @@ const championView = (c: ChampionData) => ({
   options: c.options.map(o => ({ id: o.id, label: o.label, kind: o.kind, ...(o.min !== undefined && { min: o.min }), ...(o.max !== undefined && { max: o.max }) })),
 });
 const itemView = (i: ItemData) => ({
-  id: i.id, name: i.name, gold: i.gold, tags: i.tags, plaintext: i.plaintext, component: i.component, stats: i.stats,
+  id: i.id, name: i.name, gold: i.gold, tags: i.tags, plaintext: i.plaintext, shops: i.shops, component: i.component, stats: i.stats,
   status: i.model.status, notes: i.model.notes,
 });
 
@@ -122,8 +122,9 @@ export function createApp(data: ServedData, opts: AppOptions = {}) {
 
       const results: CalcResult[] = builds.map((b: any, i: number) => {
         if (!b || typeof b !== 'object') throw new CalcError(`builds[${i}]`, 'each build must be an object');
+        // a build's own ranks, when it has them, replace the shared ones
         return calculate(data, {
-          build: { champion: body.champion, level: body.level, ranks: body.ranks ?? {}, options: body.options, items: b.items ?? [] },
+          build: { champion: body.champion, level: body.level, ranks: b.ranks ?? body.ranks ?? {}, options: body.options, items: b.items ?? [] },
           target, combo: body.combo ?? {},
         });
       });

@@ -7,7 +7,7 @@ import type {
   Amp, CastSlot, ChampionData, DamageType, Expr, ItemData, ResistMod, Rule, Slot, SpellData, StatId, StatKind, StatMod, StatModTarget, Trigger,
 } from '../shared/types.ts';
 import { CAST_SLOTS, SLOTS } from '../shared/types.ts';
-import type { Action, BuildInput, StatBlock, StatLine, TargetInput } from './types.ts';
+import type { Action, BuildInput, CritMode, StatBlock, StatLine, TargetInput } from './types.ts';
 
 /** Attack speed limits. The cap is one attack per 0.333 s. */
 const AS_MIN = 0.2, AS_MAX = 3.003;
@@ -50,6 +50,8 @@ export interface Hit {
   raw: number;
   dealt: number;
   instances: number;
+  /** a basic attack, or a rule with its own crit amount: damage that can be a critical strike */
+  crit: boolean;
 }
 
 const NO_SCOPE: Scope = { id: '(none)', dv: () => undefined, eff: () => undefined, calc: () => undefined };
@@ -65,6 +67,8 @@ const line = (base: number, bonus: number): StatLine => ({ base, bonus, total: b
 export interface FightOptions {
   /** simulating sustained basic attacks rather than a combo: effects that ramp up count as ramped */
   sustained?: boolean;
+  /** how critical strikes count; see ComboInput.crits */
+  crits?: CritMode;
 }
 
 export class Fight {
@@ -73,6 +77,7 @@ export class Fight {
   readonly level: number;
   readonly ranks: Record<CastSlot, number>;
   readonly sustained: boolean;
+  readonly crits: CritMode;
   readonly caveats = new Set<string>();
   readonly hits: Hit[] = [];
   /** rules whose damage takes time to land, by `owner/rule`: the seconds it runs for, per action that set it off */
@@ -94,6 +99,8 @@ export class Fight {
   private hitType: DamageType | undefined;
   /** the ability whose cast is being played */
   private casting: CastSlot | undefined;
+  /** stats are worked out; from here on a formula reading crit chance means the chance that a hit crits */
+  private settled = false;
 
   constructor(champ: ChampionData, items: ItemData[], build: BuildInput, target: TargetInput | null, opts: FightOptions = {}) {
     this.champ = champ;
@@ -101,6 +108,7 @@ export class Fight {
     this.level = build.level;
     this.ranks = build.ranks;
     this.sustained = !!opts.sustained;
+    this.crits = opts.crits ?? 'average';
     this.target = target ? { maxHp: target.hp, hp: target.hp, armor: target.armor, mr: target.mr, bonusHp: target.bonusHp ?? 0 } : null;
     this.env = {
       level: build.level,
@@ -134,6 +142,12 @@ export class Fight {
     }
 
     this.computeStats(build);
+    this.settled = true;
+  }
+
+  /** The share of hits that can crit that do: the crit chance, or none or all of them when the caller asks. */
+  get critRate(): number {
+    return this.crits === 'never' ? 0 : this.crits === 'always' ? 1 : this.stats.critChance;
   }
 
   // ---------- reading the world ----------
@@ -193,7 +207,9 @@ export class Fight {
       case 'mana': return of3(s.mana);
       case 'moveSpeed': return of3(s.moveSpeed);
       case 'attackSpeed': return of3(s.attackSpeed);
-      case 'critChance': return s.critChance;
+      // Stat changes see the stat. Damage sees the rate, so that models which average crits by hand
+      // (a passive's bonus "on crit", say) follow the caller's choice of never or always as well.
+      case 'critChance': return this.settled ? this.critRate : s.critChance;
       case 'critDamage': return s.critDamage;
       case 'abilityHaste': return s.abilityHaste;
       // the game expresses cooldown reduction as a negative fraction
@@ -378,14 +394,14 @@ export class Fight {
   }
 
   /** Returns whether anything was dealt. */
-  private deal(owner: Owner, rule: string, label: string, type: DamageType, amount: number): boolean {
+  private deal(owner: Owner, rule: string, label: string, type: DamageType, amount: number, crit = false): boolean {
     if (!(amount > 0)) return false;
     const raw = this.amplify(type, amount);
     const dealt = !this.target || type === 'true' ? raw : raw * damageMultiplier(this.resistance(type));
     if (this.target) this.target.hp = Math.max(0, this.target.hp - dealt);
     const last = this.hits.at(-1);
     if (last && last.owner === owner.key && last.rule === rule && last.type === type) { last.raw += raw; last.dealt += dealt; last.instances++; }
-    else this.hits.push({ line: owner.line, owner: owner.key, rule, label, type, raw, dealt, instances: 1 });
+    else this.hits.push({ line: owner.line, owner: owner.key, rule, label, type, raw, dealt, instances: 1, crit });
     // rules reacting to damage do not react to the damage they deal themselves
     if (this.hitType === undefined) {
       this.hitType = type;
@@ -407,13 +423,15 @@ export class Fight {
     const label = rule.label ?? owner.label;
     const one = (): number => {
       let amount = this.eval(rule.amount, owner);
-      // abilities that can crit are reported at their crit-chance-weighted average
-      if (rule.crit && this.stats.critChance > 0) amount += this.stats.critChance * (this.eval(rule.crit, owner) - amount);
+      // abilities that can crit are reported at their crit-chance-weighted average, or as the caller asked
+      const rate = this.critRate;
+      if (rule.crit && rate > 0) amount += rate * (this.eval(rule.crit, owner) - amount);
       return amount * effectiveness;
     };
     let landed = false;
-    if (whole) for (let i = 0; i < count; i++) landed = this.deal(owner, rule.id, label, rule.type, one()) || landed;
-    else if (count > 0) landed = this.deal(owner, rule.id, label, rule.type, one() * count);
+    const crit = !!rule.crit;
+    if (whole) for (let i = 0; i < count; i++) landed = this.deal(owner, rule.id, label, rule.type, one(), crit) || landed;
+    else if (count > 0) landed = this.deal(owner, rule.id, label, rule.type, one() * count, crit);
     // the damage is still dealt at once and the fight's clock does not wait for it: the duration is only reported
     if (landed && rule.over) {
       const seconds = this.eval(rule.over, owner);
@@ -450,7 +468,7 @@ export class Fight {
     if (action === 'aa') {
       const s = this.stats;
       // crits are averaged: 25% crit chance at 2.0x is 1.25x on every attack
-      this.deal(AUTO_ATTACK, 'attack', 'Auto attack', 'physical', s.ad.total * (1 + s.critChance * (s.critDamage - 1)));
+      this.deal(AUTO_ATTACK, 'attack', 'Auto attack', 'physical', s.ad.total * (1 + this.critRate * (s.critDamage - 1)), true);
       this.trigger('attack');
       this.trigger('onhit');
       this.trigger('after');

@@ -3,7 +3,7 @@
 import type { CastSlot, ChampionData, DamageType, ItemData, Slot } from '../shared/types.ts';
 import { CAST_SLOTS, SLOTS } from '../shared/types.ts';
 import { defaultSequence, Fight, type Hit } from './sim.ts';
-import { CalcError, type Action, type Amount, type BuildInput, type ByType, type CalcRequest, type CalcResult, type DataSource, type SourceLine, type TargetInput } from './types.ts';
+import { CalcError, CRIT_MODES, type Action, type Amount, type BuildInput, type ByType, type CalcRequest, type CalcResult, type CritMode, type DataSource, type SourceLine, type TargetInput } from './types.ts';
 
 export const LIMITS = {
   items: 6,
@@ -41,6 +41,7 @@ interface Checked {
   build: BuildInput;
   target: TargetInput | null;
   sequence: Action[];
+  crits: CritMode;
 }
 
 function check(data: DataSource, req: CalcRequest): Checked {
@@ -89,7 +90,9 @@ function check(data: DataSource, req: CalcRequest): Checked {
     for (const a of ACTIONS) counts[a] = int(c.counts?.[a] ?? 0, `combo.counts.${a}`, 0, LIMITS.count);
     sequence = defaultSequence(counts);
   }
-  return { champ, items, build: { champion: champ.id, level, ranks, items: ids, options }, target, sequence };
+  const crits = c.crits ?? 'average';
+  if (!CRIT_MODES.includes(crits)) throw new CalcError('combo.crits', `combo.crits must be one of ${CRIT_MODES.join(', ')}`);
+  return { champ, items, build: { champion: champ.id, level, ranks, items: ids, options }, target, sequence, crits };
 }
 
 function lines(champ: ChampionData, hits: Hit[], spread: Fight['spread'], sequence: Action[]): SourceLine[] {
@@ -170,10 +173,26 @@ function sustain(c: Checked): { dps: Amount; timeToKill: number | null; caveats:
 
 export function calculate(data: DataSource, req: CalcRequest): CalcResult {
   const c = check(data, req);
-  const fight = new Fight(c.champ, c.items, c.build, c.target);
-  for (const a of c.sequence) fight.act(a);
-
+  const play = (crits: CritMode) => {
+    const f = new Fight(c.champ, c.items, c.build, c.target, { crits });
+    for (const a of c.sequence) f.act(a);
+    return f;
+  };
+  const fight = play(c.crits);
   const comboLines = lines(c.champ, fight.hits, fight.spread, c.sequence);
+
+  // A line with hits that can crit also gets its total in each way of counting them: the same combo,
+  // played again with no crits and with every one. A crit changes the target's health for what comes
+  // after it, so each is a whole fight of its own, not the hits rescaled.
+  if (fight.hits.some(h => h.crit)) {
+    const fights = Object.fromEntries(CRIT_MODES.map(m => [m, m === c.crits ? fight : play(m)])) as Record<CritMode, Fight>;
+    const critLines = new Set(CRIT_MODES.flatMap(m => fights[m].hits.filter(h => h.crit).map(h => h.line)));
+    const totals = Object.fromEntries(CRIT_MODES.map(m => [m, m === c.crits ? comboLines : lines(c.champ, fights[m].hits, fights[m].spread, c.sequence)])) as Record<CritMode, SourceLine[]>;
+    for (const l of comboLines) {
+      if (!critLines.has(l.key)) continue;
+      l.crits = Object.fromEntries(CRIT_MODES.map(m => [m, { ...totals[m].find(x => x.key === l.key)!.total }])) as Record<CritMode, Amount>;
+    }
+  }
   const total = zero(), types = byType();
   for (const h of fight.hits) {
     total.raw += h.raw; total.dealt += h.dealt;
@@ -200,6 +219,7 @@ export function calculate(data: DataSource, req: CalcRequest): CalcResult {
     },
     sequence: c.sequence,
     combo: {
+      crits: c.crits,
       total: round(total),
       byType: { physical: round(types.physical), magic: round(types.magic), true: round(types.true) },
       blocked: r2(total.raw - total.dealt),

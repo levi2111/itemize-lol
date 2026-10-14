@@ -1,0 +1,14 @@
+{
+ "about": "Where the game's stat icons sit on texticons.png, the sheet item tooltips draw them from. The game publishes no map of the sheet, so these were found by hand. `pixels` is a hash of the 20x20 tile's RGBA pixels: `npm run data:art` stops when one no longer matches, and `npm run data:art -- --accept` records the tiles as they are now once they have been looked at.",
+ "checked": "16.20.1",
+ "size": 20,
+ "icons": {
+  "hp": { "x": 97, "y": 49, "pixels": "b8cf0e4289c6094b" },
+  "mana": { "x": 1, "y": 1, "pixels": "50f1d9081ef61d77" },
+  "ad": { "x": 0, "y": 24, "pixels": "79ba2bd1a5153587" },
+  "ap": { "x": 96, "y": 24, "pixels": "0ca871a832dd3495" },
+  "armor": { "x": 0, "y": 48, "pixels": "f9cc243329277a95" },
+  "mr": { "x": 72, "y": 0, "pixels": "ff062003401077f1" },
+  "crit": { "x": 72, "y": 48, "pixels": "9cff749f54d4f2d3" }
+ }
+}

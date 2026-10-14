@@ -242,7 +242,10 @@ export function resolveChampion(champ: CompiledChampion, src: ChampionSrc | unde
   return out;
 }
 
-export function resolveItem(item: CompiledItem, src: ItemSrc | undefined, lock: Lock): { model: ItemModel; fingerprint?: string; issues: ModelIssue[] } {
+/** `original` is set for another shop's copy of a Rift item, bound with the Rift item's model: the copy
+    is then checked against what was reviewed for the original. Its stats are the copy's own and do
+    not count; a passive or tooltip that differs marks it stale. */
+export function resolveItem(item: CompiledItem, src: ItemSrc | undefined, lock: Lock, original?: CompiledItem): { model: ItemModel; fingerprint?: string; issues: ModelIssue[] } {
   if (!src) return { model: autoItemModel(item), issues: [] };
   try {
     const counters = new Set(Object.keys(src.counters ?? {}));
@@ -257,8 +260,8 @@ export function resolveItem(item: CompiledItem, src: ItemSrc | undefined, lock: 
     if (src.amps?.length) model.amps = src.amps.map(x => bindAmp(x, b));
     if (src.resists?.length) model.resists = src.resists.map(x => bindResist(x, b));
     for (const r of model.rules) if (r.note) model.notes.push(r.note);
-    const fingerprint = hash([shape(item, item.stats), src]);
-    const locked = lock.items[String(item.id)];
+    const fingerprint = hash([shape(item, (original ?? item).stats), src]);
+    const locked = lock.items[String((original ?? item).id)];
     if (locked && locked !== fingerprint) {
       model.status = 'stale';
       model.notes.push('This item changed since its model was last reviewed; numbers may be off.');

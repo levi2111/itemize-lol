@@ -1,6 +1,7 @@
 /* Stage 3: the pictures. The site serves its own copies of the game art, packed so that a
    whole picker arrives in one request: one sheet of every item icon, one of every champion
-   portrait, one strip of five ability icons per champion and one splash per champion.
+   portrait, one strip of five ability icons per champion and one splash per champion,
+   and one strip of the game's stat icons (the ones item tooltips put beside a stat), cut from its texticons.png.
    Originals are mirrored into data/raw/<patch>/art/; the packed files go to web/art/<version>/,
    where <version> is a hash of their contents, so they can be cached forever. */
 import { createHash } from 'node:crypto';
@@ -10,21 +11,29 @@ import { dirname, join } from 'node:path';
 import sharp from 'sharp';
 import type { ChampionIndexEntry } from '../server/dataset.ts';
 import type { ChampionData, ItemData, Slot } from '../shared/types.ts';
-import { CDRAGON_CDN, DDRAGON, get, pool } from './fetch.ts';
+import { CDRAGON, CDRAGON_CDN, DDRAGON, cdragonPath, get, pool } from './fetch.ts';
 import { DATA_DIR, ROOT, distDir, rawDir } from './paths.ts';
 
 const ITEM_PX = 64, CHAMPION_PX = 120, ABILITY_PX = 64, SPLASH_WIDTH = 960;
 const KIT: Slot[] = ['p', 'q', 'w', 'e', 'r'];
+const STAT_ICONS_PATH = join(ROOT, 'src', 'pipeline', 'stat-icons.json');
+interface StatIcons { about: string; checked: string; size: number; icons: Record<string, { x: number; y: number; pixels: string }> }
 
 /** One sheet of square tiles, read left to right, top to bottom, in the order of `ids`. */
 export interface ArtSheet { cols: number; rows: number; ids: (string | number)[] }
 /** web/art/index.json: what the site needs to find a picture. */
-export interface ArtIndex { version: string; patch: string; items: ArtSheet; champions: ArtSheet; kit: Slot[] }
+export interface ArtIndex {
+  version: string; patch: string; items: ArtSheet; champions: ArtSheet; kit: Slot[];
+  /** stats.webp: one strip, a tile per stat in this order */
+  stats: string[];
+}
 
 export interface ArtOptions {
   patch?: string;
   /** re-download originals that are already in the mirror */
   force?: boolean;
+  /** record the stat icons as they are now, after a person has looked at them (see stat-icons.json) */
+  accept?: boolean;
   log?: (msg: string) => void;
 }
 
@@ -91,6 +100,31 @@ export async function buildArt(opts: ArtOptions = {}): Promise<ArtIndex> {
     if (++done % 25 === 0 || done === champIds.length) log(`  kits and splashes ${done}/${champIds.length}`);
   });
 
+  // The stat icons. Nothing says where on the sheet each one is, so the positions are kept by hand
+  // and every tile is checked: an icon that moved or changed stops the build instead of showing the wrong one.
+  const icons: StatIcons = JSON.parse(await readFile(STAT_ICONS_PATH, 'utf8'));
+  const sheetPng = await original('texticons.png', `${CDRAGON}/${cdragonPath(patch)}/game/assets/ux/fonts/texticons.png`);
+  if (!sheetPng) throw new Error('texticons.png could not be downloaded: the stat icons cannot be cut');
+  const statIds = Object.keys(icons.icons), px = icons.size, changed: string[] = [];
+  const statTiles = await Promise.all(statIds.map(async k => {
+    const at = icons.icons[k]!;
+    const pixels = await sharp(sheetPng).extract({ left: at.x, top: at.y, width: px, height: px }).ensureAlpha().raw().toBuffer();
+    const h = createHash('sha256').update(pixels).digest('hex').slice(0, 16);
+    if (h !== at.pixels) { changed.push(k); at.pixels = h; }
+    return sharp(pixels, { raw: { width: px, height: px, channels: 4 } }).png().toBuffer();
+  }));
+  if (changed.length && !opts.accept) {
+    throw new Error(`stat icons changed on texticons.png: ${changed.join(', ')}. Look at the sheet (${join(mirror, 'texticons.png')}), fix the positions in src/pipeline/stat-icons.json if an icon moved, then run with --accept.`);
+  }
+  if (changed.length || (opts.accept && icons.checked !== patch)) {
+    icons.checked = patch;
+    await writeFile(STAT_ICONS_PATH, JSON.stringify(icons, null, 1) + '\n');
+    log(`  stat icons recorded as of ${patch}${changed.length ? `: ${changed.join(', ')} changed` : ''}`);
+  }
+  out.set('stats.webp', await sharp({ create: { width: statIds.length * px, height: px, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+    .composite(statTiles.map((input, i) => ({ input, left: i * px, top: 0 }))).webp({ lossless: true }).toBuffer());
+  log(`  stat icons ${statIds.length}`);
+
   const names = [...out.keys()].sort();
   const hash = createHash('sha256');
   for (const name of names) hash.update(name).update(out.get(name)!);
@@ -110,6 +144,7 @@ export async function buildArt(opts: ArtOptions = {}): Promise<ArtIndex> {
     items: { cols: itemCols, rows: Math.ceil(itemIds.length / itemCols), ids: itemIds },
     champions: { cols: champCols, rows: Math.ceil(champIds.length / champCols), ids: champIds },
     kit: KIT,
+    stats: statIds,
   };
   await writeFile(join(root, 'index.json'), JSON.stringify(art));
 

@@ -62,6 +62,26 @@ test('basic attacks use crit-chance-weighted damage and crit damage from items',
   near(res.combo.total.raw, s.ad.total * (1 + s.critChance * (s.critDamage - 1)));
 });
 
+test('crits: the combo counts them at the average, never or always; sustained damage stays on the average', () => {
+  const build = { champion: 'Yasuo', level: 11, ranks: { q: 5, w: 1, e: 3, r: 2 }, items: [3031, 3072, 3006] };
+  const run = (crits?: 'average' | 'never' | 'always') => calculate(data, { build, target: { hp: 2400, armor: 80, mr: 50 }, combo: { counts: { aa: 3, q: 2, e: 1 }, crits } });
+  const avg = run(), never = run('never'), always = run('always');
+  assert.equal(avg.combo.crits, 'average');
+  assert.ok(never.combo.total.dealt < avg.combo.total.dealt && avg.combo.total.dealt < always.combo.total.dealt);
+  assert.deepEqual(never.dps, avg.dps);
+  assert.deepEqual(always.timeToKill, avg.timeToKill);
+  // the autos: ad, ad x crit damage, and between them by the chance
+  const s = avg.stats, aa = line(avg, 'aa');
+  near(aa.crits!.never.raw, 3 * s.ad.total);
+  near(aa.crits!.always.raw, 3 * s.ad.total * s.critDamage);
+  near(aa.crits!.average.raw, aa.total.raw);
+  // every line that can crit reports all three, whichever way the combo counted; the rest report none
+  assert.deepEqual(line(never, 'q').crits, line(avg, 'q').crits);
+  assert.equal(line(always, 'q').total.raw, line(avg, 'q').crits!.always.raw);
+  assert.equal(line(avg, 'e').crits, undefined);
+  assert.throws(() => calculate(data, { build, target: null, combo: { counts: { aa: 1 }, crits: 'sometimes' as never } }), (e: unknown) => e instanceof CalcError && e.field === 'combo.crits');
+});
+
 test('attack speed: base + ratio x bonus, with level growth', () => {
   const kaisa = data.champion('Kaisa')!, b = kaisa.stats;
   const res = calculate(data, { build: { champion: 'Kaisa', level: 13, ranks: { q: 0, w: 0, e: 0, r: 0 }, items: [3006] }, target: null, combo: {} });

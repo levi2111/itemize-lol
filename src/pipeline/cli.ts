@@ -18,7 +18,7 @@ try {
     }
     case 'art': {
       const { buildArt } = await import('./art.ts');
-      await buildArt({ patch: arg('patch'), force: flag('force'), log });
+      await buildArt({ patch: arg('patch'), force: flag('force'), accept: flag('accept'), log });
       break;
     }
     case 'report': {

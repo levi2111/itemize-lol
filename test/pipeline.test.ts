@@ -99,6 +99,22 @@ test('format canaries pass on the built dataset', () => {
   assert.ok(res.passed >= 10);
 });
 
+test('each shop sells one item per name, and the Rift none of the items Data Dragon misfiles under it', () => {
+  const items = new Dataset().items;
+  for (const shop of ['sr', 'aram', 'arena'] as const) {
+    const names = items.filter(i => i.shops.includes(shop)).map(i => i.name);
+    assert.equal(new Set(names).size, names.length, `${shop} lists a name twice`);
+  }
+  const rift = items.filter(i => i.shops.includes('sr'));
+  // six-digit ids are other modes' copies, and Arena's prismatic items under stale ids
+  assert.ok(rift.every(i => i.id < 100_000));
+  // ARAM's Guardian's items are listed for the Rift as well, and are not sold there
+  for (const id of [2051, 3112, 3177, 3184]) assert.deepEqual(items.find(i => i.id === id)?.shops, ['aram']);
+  // Arena's copy of a Rift item is its own item
+  const ie = items.filter(i => i.name === 'Infinity Edge');
+  assert.ok(ie.some(i => i.shops.includes('sr')) && ie.some(i => i.shops.includes('arena') && !i.shops.includes('sr')));
+});
+
 test('automatic models read a stated hit count but refuse to guess one', () => {
   const samira = data.champion('Samira')!;
   const r = autoAbilityModel(samira, 'r');

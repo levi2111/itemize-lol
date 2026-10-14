@@ -50,7 +50,7 @@ Set `verified: ['q', 'r']` on the champion once a person has checked those slots
 | `count` | How many instances. Played one by one, so each sees the health the last one left. |
 | `over` | Seconds the damage takes to land, for anything that is not instant: a burn, a channel, a zone, a pet's attacks. See "Damage over time". |
 | `when` | The rule only fires when this is non-zero. |
-| `crit` | Damage of one instance when it crits. The engine then uses the crit-chance-weighted average. |
+| `crit` | Damage of one instance when it crits. The engine then uses the crit-chance-weighted average, or the crit or non-crit amount when the caller asks for every crit or none. |
 | `appliesOnHit` | `true`, or a fraction for reduced effectiveness: the hit also sets off on-hit effects. |
 | `cooldown` | Seconds before it can fire again. |
 | `then` | Counter updates after it fires: `'plasma += 1'`, `'plasma = 0'`, or a list of them. |
@@ -163,6 +163,6 @@ The total is unchanged. The result additionally carries the rule's damage per se
 
 - **Single target.** The site answers "how much does this do to one enemy". Count everything that would land on a lone target and say so in a note when that is generous (all missiles, every tick).
 - **One model, both views.** The same rules run in the combo and in the sustained simulation. Use `sustained` for effects that ramp: fully ramped when sustained, not at all in a short combo, with a note saying so.
-- **Averages for chance.** Crits are averaged by crit chance.
+- **Averages for chance.** Crits are averaged by crit chance. A caller can also ask for no crits or every crit, so in a damage formula `critChance` reads as the share of hits that crit: the chance, 0 or 1. Average by hand with `critChance` and the model follows that choice too; stat changes (`statMods`) still see the stat itself.
 - **Write the assumption down.** If a tooltip leaves something open and you chose, add a note. Notes reach the user.
 - **Test what is easy to get wrong.** `test/engine.test.ts` derives expected values from the dataset's own numbers, so tests pin the structure and survive balance patches.

@@ -243,12 +243,17 @@ export interface ChampionData {
   warnings: string[];
 }
 
+/** Summoner's Rift, ARAM, Arena. */
+export type ItemShop = 'sr' | 'aram' | 'arena';
+
 export interface ItemData {
   id: number;
   name: string;
   gold: number;
   tags: string[];
   plaintext: string;
+  /** the shops that sell it; ARAM's and Arena's copies of a Rift item are items of their own */
+  shops: ItemShop[];
   /** builds into other items: shown under Components in the picker */
   component: boolean;
   /** epicness tier from game data: 5+ is a completed item */

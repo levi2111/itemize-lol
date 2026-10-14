@@ -19,7 +19,7 @@
 </style>
 <style>
 /* Layout: the damage totals are a full-width display at the top and never leave the screen.
-   Everything else is one tab at a time underneath: Build, Target, Breakdown, Stats.
+   Everything else is one tab at a time underneath: Build, Target, Breakdown, More stats.
    This is the first layout of the site; receipt.html is the second, and web/app.js runs both. */
 :root{
   --bg:#0c2524;
@@ -103,14 +103,12 @@ body[data-target="raw"] .needs-target{opacity:.28;pointer-events:none}
 .patch b{color:var(--text);font-weight:600}
 
 /* ---------- the display: totals ---------- */
-.hero{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.85rem 2.5rem;padding:1rem 1.5rem 1.25rem;background:linear-gradient(180deg,var(--band),#0e2c2b);border-bottom:1px solid var(--rule)}
+.hero{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.85rem 2.5rem;padding:.9rem 1.5rem 1.15rem;background:linear-gradient(180deg,var(--band),#0e2c2b);border-bottom:1px solid var(--rule)}
 .hero-top{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:1rem}
-.hero-what{display:flex;align-items:baseline;gap:.9rem}
-.hero-what .hint{color:var(--dim)}
-.hero-what .hint b{color:var(--text);font-weight:600}
-.hero-mode{display:flex;align-items:center;gap:.8rem}
-.totals{display:flex;align-items:flex-end;gap:3.2rem}
-.tot{display:grid;gap:.45rem;min-width:15rem}
+.hero-mode{display:flex;align-items:center;gap:.7rem}
+.hero-mode .seg+.lbl{margin-left:.6rem}
+.totals{display:flex;align-items:flex-end;gap:2.6rem}
+.tot{display:grid;gap:.45rem;min-width:13rem}
 .tot-id{display:flex;align-items:center;gap:.5rem;font-size:.98rem;font-weight:700}
 .tot-n{font-size:4.6rem;font-weight:800;font-stretch:94%;line-height:.86;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--dim)}
 .tot-n i{font-style:normal}
@@ -120,16 +118,12 @@ body[data-compare="off"] .tot{min-width:19rem}
 .tot-bar{height:.4rem;background:rgba(236,231,216,.12);border-radius:1px;overflow:hidden}
 .tot-bar i{display:block;height:100%;width:var(--w,0%);background:var(--c);transition:width .2s}
 body[data-target="raw"] .tot-bar{visibility:hidden}
-.tot-cap{font-size:.82rem;color:var(--dim)}
+.tot-cap{font-size:.82rem;color:var(--dim);white-space:nowrap}
 .tot-cap b{color:var(--text)}
-.lead{display:grid;gap:.25rem;padding-bottom:1.75rem}
-.lead-main{display:flex;align-items:center;gap:.5rem;font-size:1.3rem;font-weight:800;white-space:nowrap}
-.lead-main i{font-style:normal;color:var(--c)}
-.lead-sub{font-size:.84rem;color:var(--dim)}
-.hero-side{display:flex;align-items:flex-end;gap:2.8rem;padding-bottom:.15rem}
-.metric{display:grid;gap:.55rem}
-.metric-v{display:flex;gap:1.3rem}
-.mv{display:flex;align-items:center;gap:.45rem;font-family:var(--font-mono);font-size:1.5rem;font-weight:500;font-variant-numeric:tabular-nums;color:var(--dim);white-space:nowrap}
+.hero-side{display:grid;align-content:end;gap:.8rem;padding-bottom:.2rem}
+.metric{display:grid;grid-template-columns:10.6rem auto;align-items:center;column-gap:.8rem}
+.metric-v{display:flex;gap:1.2rem}
+.mv{display:flex;align-items:center;gap:.45rem;font-family:var(--font-mono);font-size:1.3rem;font-weight:500;font-variant-numeric:tabular-nums;color:var(--dim);white-space:nowrap}
 .mv i{font-style:normal}
 .mv.win,body[data-compare="off"] .mv{color:var(--text);font-weight:600}
 
@@ -173,8 +167,10 @@ body[data-target="raw"] .tot-bar{visibility:hidden}
 .ruler button.past[data-r]::before{color:var(--text)}
 .ruler button.now span{background:var(--text);color:var(--ink);font-weight:700}
 
-.skills{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.6rem 2.4rem;align-items:end}
-.skills .sec-head{grid-column:1/-1;justify-content:flex-start;gap:1.2rem}
+.skills{display:grid;gap:.6rem;align-content:start}
+.skills .sec-head{justify-content:flex-start;align-items:center;gap:.9rem}
+.skills .sec-head .hint{margin-left:auto}
+.rank-same{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.6rem 2.4rem;align-items:end}
 .skill-row{display:flex;gap:1.1rem}
 .skill{display:grid;gap:.4rem;width:3.5rem}
 .skill-ico{position:relative;width:3.5rem;height:3.5rem;border:1px solid var(--rule);border-radius:3px;background:var(--well)}
@@ -196,7 +192,8 @@ body[data-target="raw"] .tot-bar{visibility:hidden}
 .pts.over b{color:var(--warn)}
 
 .loadout{position:relative;display:grid;grid-template-columns:1fr 1fr;row-gap:.9rem;align-content:start;padding-top:1.1rem;border-top:1px solid var(--rule)}
-.loadout>.sec-head{grid-column:1/-1}
+.loadout>.sec-head{grid-column:1/-1;justify-content:flex-start;align-items:center}
+.loadout>.sec-head .hint{margin-left:auto}
 .build{display:grid;gap:.7rem;align-content:start;min-width:0}
 .build.a{padding-right:2.4rem}
 .build.b,.add-b{margin-left:0}
@@ -224,7 +221,7 @@ body[data-compare="on"] .slot.uniq::after{content:"";position:absolute;left:0;ri
 .add-b span.hint{font-weight:400}
 .add-b:hover{border-color:var(--b);color:var(--text)}
 
-.picker{position:absolute;left:0;right:0;bottom:calc(100% + .6rem);height:14rem;z-index:20;display:grid;grid-template-columns:26rem minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;background:var(--well);border:1px solid var(--faint);border-radius:4px;box-shadow:0 1rem 2rem rgba(0,0,0,.5)}
+.picker{position:absolute;left:0;right:0;bottom:calc(100% + .6rem);height:16rem;z-index:20;display:grid;grid-template-columns:26rem minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;background:var(--well);border:1px solid var(--faint);border-radius:4px;box-shadow:0 1rem 2rem rgba(0,0,0,.5)}
 .picker-ctl{display:grid;align-content:start;gap:.6rem;padding:.8rem;border-right:1px solid var(--rule);min-height:0;overflow:hidden}
 .picker-top{display:flex;align-items:center;justify-content:space-between;gap:.6rem}
 .picker-for{display:flex;align-items:center;gap:.45rem;font-weight:700;font-size:.9rem;white-space:nowrap}
@@ -293,8 +290,9 @@ input[type=range]::-moz-range-thumb{width:.85rem;height:.85rem;border:0;backgrou
 body[data-compare="off"] .row{grid-template-columns:2.6rem 14rem 4.8rem minmax(6rem,1fr) 5rem 3.6rem}
 .cols{padding:0 0 .5rem;border-bottom:1px solid var(--rule);font-size:.7rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
 .cols>*:nth-child(n+5){justify-self:end}
-.lines{flex:none;display:grid;grid-auto-rows:2.5rem}
-.line{border-bottom:1px solid rgba(37,80,77,.6)}
+.lines{flex:none;display:grid}
+.line{height:2.5rem;border-bottom:1px solid rgba(37,80,77,.6)}
+.line.crits{border-bottom-color:transparent}
 .q{display:flex;align-items:baseline;justify-content:center;font-family:var(--font-mono);font-size:.84rem;color:var(--faint)}
 .q input{width:1.3rem;padding:0;border:0;border-bottom:1px dotted var(--faint);background:none;color:var(--text);font-weight:600;text-align:right;appearance:textfield;-moz-appearance:textfield}
 .q input::-webkit-inner-spin-button{-webkit-appearance:none}
@@ -329,16 +327,116 @@ body[data-compare="on"] .n.win{color:var(--text);font-weight:700}
 .vd p{margin:0;color:var(--dim)}
 .vd p b{color:var(--text)}
 
-/* ---------- stats tab ---------- */
-.pane-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3.5rem;align-content:start}
-.srow{display:grid;grid-template-columns:minmax(0,1fr) 4.6rem 4.6rem 4.4rem;column-gap:.8rem;align-items:baseline;padding:.75rem 0;border-bottom:1px solid rgba(37,80,77,.6)}
-body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 5rem 9.5rem}
+/* ---------- more stats tab: every stat, then where each build is ahead ---------- */
+.pane-more{display:grid;align-content:start;gap:.9rem;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.more-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3.5rem}
+.srow{display:grid;grid-template-columns:minmax(0,1fr) 4.8rem 4.8rem 4.4rem;column-gap:.8rem;align-items:baseline;padding:.28rem 0;border-bottom:1px solid rgba(37,80,77,.6)}
+body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 5rem 10rem}
 .srow.shead{padding:0 0 .5rem;border-bottom-color:var(--rule);align-items:center}
 .srow>*:nth-child(n+2){justify-self:end}
 .srow .sn{font-weight:600}
 .srow .note{font-size:.8rem;color:var(--faint);white-space:nowrap}
 .srow.same .n,.srow.same .sn{color:var(--faint)}
 .srow.same .g{color:var(--faint);font-weight:400}
+/* where each build is ahead: the stats one build has more of, by how much, A's left and B's right */
+.ahead{display:grid;gap:.6rem;padding-top:.9rem;border-top:1px solid var(--rule)}
+.ahead>.sec-head{justify-content:flex-start;align-items:center}
+.ah-cols{display:grid;grid-template-columns:repeat(2,minmax(0,26rem));column-gap:3rem}
+.ah{display:grid;align-content:start}
+.ah.a{padding-right:3rem;border-right:1px solid var(--rule)}
+.ah-head{display:flex;align-items:center;gap:.5rem;padding-bottom:.4rem;font-weight:700}
+.ah-row{display:grid;grid-template-columns:5.2rem minmax(0,1fr);align-items:baseline;padding:.24rem 0;border-bottom:1px solid rgba(37,80,77,.6)}
+.ah-row b{font-family:var(--font-mono);font-size:.98rem;font-weight:700;color:var(--c);font-variant-numeric:tabular-nums}
+.ah-none{padding:.24rem 0;font-size:.84rem;color:var(--faint)}
+.ah-same{margin:0;font-size:.8rem;color:var(--faint)}
+.ah-same b{color:var(--dim);font-weight:600}
+
+/* ---------- the combo: one line in the band, edited in a dropdown ---------- */
+.ibtn{width:1.65rem;height:1.65rem;display:inline-grid;place-items:center;flex:none;border:1px solid var(--rule);border-radius:3px;background:var(--well);color:var(--dim)}
+.ibtn svg{width:.95rem;height:.95rem}
+.ibtn:hover,.ibtn[aria-expanded="true"]{border-color:var(--text);color:var(--text)}
+.combo{display:flex;align-items:center;gap:.75rem}
+.combo-sum{font-size:.92rem;color:var(--text);white-space:nowrap}
+.combo-sum:hover{text-decoration:underline;text-decoration-color:var(--faint);text-underline-offset:.2em}
+.menu.combo-menu{left:0;right:auto;width:20rem;gap:.15rem}
+.step{display:grid;grid-template-columns:1.7rem minmax(0,1fr) 1.5rem 1.7rem 1.5rem;align-items:center;column-gap:.5rem;height:2.15rem;padding:0 .3rem;border-radius:3px}
+.step:hover{background:rgba(236,231,216,.05)}
+.step .sk{position:relative;width:1.7rem;height:1.7rem;display:grid;place-items:center;overflow:hidden;border:1px solid var(--rule);border-radius:2px;font-family:var(--font-mono);font-size:.6rem;font-weight:700;color:var(--dim);background:var(--bg)}
+.step .sk .ico{position:absolute;inset:0}
+.step .nm{display:flex;align-items:baseline;gap:.4rem;min-width:0;font-size:.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.step .nm small{font-family:var(--font-mono);font-size:.62rem;color:var(--faint)}
+.step button{width:1.5rem;height:1.5rem;display:grid;place-items:center;border:1px solid var(--rule);border-radius:2px;font-family:var(--font-mono);font-size:.9rem;color:var(--dim)}
+.step button:hover{color:var(--ink);background:var(--text);border-color:var(--text)}
+.step output{text-align:center;font-family:var(--font-mono);font-size:.92rem;font-weight:700}
+.step.zero output,.step.zero .nm{color:var(--faint)}
+.step.zero .sk .ico{filter:grayscale(1) brightness(.5)}
+.step.dead{opacity:.55}
+.step.dead .none{grid-column:3/6;justify-self:end;font-size:.74rem;color:var(--faint)}
+.combo-foot{display:flex;justify-content:space-between;align-items:center;gap:.6rem;margin-top:.3rem;padding:.45rem .3rem 0;border-top:1px solid var(--rule)}
+/* the kit strip's five icons, for the places other than the ranks row that show one */
+.ico.kit.p{background-position:0 0} .ico.kit.q{background-position:25% 0} .ico.kit.w{background-position:50% 0} .ico.kit.e{background-position:75% 0} .ico.kit.r{background-position:100% 0}
+
+/* ---------- stats at a glance, beside the totals ---------- */
+.glance{display:grid;grid-template-columns:auto repeat(7,auto);align-self:flex-end;align-items:center;row-gap:.3rem;margin:0 0 1.55rem .4rem}
+.gl-h{padding:0 .75rem .1rem;text-align:right;border-left:1px solid var(--rule);cursor:help}
+.gl-h.first{border-left:0;padding:0 .3rem 0 0;cursor:default}
+/* the game's stat icons: one strip, a tile per stat, in the order the art index gives */
+.si{display:inline-block;width:1rem;height:1rem;vertical-align:-.15rem;background:var(--art-stats) no-repeat;background-size:calc(var(--stats-n,7)*100%) 100%;opacity:0;transition:opacity .18s}
+.has-stats .si{opacity:1}
+.gl-t{padding-right:.3rem}
+.gl-v{padding:0 .75rem;font-family:var(--font-mono);font-size:1.05rem;font-weight:500;font-variant-numeric:tabular-nums;text-align:right;border-left:1px solid var(--rule);white-space:nowrap;cursor:help}
+.gl-v.win{color:var(--c);font-weight:700}
+.gl-v.lose{color:var(--dim)}
+.gl-v.none{color:var(--faint)}
+
+/* ---------- ranks per build: one compact row each, differences underlined like items ---------- */
+#rank-link[aria-pressed="true"] .i-unlink,#rank-link[aria-pressed="false"] .i-link{display:none}
+#rank-link[aria-pressed="false"]{color:var(--text);border-color:var(--faint)}
+body[data-compare="on"][data-ranks="split"] .rank-same{display:none}
+body:not([data-ranks="split"]) .rank-split{display:none!important}
+.rank-split{display:grid;gap:.55rem;padding-bottom:.4rem}
+.rrow{display:flex;align-items:center;gap:1.15rem}
+.rs{position:relative;display:flex;align-items:center;gap:.45rem;padding-bottom:.3rem}
+.rs .ib{position:relative;width:2.4rem;height:2.4rem;border:1px solid var(--rule);border-radius:3px;background:var(--well)}
+.rs .ib .k{position:absolute;left:-.3rem;top:-.35rem;font-family:var(--font-mono);font-size:.56rem;font-weight:700;line-height:1.35;padding:0 .22rem;background:var(--bg);border:1px solid var(--faint);border-radius:2px}
+.rs .pips{display:flex;gap:.14rem;height:.62rem}
+.rs .pip{width:.5rem}
+.rs b{font-family:var(--font-mono);font-size:.84rem;min-width:.6rem}
+.rs.zero .ico{filter:grayscale(1) brightness(.5)}
+.rs.diff::after{content:"";position:absolute;left:0;right:0;bottom:0;height:.16rem;background:var(--c);border-radius:1px}
+.rrow .plan{padding:0 0 .3rem;margin-left:.4rem;gap:.7rem}
+.rrow .plan select{font-size:.76rem;padding:.26rem 1.6rem .26rem .5rem}
+#rank-split:not(.has-kit) .ib{animation:wait .7s ease-in-out infinite alternate}
+
+/* ---------- the shops the item picker draws from ---------- */
+.shop-now{display:inline-flex;align-items:center;gap:.4rem;font-size:.78rem;font-weight:600;color:var(--dim);border:1px solid var(--rule);border-radius:3px;padding:.18rem .5rem;background:var(--well)}
+.shop-now:hover{border-color:var(--text);color:var(--text)}
+.shop{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem;padding-top:.55rem;border-top:1px solid var(--rule)}
+.shop .lbl{margin-right:.35rem}
+.chip.locked{cursor:default}
+.chip.locked:hover{color:var(--ink)}
+/* an item another shop sells, and the Rift does not, carries its shop's name */
+.pi .md,.slot .md{position:absolute;left:0;right:0;bottom:0;font-family:var(--font-mono);font-size:.5rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;text-align:center;line-height:1.35;color:var(--text);background:rgba(8,28,27,.88)}
+.grp{display:flex;align-items:baseline;gap:.6rem}
+.grp em{font-style:normal;font-weight:400;letter-spacing:0;text-transform:none}
+.miss{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:.8rem;padding:.5rem .6rem;border:1px dashed var(--faint);border-radius:3px;font-size:.8rem;color:var(--dim)}
+
+/* ---------- crits: one hit of a line that can crit, without, with, and on average ---------- */
+.critrow{display:grid;grid-template-columns:2.6rem minmax(0,1fr);column-gap:.9rem;align-items:start;height:1.75rem;border-bottom:1px solid rgba(37,80,77,.6)}
+.cr{display:flex;align-items:center;gap:1.7rem;font-size:.74rem;color:var(--faint);white-space:nowrap;margin-top:-.2rem}
+.cr-l{display:flex;align-items:center;gap:.4rem;font-size:.64rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);cursor:help}
+.cr-l::before{content:"";width:.55rem;height:.55rem;border-left:1px solid var(--faint);border-bottom:1px solid var(--faint);margin-top:-.35rem}
+.cr-b{display:flex;align-items:center;gap:.85rem}
+.cr-b:empty{display:none}
+.cv b{font-family:var(--font-mono);font-size:.8rem;font-weight:500;color:var(--dim);margin-right:.3rem}
+.cv em{font-style:normal;font-family:var(--font-mono);font-size:.7rem;margin-left:.25rem}
+.cv[title]{cursor:help}
+.cv.on{color:var(--dim)}
+.cv.on b{color:var(--text);font-weight:700}
+.cb{display:grid;grid-template-columns:1.35rem minmax(0,1fr);gap:.15rem .7rem;align-items:center;font-size:.86rem;color:var(--dim)}
+.cb b{font-family:var(--font-mono);font-weight:600;color:var(--text)}
+.cb p{grid-column:2;margin:0;font-size:.76rem;color:var(--faint)}
+.notes b{color:var(--text);font-weight:600}
 
 /* ---------- champion picker ---------- */
 .veil{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:rgba(4,16,15,.74)}
@@ -450,8 +548,25 @@ body:not(.has-items) .slot:not(.empty),#skill-row:not(.has-kit) .skill-ico{anima
   <!-- the display: always on screen -->
   <section class="hero" aria-label="Damage totals">
     <div class="hero-top">
-      <div class="hero-what"><span class="lbl">Combo damage</span><span class="hint"><span id="h-ctx"></span>. <span id="h-combo"></span>. <b id="h-mode"></b></span></div>
+      <div class="combo">
+        <span class="lbl">Combo</span>
+        <button class="combo-sum menu-btn" id="combo-sum" aria-haspopup="true" aria-expanded="false" aria-controls="combo-menu" title="Change the combo"></button>
+        <div class="set">
+          <button class="ibtn menu-btn" id="combo-btn" aria-haspopup="true" aria-expanded="false" aria-controls="combo-menu" aria-label="Change the combo" title="Change the combo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></button>
+          <div class="menu combo-menu" id="combo-menu" role="dialog" aria-label="The combo" hidden>
+            <span class="lbl">Casts in the combo</span>
+            <div id="steps" style="display:contents"></div>
+            <div class="combo-foot"><span class="hint">Also in the Breakdown's Qty column</span><button class="act" id="combo-reset" title="Three autos and one of each ability that deals damage">Reset</button></div>
+          </div>
+        </div>
+      </div>
       <div class="hero-mode">
+        <span class="lbl">Crits</span>
+        <div class="seg" id="crit-seg" role="radiogroup" aria-label="Count critical strikes as">
+          <button role="radio" data-crit="average" aria-checked="true" title="Each hit that can crit deals its average at the build's crit chance">Average</button>
+          <button role="radio" data-crit="never" aria-checked="false" title="Nothing crits: the least this combo does">Never</button>
+          <button role="radio" data-crit="always" aria-checked="false" title="Everything that can crit does: the most this combo does">Always</button>
+        </div>
         <span class="lbl">Show as</span>
         <div class="seg" id="tseg" role="radiogroup" aria-label="Show damage as">
           <button role="radio" data-t="raw" aria-checked="false">Raw output</button>
@@ -473,10 +588,7 @@ body:not(.has-items) .slot:not(.empty),#skill-row:not(.has-kit) .skill-ico{anima
         <div class="tot-bar"><i id="h-bar-b"></i></div>
         <div class="tot-cap" id="h-cap-b"></div>
       </div>
-      <div class="lead b only-cmp">
-        <div class="lead-main"><span class="tag b sm">B</span>ahead by <i>–</i></div>
-        <div class="lead-sub"><span>–</span> on this combo</div>
-      </div>
+      <div class="glance" id="glance" aria-label="Stats at a glance"></div>
     </div>
     <div class="hero-side">
       <div class="metric">
@@ -499,8 +611,8 @@ body:not(.has-items) .slot:not(.empty),#skill-row:not(.has-kit) .skill-ico{anima
   <nav class="tabs" role="tablist" aria-label="Details">
     <button class="tab" role="tab" data-tab="build" aria-selected="true"><b>Build</b><span class="sum" id="ts-build"></span><span class="key">1</span></button>
     <button class="tab" role="tab" data-tab="target" aria-selected="false"><b>Target</b><span class="sum" id="ts-target"></span><span class="key">2</span></button>
-    <button class="tab" role="tab" data-tab="break" aria-selected="false"><b>Breakdown</b><span class="sum">Damage by source</span><span class="key">3</span></button>
-    <button class="tab" role="tab" data-tab="stats" aria-selected="false"><b>Stats</b><span class="sum" id="ts-stats"></span><span class="key">4</span></button>
+    <button class="tab" role="tab" data-tab="break" aria-selected="false"><b>Breakdown</b><span class="sum">Damage by source, crits split out</span><span class="key">3</span></button>
+    <button class="tab" role="tab" data-tab="stats" aria-selected="false"><b>More stats</b><span class="sum" id="ts-stats"></span><span class="key">4</span></button>
   </nav>
 
   <main class="panes">
@@ -523,7 +635,12 @@ body:not(.has-items) .slot:not(.empty),#skill-row:not(.has-kit) .skill-ico{anima
         </div>
 
         <div class="skills">
-          <div class="sec-head"><span class="lbl">Ability ranks</span><span class="hint">Click a pip to set a rank</span></div>
+          <div class="sec-head">
+            <span class="lbl">Ability ranks</span>
+            <button class="ibtn only-cmp" id="rank-link" aria-pressed="true"><svg class="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><svg class="i-unlink" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18.84 12.25 1.72-1.71h-.02a5.004 5.004 0 0 0-.12-7.07 5.006 5.006 0 0 0-6.95 0l-1.72 1.71"/><path d="m5.17 11.75-1.71 1.71a5.004 5.004 0 0 0 .12 7.07 5.006 5.006 0 0 0 6.95 0l1.71-1.71"/><path d="M8 2v3M2 8h3M16 19v3M19 16h3"/></svg></button>
+            <span class="hint">Click a pip to set a rank</span>
+          </div>
+          <div class="rank-same">
           <div class="skill-row" id="skill-row">
             <div class="skill passive" data-k="p"><div class="skill-ico"><i class="ico kit"></i><span class="k">P</span></div><div class="pips-none">passive</div></div>
             <div class="skill" data-k="q"><div class="skill-ico"><i class="ico kit"></i><span class="k">Q</span><span class="rk"></span></div><div class="pips"></div></div>
@@ -544,14 +661,16 @@ body:not(.has-items) .slot:not(.empty),#skill-row:not(.has-kit) .skill-ico{anima
             </select>
             <span class="pts" id="pts"><b>13</b> of 13 points spent</span>
           </div>
+          </div>
+          <div class="rank-split only-cmp" id="rank-split"></div>
         </div>
       </div>
 
       <div class="loadout" id="builds">
         <div class="sec-head">
           <span class="lbl">Items</span>
-          <span class="hint only-cmp">Both builds use the champion, level and ranks above. Underlined items differ.</span>
-          <span class="hint only-solo">Click a slot to change it</span>
+          <button class="shop-now" id="shop-now" title="The shops the item picker draws from"></button>
+          <span class="hint" id="items-hint"></span>
         </div>
         <div class="build a" data-b="a">
           <div class="b-head"><span class="tag a sm">A</span><input class="b-name" id="name-a" value="On-hit" aria-label="Name of build A" spellcheck="false"><span class="b-gold"><b>0</b> gold</span>
@@ -563,13 +682,19 @@ body:not(.has-items) .slot:not(.empty),#skill-row:not(.has-kit) .skill-ico{anima
             <div class="b-acts"><button class="act" id="copy-a" title="Start build B from build A's items">Copy A</button><button class="act" id="rm-b" title="Remove build B">Remove</button></div></div>
           <div class="slots"></div>
         </div>
-        <button class="add-b only-solo" id="add-b"><span class="tag b sm">B</span>Add a second build to compare<span class="hint">Same champion, level and ranks</span></button>
+        <button class="add-b only-solo" id="add-b"><span class="tag b sm">B</span>Add a second build to compare<span class="hint">Same champion and level</span></button>
 
         <div class="picker" id="picker" role="dialog" aria-label="Choose an item" hidden>
           <div class="picker-ctl">
             <div class="picker-top"><span class="picker-for" id="picker-for"></span><button class="esc" id="picker-x">Esc</button></div>
             <input class="search" type="search" id="item-q" placeholder="Search items" autocomplete="off" aria-label="Search items">
             <div class="chips" id="item-chips"></div>
+            <div class="shop" id="shop">
+              <span class="lbl">Shop</span>
+              <button class="chip locked" aria-pressed="true" title="Always included">Summoner's Rift</button>
+              <button class="chip" data-shop="aram" aria-pressed="false" title="Add ARAM's own items">+ ARAM</button>
+              <button class="chip" data-shop="arena" aria-pressed="false" title="Add Arena's own items">+ Arena</button>
+            </div>
           </div>
           <div class="picker-grid" id="item-grid"></div>
           <div class="picker-foot" id="item-foot"></div>
@@ -660,8 +785,11 @@ body:not(.has-items) .slot:not(.empty),#skill-row:not(.has-kit) .skill-ico{anima
       </aside>
     </section>
 
-    <!-- 4. stats -->
-    <section class="pane pane-stats" data-pane="stats" role="tabpanel" aria-label="Stats" id="stats-pane" hidden></section>
+    <!-- 4. more stats -->
+    <section class="pane pane-more" data-pane="stats" role="tabpanel" aria-label="More stats" hidden>
+      <div class="more-grid" id="more-grid"></div>
+      <div class="ahead" id="ahead"></div>
+    </section>
   </main>
   <footer class="legal" id="legal"></footer>
 </div>

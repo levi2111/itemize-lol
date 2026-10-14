@@ -28,7 +28,12 @@ export interface ComboInput {
   counts?: Partial<Record<Action, number>>;
   /** or the exact order, which matters for effects that read the target's health or stack */
   sequence?: Action[];
+  /** how critical strikes count in the combo: at the build's crit chance (the default), none, or every one that can.
+      Sustained damage and time to kill always use the average */
+  crits?: CritMode;
 }
+export type CritMode = 'average' | 'never' | 'always';
+export const CRIT_MODES: readonly CritMode[] = ['average', 'never', 'always'];
 
 export interface CalcRequest {
   build: BuildInput;
@@ -57,6 +62,8 @@ export interface SourceLine {
   parts: { id: string; label: string; type: DamageType; hits: number; total: Amount; over?: OverTime }[];
   /** set when part of the line is not instant: those parts taken together */
   over?: OverTime;
+  /** set when the line holds hits that can crit: its total with no crits, at the build's crit chance, and with every one */
+  crits?: Record<CritMode, Amount>;
 }
 
 /** Damage that takes time to land: a burn, a channel, a zone the target stands in. */
@@ -102,6 +109,8 @@ export interface CalcResult {
   /** the order the combo was played in */
   sequence: Action[];
   combo: {
+    /** how critical strikes were counted */
+    crits: CritMode;
     total: Amount;
     byType: ByType;
     /** raw minus dealt: what armor and magic resist took */

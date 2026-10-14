@@ -123,7 +123,19 @@ export async function buildDataset(opts: BuildOptions = {}): Promise<BuildReport
   // ---- items ----
   const compiledItems = compileItems(ddItems, itemsBin, table, clog);
   compiledItems.warnings.forEach(mismatch);
+  // ARAM's and Arena's copies of a Rift item have ids of their own, and use the Rift item's model when it binds
+  const riftByName = new Map(compiledItems.items.filter(i => i.shops.includes('sr')).map(i => [i.name, i]));
   const items: ItemData[] = compiledItems.items.map(it => {
+    const original = itemModels.has(it.id) ? undefined : riftByName.get(it.name);
+    if (original && itemModels.has(original.id)) {
+      const { model, issues } = resolveItem(it, itemModels.get(original.id)!.src, lock, original);
+      // a copy the model does not fit falls back to its estimate quietly: the model was written for the original
+      if (issues.length) model.notes = model.notes.filter(n => !n.startsWith('A hand-written model exists'));
+      model.notes = model.notes.map(n => n.startsWith('This item changed since') ? `This copy's passive differs from the Summoner's Rift item's, whose model it uses; numbers may be off.` : n);
+      report.coverage.items[model.status]++;
+      if (model.status === 'stale') report.stale.push(`item ${it.id} ${it.name} (${it.shops.join(', ')} copy of ${original.id})`);
+      return { ...it, model };
+    }
     const src = itemModels.get(it.id);
     const { model, fingerprint, issues } = resolveItem(it, src?.src, lock);
     report.modelIssues.push(...issues);

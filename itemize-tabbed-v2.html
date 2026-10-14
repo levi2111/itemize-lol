@@ -1,0 +1,1266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>itemize.lol tabbed wireframe v2</title>
+<style>
+/* Archivo and IBM Plex Mono from the site's own copies, so this file opens straight from the repository root. */
+@font-face{font-family:"Archivo";font-style:normal;font-weight:100 900;font-stretch:62% 125%;font-display:swap;src:url(web/fonts/archivo-v25.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:400;font-display:swap;src:url(web/fonts/plex-mono-v20-400.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:500;font-display:swap;src:url(web/fonts/plex-mono-v20-500.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:600;font-display:swap;src:url(web/fonts/plex-mono-v20-600.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:700;font-display:swap;src:url(web/fonts/plex-mono-v20-700.woff2) format("woff2")}
+</style>
+<style>
+/* Wireframe v2 of the tabs layout (web/index.html), drawn over the page as it is today.
+   Six changes, each marked with a numbered pin; a pin opens what changed and what it needs.
+   The numbers are the engine's (Yasuo, level 11, against the 2,400 HP / 80 armor / 50 MR dummy),
+   computed once: the crit and rank switches swap between those results, and the combo steppers
+   rescale each line by its count. Nothing here calls the API. */
+:root{
+  --bg:#0c2524;
+  --band:#123534;
+  --well:#081c1b;
+  --rule:#25504d;
+  --text:#ece7d8;
+  --dim:#a3beb7;
+  --faint:#6f948d;
+  --ink:#141714;
+  --a:#eef035;
+  --b:#ff7fb2;
+  --phys:#f29a4a;
+  --magic:#6fb6f2;
+  --warn:#ffb05c;
+  --note:#b9a4ff;         /* wireframe annotations only, never part of the site */
+  --font-ui:"Archivo",system-ui,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+  --art-items:url(web/art/ad3293e668/items.webp);
+  --items-cols:15;--items-rows:15;
+  --art-kit:url(web/art/ad3293e668/kit/Yasuo.webp);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{height:100%;font-size:clamp(11.5px,min(1.04vw,1.93vh),21px);color-scheme:dark}
+body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size:.9rem;line-height:1.3;-webkit-font-smoothing:antialiased}
+@media (max-width:1100px),(max-height:590px){body{overflow:auto}}
+button,input,select{font:inherit;color:inherit;margin:0}
+button{background:none;border:0;padding:0;cursor:pointer;text-align:inherit}
+img{display:block}
+:focus-visible{outline:2px solid var(--a);outline-offset:2px}
+[hidden]{display:none!important}
+
+body[data-compare="off"] .only-cmp,
+body[data-compare="on"] .only-solo{display:none!important}
+
+.a{--c:var(--a)} .b{--c:var(--b)}
+
+.app{height:100%;min-width:95.5rem;min-height:51.4rem;display:grid;grid-template-rows:3.1rem auto auto minmax(0,1fr) auto}
+
+.lbl{font-size:.72rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
+.hint{font-size:.8rem;color:var(--faint)}
+.sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:.8rem}
+.key{font-family:var(--font-mono);font-size:.62rem;border:1px solid currentColor;border-radius:2px;padding:0 .3rem;opacity:.7}
+.tag{display:inline-grid;place-items:center;flex:none;font-weight:800;font-style:normal;color:var(--ink);background:var(--c);border-radius:2px;line-height:1}
+.tag.xs{width:1.1rem;height:1.1rem;font-size:.7rem}
+.tag.sm{width:1.35rem;height:1.35rem;font-size:.82rem}
+
+.seg{display:inline-grid;grid-auto-flow:column;gap:2px;padding:2px;border:1px solid var(--rule);background:var(--well);border-radius:4px}
+.seg button{display:flex;align-items:center;justify-content:center;gap:.4rem;padding:.4rem .95rem;font-size:.82rem;font-weight:600;color:var(--dim);border-radius:3px;white-space:nowrap}
+.seg button:hover{color:var(--text)}
+.seg button[aria-checked="true"]{background:var(--text);color:var(--ink)}
+.seg .vs{font-weight:400;opacity:.7}
+.seg.sm button{padding:.22rem .65rem;font-size:.74rem}
+.chip{font-size:.76rem;font-weight:600;padding:.22rem .6rem;border:1px solid var(--rule);border-radius:3px;color:var(--dim);white-space:nowrap}
+.chip:hover{color:var(--text);border-color:var(--faint)}
+.chip[aria-pressed="true"]{background:var(--text);color:var(--ink);border-color:var(--text)}
+.search{background:rgba(236,231,216,.06);border:1px solid var(--rule);border-radius:3px;padding:.42rem .7rem;font-size:.88rem;width:100%;min-width:0}
+.search::placeholder{color:var(--faint)}
+.search:focus{outline:0;border-color:var(--text)}
+.esc{font-family:var(--font-mono);font-size:.68rem;border:1px solid var(--rule);border-radius:3px;padding:.3rem .5rem;color:var(--dim)}
+.esc:hover{border-color:var(--text);color:var(--text)}
+.btn{border:1px solid var(--rule);border-radius:3px;padding:.36rem .8rem;font-size:.82rem;font-weight:600;background:var(--well)}
+.btn:hover{border-color:var(--text)}
+.swap{display:inline-flex;align-items:center;gap:.4rem;font-size:.78rem;font-weight:600;border:1px solid var(--rule);border-radius:3px;padding:.22rem .55rem;background:var(--well)}
+.swap:hover,.champ:hover .swap{border-color:var(--text)}
+.act{height:1.6rem;display:grid;place-items:center;padding:0 .55rem;border:1px solid var(--rule);border-radius:3px;font-size:.72rem;font-weight:600;color:var(--dim);white-space:nowrap}
+.act:hover{border-color:var(--text);color:var(--text)}
+
+/* ---------- top bar ---------- */
+.bar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:1rem;padding:0 1.5rem;border-bottom:1px solid var(--rule);background:var(--well)}
+.bar-l{display:flex;align-items:center;gap:2.2rem}
+.bar-r{display:flex;align-items:center;justify-content:flex-end;gap:1.1rem}
+.mark{display:inline-flex;align-items:baseline;font-stretch:108%;font-weight:800;font-size:1.2rem;letter-spacing:-.03em;color:var(--text);text-decoration:none}
+.mark b{font-weight:900;color:var(--ink);background:var(--a);border-radius:2px;padding:0 .26em}
+.mark span{padding-left:.12em;color:var(--dim)}
+.nav{display:flex;gap:1.4rem;font-size:.84rem;font-weight:500}
+.nav a{color:var(--dim);text-decoration:none}
+.nav a:hover,.nav a[aria-current]{color:var(--text)}
+.patch{font-family:var(--font-mono);font-size:.76rem;color:var(--dim)}
+.patch b{color:var(--text);font-weight:600}
+.set{position:relative;display:inline-flex}
+.gear{width:2rem;height:2rem;display:grid;place-items:center;border:1px solid var(--rule);border-radius:3px;background:var(--well);color:var(--dim)}
+.gear svg{width:1.05rem;height:1.05rem}
+.menu{position:absolute;right:0;top:calc(100% + .5rem);z-index:40;display:grid;gap:.3rem;padding:.7rem;background:var(--well);border:1px solid var(--faint);border-radius:4px;box-shadow:0 1rem 2rem rgba(0,0,0,.5)}
+
+/* ---------- the display: totals ---------- */
+.hero{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.85rem 2.5rem;padding:.9rem 1.5rem 1.15rem;background:linear-gradient(180deg,var(--band),#0e2c2b);border-bottom:1px solid var(--rule)}
+.hero-top{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:1rem}
+.hero-mode{display:flex;align-items:center;gap:.7rem}
+.hero-mode .lbl+.seg{margin-right:.6rem}
+.hero-mode .seg:last-child{margin-right:0}
+.totals{display:flex;align-items:flex-end;gap:2.6rem}
+.tot{display:grid;gap:.45rem;min-width:13rem}
+.tot-id{display:flex;align-items:center;gap:.5rem;font-size:.98rem;font-weight:700}
+.tot-n{font-size:4.6rem;font-weight:800;font-stretch:94%;line-height:.86;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--dim)}
+.tot-n i{font-style:normal}
+.tot.win .tot-n,body[data-compare="off"] .tot-n{color:var(--text)}
+body[data-compare="off"] .tot-n{font-size:5.2rem}
+body[data-compare="off"] .tot{min-width:19rem}
+.tot-bar{height:.4rem;background:rgba(236,231,216,.12);border-radius:1px;overflow:hidden}
+.tot-bar i{display:block;height:100%;width:var(--w,0%);background:var(--c);transition:width .2s}
+.tot-cap{font-size:.82rem;color:var(--dim);white-space:nowrap}
+.tot-cap b{color:var(--text)}
+.hero-side{display:grid;align-content:end;gap:.8rem;padding-bottom:.2rem}
+.metric{display:grid;grid-template-columns:10.6rem auto;align-items:center;column-gap:.8rem}
+.metric-v{display:flex;gap:1.2rem}
+.mv{display:flex;align-items:center;gap:.45rem;font-family:var(--font-mono);font-size:1.3rem;font-weight:500;font-variant-numeric:tabular-nums;color:var(--dim);white-space:nowrap}
+.mv i{font-style:normal}
+.mv.win,body[data-compare="off"] .mv{color:var(--text);font-weight:600}
+
+/* small square icon buttons: the combo's pencil and the ranks' chain */
+.ibtn{width:1.65rem;height:1.65rem;display:inline-grid;place-items:center;flex:none;border:1px solid var(--rule);border-radius:3px;background:var(--well);color:var(--dim)}
+.ibtn svg{width:.95rem;height:.95rem}
+.ibtn:hover,.ibtn[aria-expanded="true"]{border-color:var(--text);color:var(--text)}
+#rank-link[aria-pressed="true"] .i-unlink,#rank-link[aria-pressed="false"] .i-link{display:none}
+#rank-link[aria-pressed="false"]{color:var(--text);border-color:var(--faint)}
+
+/* 2. the combo: one line in the band, edited in a dropdown */
+.combo{display:flex;align-items:center;gap:.75rem}
+.combo-sum{font-size:.92rem;color:var(--text);white-space:nowrap}
+.combo-sum:hover{text-decoration:underline;text-decoration-color:var(--faint);text-underline-offset:.2em}
+.combo-menu{left:0;right:auto;width:20rem;gap:.15rem}
+.combo-menu>.lbl{padding:0 .3rem .3rem}
+.step{display:grid;grid-template-columns:1.7rem minmax(0,1fr) 1.5rem 1.7rem 1.5rem;align-items:center;column-gap:.5rem;height:2.15rem;padding:0 .3rem;border-radius:3px}
+.step:hover{background:rgba(236,231,216,.05)}
+.step .sk{position:relative;width:1.7rem;height:1.7rem;display:grid;place-items:center;overflow:hidden;border:1px solid var(--rule);border-radius:2px;font-family:var(--font-mono);font-size:.6rem;font-weight:700;color:var(--dim);background:var(--bg)}
+.step .sk .ico{position:absolute;inset:0}
+.step .nm{display:flex;align-items:baseline;gap:.4rem;min-width:0;font-size:.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.step .nm small{font-family:var(--font-mono);font-size:.62rem;color:var(--faint)}
+.step button{width:1.5rem;height:1.5rem;display:grid;place-items:center;border:1px solid var(--rule);border-radius:2px;font-family:var(--font-mono);font-size:.9rem;color:var(--dim)}
+.step button:hover{color:var(--ink);background:var(--text);border-color:var(--text)}
+.step output{text-align:center;font-family:var(--font-mono);font-size:.92rem;font-weight:700}
+.step.zero output,.step.zero .nm{color:var(--faint)}
+.step.zero .sk .ico{filter:grayscale(1) brightness(.5)}
+.step.dead{opacity:.55}
+.step.dead .none{grid-column:3/6;justify-self:end;font-size:.74rem;color:var(--faint)}
+.combo-foot{display:flex;justify-content:space-between;align-items:center;gap:.6rem;margin-top:.3rem;padding:.45rem .3rem 0;border-top:1px solid var(--rule)}
+
+/* 3. stats at a glance, where "B ahead by n" was */
+.glance{display:grid;grid-template-columns:auto repeat(7,auto);align-self:flex-end;align-items:center;row-gap:.3rem;margin:0 0 1.55rem .4rem}
+.gl-h{padding:0 .75rem .1rem;font-size:.64rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);text-align:right;border-left:1px solid var(--rule)}
+.gl-h.first{border-left:0;padding:0 .3rem 0 0}
+/* the game's stat icons, one strip of seven 20px tiles in the glance's column order */
+.si{display:inline-block;width:1rem;height:1rem;vertical-align:-.15rem;background:var(--stat-icons) no-repeat;background-size:700% 100%}
+.gl-h[title]{cursor:help}
+.gl-t{padding-right:.3rem}
+.gl-v{padding:0 .75rem;font-family:var(--font-mono);font-size:1.05rem;font-weight:500;font-variant-numeric:tabular-nums;text-align:right;border-left:1px solid var(--rule);white-space:nowrap}
+.gl-v.win{color:var(--c);font-weight:700}
+.gl-v.lose{color:var(--dim)}
+.gl-v.none{color:var(--faint)}
+
+/* ---------- tabs ---------- */
+.tabs{display:flex;align-items:center;gap:.3rem;padding:0 1.5rem;border-bottom:1px solid var(--rule)}
+.tab{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:.9rem;align-items:center;min-width:16rem;max-width:23rem;padding:.6rem 1rem .55rem;margin-bottom:-1px;border-bottom:2px solid transparent;color:var(--dim)}
+.tab b{font-size:1rem;font-weight:700}
+.tab span.sum{grid-column:1;font-size:.78rem;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tab .key{grid-column:2;grid-row:1/3}
+.tab:hover{color:var(--text)}
+.tab[aria-selected="true"]{color:var(--text);border-bottom-color:var(--text);background:linear-gradient(0deg,rgba(236,231,216,.06),transparent)}
+.tab[aria-selected="true"] span.sum{color:var(--dim)}
+
+.panes{min-height:0;padding:1.2rem 1.5rem 1.1rem}
+.pane{height:100%}
+
+/* ---------- build tab ---------- */
+.pane-build{display:grid;grid-template-rows:auto minmax(0,1fr);gap:1.4rem}
+.setup{display:grid;grid-template-columns:30rem minmax(0,1fr);gap:1.2rem 3rem}
+.champ{grid-row:1/3;position:relative;display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;padding:1rem 1.1rem;overflow:hidden;border:1px solid var(--rule);border-radius:4px;background:var(--well)}
+.champ:hover{border-color:var(--faint)}
+.champ-art{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 22%;opacity:.55;
+  -webkit-mask-image:linear-gradient(90deg,transparent 10%,#000 70%);mask-image:linear-gradient(90deg,transparent 10%,#000 70%)}
+.champ-txt{position:relative;display:grid;gap:.15rem}
+.champ-name{font-size:2.2rem;font-weight:800;letter-spacing:-.015em;line-height:1.05}
+.champ-title{color:var(--dim)}
+.champ .swap{position:relative}
+
+.lvl{display:grid;gap:.35rem}
+.lvl output{font-family:var(--font-mono);font-size:1.05rem;font-weight:700;color:var(--text);margin-left:.5rem;letter-spacing:0}
+.ruler{position:relative;display:grid;grid-template-columns:repeat(18,minmax(0,1fr));border-bottom:2px solid var(--rule);margin-bottom:1rem}
+.ruler::before{content:"";position:absolute;left:0;bottom:-2px;height:2px;background:var(--text);width:calc((var(--lv) - .5)/18*100%)}
+.ruler button{position:relative;height:2.2rem;display:grid;justify-items:center;align-content:start;font-family:var(--font-mono);font-size:.76rem;color:var(--faint)}
+.ruler button::after{content:"";position:absolute;left:50%;bottom:0;width:1px;height:.45rem;background:var(--rule)}
+.ruler button.ult::after{height:.8rem}
+.ruler button[data-r]::before{content:attr(data-r);position:absolute;left:50%;top:calc(100% + .3rem);transform:translateX(-50%);font-size:.6rem;letter-spacing:.05em}
+.ruler button span{padding:.1rem .4rem;border-radius:3px}
+.ruler button.past{color:var(--dim)}
+.ruler button.past::after{background:var(--text)}
+.ruler button.past[data-r]::before{color:var(--text)}
+.ruler button.now span{background:var(--text);color:var(--ink);font-weight:700}
+
+.skills{display:grid;gap:.6rem;align-content:start}
+.skills .sec-head{justify-content:flex-start;align-items:center;gap:.9rem}
+.skills .sec-head .hint{margin-left:auto}
+.ico{display:block;width:100%;aspect-ratio:1;background-repeat:no-repeat}
+.ico.items{background-image:var(--art-items);background-size:calc(var(--items-cols)*100%) calc(var(--items-rows)*100%)}
+.ico.kit{background-image:var(--art-kit);background-size:500% 100%}
+.kit.p{background-position:0 0} .kit.q{background-position:25% 0} .kit.w{background-position:50% 0} .kit.e{background-position:75% 0} .kit.r{background-position:100% 0}
+.rank-same{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.6rem 2.4rem;align-items:end}
+.skill-row{display:flex;gap:1.1rem}
+.skill{display:grid;gap:.4rem;width:3.5rem}
+.skill-ico{position:relative;width:3.5rem;height:3.5rem;border:1px solid var(--rule);border-radius:3px;background:var(--well)}
+.skill-ico .ico{border-radius:2px}
+.skill-ico .k{position:absolute;left:-.4rem;top:-.4rem;font-family:var(--font-mono);font-size:.66rem;font-weight:700;line-height:1.35;padding:0 .3rem;background:var(--bg);border:1px solid var(--faint);border-radius:2px}
+.skill-ico .rk{position:absolute;right:.2rem;bottom:.05rem;font-family:var(--font-mono);font-size:.78rem;font-weight:700;text-shadow:0 0 .25rem #000,0 0 .12rem #000,0 0 .5rem #000}
+.pips{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:.14rem;height:.6rem}
+.pip{border:1px solid var(--faint);border-radius:1px}
+.pip.on{background:var(--text);border-color:var(--text)}
+.pips-none{height:.6rem;font-size:.62rem;color:var(--faint);line-height:.6rem}
+.plan{display:flex;align-items:center;gap:.9rem;padding-bottom:1rem}
+select.order{appearance:none;-webkit-appearance:none;cursor:pointer;font-family:var(--font-mono);font-size:.82rem;padding:.36rem 1.7rem .36rem .6rem;border:1px solid var(--rule);border-radius:3px;background:var(--well) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23ece7d8' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right .55rem center/.6rem}
+.pts{font-size:.82rem;color:var(--dim);white-space:nowrap}
+.pts b{color:var(--text);font-weight:700}
+
+/* 6. ranks per build: one compact row each, differences underlined like items */
+body[data-compare="on"][data-ranks="split"] .rank-same{display:none}
+body:not([data-ranks="split"]) .rank-split{display:none!important}
+.rank-split{display:grid;gap:.55rem;padding-bottom:.4rem}
+.rrow{display:flex;align-items:center;gap:1.15rem}
+.rs{position:relative;display:flex;align-items:center;gap:.45rem;padding-bottom:.3rem}
+.rs .ib{position:relative;width:2.4rem;height:2.4rem;border:1px solid var(--rule);border-radius:3px;background:var(--well)}
+.rs .ib .k{position:absolute;left:-.3rem;top:-.35rem;font-family:var(--font-mono);font-size:.56rem;font-weight:700;line-height:1.35;padding:0 .22rem;background:var(--bg);border:1px solid var(--faint);border-radius:2px}
+.rs .pips{display:flex;gap:.14rem;height:.62rem}
+.rs .pip{width:.5rem}
+.rs b{font-family:var(--font-mono);font-size:.84rem;min-width:.6rem}
+.rs.zero .ico{filter:grayscale(1) brightness(.5)}
+.rs.diff::after{content:"";position:absolute;left:0;right:0;bottom:0;height:.16rem;background:var(--c);border-radius:1px}
+.rrow .plan{padding:0 0 .3rem;margin-left:.4rem;gap:.7rem}
+.rrow select.order{font-size:.76rem;padding:.26rem 1.6rem .26rem .5rem}
+
+.loadout{position:relative;display:grid;grid-template-columns:1fr 1fr;row-gap:.9rem;align-content:start;padding-top:1.1rem;border-top:1px solid var(--rule)}
+.loadout>.sec-head{grid-column:1/-1;justify-content:flex-start;align-items:center}
+.loadout>.sec-head .hint{margin-left:auto}
+.build{display:grid;gap:.7rem;align-content:start;min-width:0}
+.build.a{padding-right:2.4rem}
+.build.b{padding-left:2.4rem;border-left:1px solid var(--rule)}
+.b-head{display:flex;align-items:center;gap:.6rem;min-width:0}
+.b-name{flex:0 1 11rem;min-width:0;background:none;border:0;border-bottom:1px dashed transparent;padding:0;font-weight:700;font-size:1.02rem}
+.b-name:hover{border-bottom-color:var(--faint)}
+.b-name:focus{outline:0;border-bottom:1px solid var(--text)}
+.b-gold{font-family:var(--font-mono);font-size:.8rem;color:var(--dim);white-space:nowrap}
+.b-gold b{color:var(--text);font-weight:600}
+.b-acts{display:flex;gap:.3rem;margin-left:auto}
+.slots{display:grid;grid-template-columns:repeat(6,minmax(0,4.8rem));gap:.6rem}
+.slot{position:relative;aspect-ratio:1;border:1px solid var(--rule);border-radius:3px;background:var(--well);cursor:pointer}
+.slot .ico{border-radius:2px}
+.slot:hover{border-color:var(--text)}
+.slot.empty{border-style:dashed;border-color:var(--faint)}
+.slot.empty::before{content:"+";position:absolute;inset:0;display:grid;place-items:center;font-family:var(--font-mono);font-size:1.2rem;color:var(--faint)}
+.slot.sel{outline:2px solid var(--text);outline-offset:2px}
+body[data-compare="on"] .slot.uniq::after{content:"";position:absolute;left:0;right:0;bottom:-.42rem;height:.18rem;background:var(--c);border-radius:1px}
+.add-b{align-self:stretch;margin-left:2.4rem;display:grid;place-content:center;justify-items:center;gap:.5rem;border:1px dashed var(--faint);border-radius:4px;color:var(--dim);font-weight:600;text-align:center}
+
+/* 1. the shop the picker draws from */
+.shop-now{display:inline-flex;align-items:center;gap:.4rem;font-size:.78rem;font-weight:600;color:var(--dim);border:1px solid var(--rule);border-radius:3px;padding:.18rem .5rem;background:var(--well)}
+.shop-now:hover{border-color:var(--text);color:var(--text)}
+.picker{position:absolute;left:0;right:0;bottom:calc(100% + .6rem);height:16rem;z-index:20;display:grid;grid-template-columns:26rem minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;background:var(--well);border:1px solid var(--faint);border-radius:4px;box-shadow:0 1rem 2rem rgba(0,0,0,.5)}
+.picker-ctl{display:grid;align-content:start;gap:.6rem;padding:.8rem;border-right:1px solid var(--rule);min-height:0;overflow:hidden}
+.picker-top{display:flex;align-items:center;justify-content:space-between;gap:.6rem}
+.picker-for{display:flex;align-items:center;gap:.45rem;font-weight:700;font-size:.9rem;white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:.3rem}
+.shop{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem;padding-top:.55rem;border-top:1px solid var(--rule)}
+.shop .lbl{margin-right:.35rem}
+.chip.locked{cursor:default}
+.chip.locked:hover{color:var(--ink)}
+.picker-grid{overflow:auto;padding:.8rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(2.8rem,1fr));gap:.4rem;align-content:start;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.pi{position:relative;aspect-ratio:1;border:1px solid var(--rule);border-radius:3px;background:var(--bg)}
+.pi:hover,.pi:focus-visible{outline:2px solid var(--text);outline-offset:1px;z-index:1}
+.pi .md,.slot .md{position:absolute;left:0;right:0;bottom:0;font-family:var(--font-mono);font-size:.5rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;text-align:center;line-height:1.35;color:var(--text);background:rgba(8,28,27,.88)}
+.pi.ph{display:grid;place-items:center;border-style:dashed;border-color:var(--faint);font-family:var(--font-mono);font-size:.66rem;font-weight:600;color:var(--faint);cursor:not-allowed}
+.grp{grid-column:1/-1;display:flex;align-items:baseline;gap:.6rem;font-size:.68rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+.grp em{font-style:normal;font-weight:400;letter-spacing:0;text-transform:none}
+.grp:not(:first-child){padding-top:.3rem}
+.miss{grid-column:1/-1;display:flex;align-items:center;gap:.8rem;padding:.5rem .6rem;border:1px dashed var(--faint);border-radius:3px;font-size:.8rem;color:var(--dim)}
+.picker-foot{grid-column:1/-1;display:flex;align-items:baseline;gap:.8rem;min-height:2.1rem;padding:.45rem .8rem;border-top:1px solid var(--rule);font-size:.8rem;color:var(--dim);white-space:nowrap;overflow:hidden}
+.picker-foot b{color:var(--text)}
+.picker-foot .g{font-family:var(--font-mono);color:var(--a)}
+.picker-foot span:last-child{overflow:hidden;text-overflow:ellipsis}
+
+/* ---------- target tab ---------- */
+.pane-target{display:grid;grid-template-columns:28rem minmax(0,1fr);gap:1.5rem 3.5rem;align-content:start}
+.who{display:flex;align-items:center;gap:1.1rem;padding:1.1rem 1.2rem;border:1px solid var(--rule);border-radius:4px;background:var(--well)}
+.who-ico{flex:none;width:4.2rem;height:4.2rem;color:var(--dim)}
+.who-txt{display:grid;gap:.35rem}
+.who-name{font-size:1.5rem;font-weight:800;letter-spacing:-.01em;line-height:1.1}
+.who-sub{font-size:.86rem;color:var(--dim)}
+.tune{display:grid;gap:.7rem;align-content:start}
+.presets{display:flex;gap:.3rem}
+.dials{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2.4rem}
+.dial{display:grid;gap:.25rem;min-width:0}
+.dial input[type=number]{width:100%;min-width:0;padding:0 0 .05rem;border:0;border-bottom:1px dashed var(--faint);background:none;font-family:var(--font-mono);font-size:2.3rem;font-weight:600;letter-spacing:-.03em;appearance:textfield;-moz-appearance:textfield}
+.dial input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:1.1rem;background:none}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--rule)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:.85rem;height:.85rem;margin-top:calc(1px - .425rem);background:var(--text);border-radius:50%}
+input[type=range]::-moz-range-track{height:2px;background:var(--rule)}
+input[type=range]::-moz-range-thumb{width:.85rem;height:.85rem;border:0;background:var(--text);border-radius:50%}
+.dial-note{font-size:.8rem;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t-row2{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4rem;padding-top:1.3rem;border-top:1px solid var(--rule)}
+.hits{display:grid;gap:.55rem;align-content:start;--hpv:2400}
+.hp{display:grid;grid-template-columns:1.35rem minmax(0,1fr) 9rem;gap:.7rem;align-items:center}
+.hpbar{position:relative;height:1.1rem;border:1px solid var(--faint);border-radius:2px;overflow:hidden;background:color-mix(in srgb,var(--c) 50%,transparent)}
+.hpbar i{position:absolute;inset:0 auto 0 0;width:var(--left);background:var(--text);transition:width .2s}
+.hpbar::after{content:"";position:absolute;inset:0;background:
+  repeating-linear-gradient(90deg,transparent 0 calc(100000%/var(--hpv) - 2px),rgba(8,28,27,.95) 0 calc(100000%/var(--hpv))),
+  repeating-linear-gradient(90deg,transparent 0 calc(10000%/var(--hpv) - 1px),rgba(8,28,27,.45) 0 calc(10000%/var(--hpv)))}
+.hp-txt{font-family:var(--font-mono);font-size:.82rem;color:var(--dim);white-space:nowrap}
+.hp-txt b{color:var(--text);font-weight:600}
+.t-inv{display:grid;gap:.55rem;align-content:start}
+.t-inv .sec-head{justify-content:flex-start}
+.t-slots{display:flex;gap:.45rem}
+.t-slots span{width:3rem;height:3rem;border:1px dashed var(--faint);border-radius:3px;opacity:.55}
+.t-inv p{margin:0;font-size:.8rem;color:var(--faint)}
+.soon{font-size:.62rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);border:1px solid var(--faint);border-radius:99px;padding:.02rem .45rem}
+
+/* ---------- breakdown tab ---------- */
+.pane-break{display:grid;grid-template-columns:minmax(0,1fr) 27rem;gap:3.5rem;min-height:0}
+.table{display:flex;flex-direction:column;min-height:0}
+.row{display:grid;grid-template-columns:2.6rem 14rem 4.8rem minmax(6rem,1fr) 4.6rem 4.6rem 4.4rem;column-gap:.9rem;align-items:center}
+body[data-compare="off"] .row{grid-template-columns:2.6rem 14rem 4.8rem minmax(6rem,1fr) 5rem 3.6rem}
+.cols{padding:0 0 .5rem;border-bottom:1px solid var(--rule);font-size:.7rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
+.cols>*:nth-child(n+5){justify-self:end}
+.lines{flex:none;display:grid}
+.line{height:2.5rem;border-bottom:1px solid rgba(37,80,77,.6)}
+.line.crits{border-bottom-color:transparent}
+.q{display:flex;align-items:baseline;justify-content:center;font-family:var(--font-mono);font-size:.84rem;color:var(--faint)}
+.q input{width:1.3rem;padding:0;border:0;border-bottom:1px dotted var(--faint);background:none;color:var(--text);font-weight:600;text-align:right;appearance:textfield;-moz-appearance:textfield}
+.q input::-webkit-inner-spin-button{-webkit-appearance:none}
+.q input:focus{outline:0;border-bottom:1px solid var(--text)}
+.src{display:flex;align-items:center;gap:.55rem;min-width:0;white-space:nowrap}
+.src .k{flex:none;display:inline-grid;place-items:center;min-width:1.4rem;height:1.35rem;padding:0 .15rem;border:1px solid var(--faint);border-radius:2px;font-family:var(--font-mono);font-size:.66rem;font-weight:700;color:var(--dim)}
+.src .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.ty{font-size:.76rem;font-weight:600}
+.ty.p{color:var(--phys)} .ty.m{color:var(--magic)} .ty.none{color:var(--faint);font-weight:400}
+.bars{display:grid;gap:.2rem}
+.bars i{display:block;height:.4rem;width:var(--w,0%);background:var(--c);border-radius:1px;transition:width .2s}
+.n,.g,.sh{justify-self:end;font-family:var(--font-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.n i,.g i{font-style:normal}
+.n{font-size:.95rem}
+body[data-compare="on"] .n{color:var(--dim)}
+body[data-compare="on"] .n.win{color:var(--text);font-weight:700}
+.g{font-size:.8rem;font-weight:600;color:var(--c)}
+.sh{font-size:.84rem;color:var(--dim)}
+.line.off .nm,.line.off .n{color:var(--faint)}
+.total{padding-top:.7rem}
+.total .tl{grid-column:1/5;font-size:1.05rem;font-weight:800}
+.total .n{font-size:1.15rem;font-weight:700}
+
+/* 5. one hit of a line that can crit: without, with, and on average */
+.critrow{display:grid;grid-template-columns:2.6rem minmax(0,1fr);column-gap:.9rem;align-items:start;height:1.75rem;border-bottom:1px solid rgba(37,80,77,.6)}
+.cr{display:flex;align-items:center;gap:1.7rem;font-size:.74rem;color:var(--faint);white-space:nowrap;margin-top:-.2rem}
+.cr-l{display:flex;align-items:center;gap:.4rem;font-size:.64rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
+.cr-l::before{content:"";width:.55rem;height:.55rem;border-left:1px solid var(--faint);border-bottom:1px solid var(--faint);margin-top:-.35rem}
+.cr-b{display:flex;align-items:center;gap:.85rem}
+.cv b{font-family:var(--font-mono);font-size:.8rem;font-weight:500;color:var(--dim);margin-right:.3rem}
+.cv em{font-style:normal;font-family:var(--font-mono);font-size:.7rem;margin-left:.25rem}
+.cv[title]{cursor:help}
+.cv.on{color:var(--dim)}
+.cv.on b{color:var(--text);font-weight:700}
+
+.bside{display:grid;gap:1.5rem;align-content:start;min-height:0;max-height:100%;overflow:auto;padding-right:.4rem;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.bs{display:grid;gap:.55rem}
+.bs+.bs{padding-top:1.3rem;border-top:1px solid var(--rule)}
+.bs .sec-head{justify-content:flex-start;align-items:center}
+.mixrow{display:grid;grid-template-columns:1.35rem 9rem minmax(0,1fr);gap:.7rem;align-items:center;font-size:.84rem;color:var(--dim)}
+.split{display:flex;height:.5rem;border-radius:1px;overflow:hidden}
+.split i{display:block;background:var(--c)}
+.p{--c:var(--phys)} .m{--c:var(--magic)}
+.pair{display:flex;gap:1.6rem}
+.pair .mv{font-size:1.25rem;color:var(--text)}
+.vd{display:flex;align-items:center;gap:.6rem;font-size:.88rem}
+.vd p{margin:0;color:var(--dim)}
+.vd p b{color:var(--text)}
+.notes{display:grid;gap:.3rem;font-size:.78rem;color:var(--dim)}
+.notes p{margin:0}
+.notes b{color:var(--text);font-weight:600}
+.opt{display:grid;grid-template-columns:2.4rem minmax(0,1fr);column-gap:.7rem;align-items:center;font-size:.84rem;color:var(--dim)}
+.opt input{justify-self:end;margin:0}
+.opt input[type="checkbox"]{width:.95rem;height:.95rem;accent-color:var(--text)}
+.opt input[type="number"]{width:100%;padding:0 0 .05rem;border:0;border-bottom:1px dotted var(--faint);background:none;color:var(--text);font-family:var(--font-mono);font-size:.84rem;font-weight:600;text-align:right;appearance:textfield;-moz-appearance:textfield}
+.cb{display:grid;grid-template-columns:1.35rem minmax(0,1fr);gap:.15rem .7rem;align-items:center;font-size:.86rem;color:var(--dim)}
+.cb b{font-family:var(--font-mono);font-weight:600;color:var(--text)}
+.cb p{grid-column:2;margin:0;font-size:.76rem;color:var(--faint)}
+
+/* ---------- 4. more stats ---------- */
+.pane-more{display:grid;align-content:start;gap:.9rem;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.more-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3.5rem}
+.srow{display:grid;grid-template-columns:minmax(0,1fr) 4.8rem 4.8rem 4.4rem;column-gap:.8rem;align-items:baseline;padding:.28rem 0;border-bottom:1px solid rgba(37,80,77,.6)}
+body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 5rem 10rem}
+.srow.shead{padding:0 0 .45rem;border-bottom-color:var(--rule);align-items:center}
+.srow>*:nth-child(n+2){justify-self:end}
+.srow .sn{display:flex;align-items:center;gap:.45rem;font-weight:600}
+.srow .note{font-size:.8rem;color:var(--faint);white-space:nowrap}
+.srow.same .n,.srow.same .sn{color:var(--faint)}
+.srow.same .g{color:var(--faint);font-weight:400}
+.new{font-family:var(--font-mono);font-size:.54rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--note);border:1px dashed var(--note);border-radius:2px;padding:0 .22rem;line-height:1.4}
+/* where each build is ahead: the stats one build has more of, by how much, A's left and B's right */
+.ahead{display:grid;gap:.6rem;padding-top:.9rem;border-top:1px solid var(--rule)}
+.ahead>.sec-head{justify-content:flex-start;align-items:center}
+.ah-cols{display:grid;grid-template-columns:repeat(2,minmax(0,26rem));column-gap:3rem}
+.ah{display:grid;align-content:start}
+.ah.a{padding-right:3rem;border-right:1px solid var(--rule)}
+.ah-head{display:flex;align-items:center;gap:.5rem;padding-bottom:.4rem;font-weight:700}
+.ah-row{display:grid;grid-template-columns:5.2rem minmax(0,1fr);align-items:baseline;padding:.24rem 0;border-bottom:1px solid rgba(37,80,77,.6)}
+.ah-row b{font-family:var(--font-mono);font-size:.98rem;font-weight:700;color:var(--c);font-variant-numeric:tabular-nums}
+.ah-row span{color:var(--text)}
+.ah-none{padding:.24rem 0;font-size:.84rem;color:var(--faint)}
+.ah-same{margin:0;font-size:.8rem;color:var(--faint)}
+.ah-same b{color:var(--dim);font-weight:600}
+
+/* ---------- footer ---------- */
+.legal{display:grid;align-content:center;min-height:2.8rem;padding:.4rem 1.5rem .45rem;border-top:1px solid var(--rule);background:var(--well);font-size:max(.7rem,10px);line-height:1.35;color:var(--dim)}
+
+/* ---------- wireframe annotations ---------- */
+.pin{display:inline-grid;place-items:center;flex:none;width:1.3rem;height:1.3rem;border-radius:50%;background:var(--note);color:var(--ink);font-family:var(--font-mono);font-size:.72rem;font-weight:700;line-height:1;cursor:pointer;user-select:none;vertical-align:middle;letter-spacing:0;text-transform:none;box-shadow:0 0 0 3px rgba(185,164,255,.22);animation:ping 1.5s ease-out 2}
+.pin:hover,.pin.open{box-shadow:0 0 0 4px rgba(185,164,255,.5)}
+@keyframes ping{from{box-shadow:0 0 0 0 rgba(185,164,255,.75)}to{box-shadow:0 0 0 .9rem rgba(185,164,255,0)}}
+@media (prefers-reduced-motion:reduce){.pin{animation:none}}
+.hl{outline:2px dashed var(--note)!important;outline-offset:4px;border-radius:3px}
+.wfbtn{font-family:var(--font-mono);font-size:.66rem;letter-spacing:.08em;text-transform:uppercase;color:var(--note);border:1px dashed var(--note);border-radius:3px;padding:.32rem .6rem}
+.wfbtn:hover,.wfbtn[aria-expanded="true"]{background:rgba(185,164,255,.12)}
+.wf-menu{width:27rem;gap:.15rem;border-color:var(--note)}
+.wf-menu>p{margin:0 .3rem .4rem;font-size:.78rem;color:var(--dim)}
+.wfi{display:grid;grid-template-columns:1.3rem minmax(0,1fr);column-gap:.7rem;align-items:center;padding:.45rem .5rem;border-radius:3px;color:var(--dim)}
+.wfi b{color:var(--text);font-weight:700}
+.wfi span:last-child{grid-column:2;font-size:.78rem}
+.wfi .pin{grid-row:1/3;animation:none}
+.wfi:hover{background:rgba(236,231,216,.07)}
+.wfnote{position:fixed;z-index:70;width:28rem;max-height:76vh;overflow:auto;padding:1rem 1.1rem 1.05rem;background:var(--well);border:1px solid var(--note);border-radius:5px;box-shadow:0 1.2rem 2.4rem rgba(0,0,0,.6);font-size:.86rem;line-height:1.42;color:var(--dim)}
+.wfnote h3{display:flex;align-items:center;gap:.6rem;margin:0 0 .55rem;font-size:1.02rem;font-weight:800;color:var(--text)}
+.wfnote h3 .pin{animation:none;cursor:default}
+.wfnote p{margin:0 0 .5rem}
+.wfnote p:last-child{margin-bottom:0}
+.wfnote b{color:var(--text)}
+.wfnote .k{display:block;margin:.75rem 0 .2rem;font-family:var(--font-mono);font-size:.62rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--note)}
+.wfnote .x{position:absolute;right:.6rem;top:.6rem}
+</style>
+</head>
+<body data-compare="on" data-ranks="split" data-crit="avg">
+<div class="app">
+  <header class="bar">
+    <div class="bar-l">
+      <a class="mark" href="#" aria-label="itemize.lol"><b>itemize</b><span>.lol</span></a>
+      <nav class="nav" aria-label="Site"><a href="#" aria-current="page">Workbench</a><a href="#">Saved builds</a></nav>
+    </div>
+    <div class="seg" id="cmp-seg" role="radiogroup" aria-label="How many builds">
+      <button role="radio" data-cmp="off" aria-checked="false">One build</button>
+      <button role="radio" data-cmp="on" aria-checked="true">Compare <span class="tag a xs">A</span><span class="vs">vs</span><span class="tag b xs">B</span></button>
+    </div>
+    <div class="bar-r">
+      <div class="set">
+        <button class="wfbtn menu-btn" id="wf-btn" aria-haspopup="true" aria-expanded="false" aria-controls="wf-menu">Wireframe · 6 changes</button>
+        <div class="menu wf-menu" id="wf-menu" role="menu" hidden></div>
+      </div>
+      <span class="patch">Patch <b>26.20</b></span>
+      <button class="btn">Copy build link</button>
+      <span class="gear" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+    </div>
+  </header>
+
+  <!-- the display: always on screen -->
+  <section class="hero" aria-label="Damage totals">
+    <div class="hero-top">
+      <div class="combo" data-wf="2">
+        <span class="lbl">Combo</span>
+        <button class="combo-sum menu-btn" id="combo-sum" aria-haspopup="true" aria-expanded="false" aria-controls="combo-menu" title="Change the combo"></button>
+        <div class="set">
+          <button class="ibtn menu-btn" id="combo-btn" aria-haspopup="true" aria-expanded="false" aria-controls="combo-menu" aria-label="Change the combo" title="Change the combo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></button>
+          <div class="menu combo-menu" id="combo-menu" role="dialog" aria-label="The combo" hidden>
+            <span class="lbl">Casts in the combo</span>
+            <div id="steps" style="display:contents"></div>
+            <div class="combo-foot"><span class="hint">Also in the Breakdown's Qty column</span><button class="act" id="combo-reset" title="Three autos and one of each ability that deals damage">Reset</button></div>
+          </div>
+        </div>
+        <span class="pin" data-n="2">2</span>
+      </div>
+      <div class="hero-mode">
+        <span class="pin" data-n="5">5</span>
+        <span class="lbl">Crits</span>
+        <div class="seg" id="crit-seg" role="radiogroup" aria-label="Count critical strikes as" data-wf="5">
+          <button role="radio" data-crit="avg" aria-checked="true" title="Each hit that can crit deals its average at your crit chance">Average</button>
+          <button role="radio" data-crit="none" aria-checked="false" title="Nothing crits: the least this combo does">Never</button>
+          <button role="radio" data-crit="all" aria-checked="false" title="Everything that can crit does: the most this combo does">Always</button>
+        </div>
+        <span class="lbl">Show as</span>
+        <div class="seg" role="radiogroup" aria-label="Show damage as" title="Unchanged, and not wired up in the wireframe">
+          <button role="radio" aria-checked="false">Raw output</button>
+          <button role="radio" aria-checked="true">Target dummy</button>
+          <button role="radio" aria-checked="false">Enemy champion</button>
+        </div>
+      </div>
+    </div>
+    <div class="totals">
+      <div class="tot a">
+        <div class="tot-id"><span class="tag a sm only-cmp">A</span><span class="nm-a">Crit</span></div>
+        <div class="tot-n"><i id="tot-a">–</i></div>
+        <div class="tot-bar"><i id="h-bar-a"></i></div>
+        <div class="tot-cap" id="h-cap-a"></div>
+      </div>
+      <div class="tot b only-cmp">
+        <div class="tot-id"><span class="tag b sm">B</span><span class="nm-b">Bruiser</span></div>
+        <div class="tot-n"><i id="tot-b">–</i></div>
+        <div class="tot-bar"><i id="h-bar-b"></i></div>
+        <div class="tot-cap" id="h-cap-b"></div>
+      </div>
+      <div class="glance" id="glance" data-wf="3" aria-label="Stats at a glance"></div>
+    </div>
+    <div class="hero-side">
+      <div class="metric"><span class="lbl">DPS, autos and procs</span>
+        <div class="metric-v"><span class="mv a" id="dps-a"><span class="tag a sm only-cmp">A</span><i>–</i></span><span class="mv b only-cmp" id="dps-b"><span class="tag b sm">B</span><i>–</i></span></div></div>
+      <div class="metric"><span class="lbl">Time to kill</span>
+        <div class="metric-v"><span class="mv a" id="ttk-a"><span class="tag a sm only-cmp">A</span><i>–</i></span><span class="mv b only-cmp" id="ttk-b"><span class="tag b sm">B</span><i>–</i></span></div></div>
+    </div>
+  </section>
+
+  <nav class="tabs" role="tablist" aria-label="Details">
+    <button class="tab" role="tab" data-tab="build" aria-selected="true"><b>Build</b><span class="sum" id="ts-build"></span><span class="key">1</span></button>
+    <button class="tab" role="tab" data-tab="target" aria-selected="false"><b>Target</b><span class="sum">Dummy, 2,400 HP, 80 armor, 50 MR</span><span class="key">2</span></button>
+    <button class="tab" role="tab" data-tab="break" aria-selected="false"><b>Breakdown</b><span class="sum">Damage by source, crits split out</span><span class="key">3</span></button>
+    <button class="tab" role="tab" data-tab="stats" aria-selected="false" data-wf="4"><b>More stats</b><span class="sum" id="ts-stats"></span><span class="key">4</span></button>
+    <span class="pin" data-n="4">4</span>
+  </nav>
+
+  <main class="panes">
+    <!-- 1. build -->
+    <section class="pane pane-build" data-pane="build" role="tabpanel" aria-label="Build">
+      <div class="setup">
+        <button class="champ" title="Change champion">
+          <img class="champ-art" src="web/art/ad3293e668/splash/Yasuo.webp" alt="">
+          <span class="champ-txt"><span class="lbl">Champion</span><span class="champ-name">Yasuo</span><span class="champ-title">The Unforgiven</span></span>
+          <span class="swap">Change <span class="key">C</span></span>
+        </button>
+        <div class="lvl">
+          <div class="sec-head"><span class="lbl">Level<output>11</output></span></div>
+          <div class="ruler" id="ruler" role="group" aria-label="Champion level" style="--lv:11"></div>
+        </div>
+        <div class="skills">
+          <div class="sec-head">
+            <span class="lbl">Ability ranks</span>
+            <button class="ibtn only-cmp" id="rank-link" aria-pressed="false" data-wf="6"><svg class="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><svg class="i-unlink" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18.84 12.25 1.72-1.71h-.02a5.004 5.004 0 0 0-.12-7.07 5.006 5.006 0 0 0-6.95 0l-1.72 1.71"/><path d="m5.17 11.75-1.71 1.71a5.004 5.004 0 0 0 .12 7.07 5.006 5.006 0 0 0 6.95 0l1.71-1.71"/><path d="M8 2v3M2 8h3M16 19v3M19 16h3"/></svg></button>
+            <span class="pin only-cmp" data-n="6">6</span>
+            <span class="hint">Click a pip to set a rank</span>
+          </div>
+          <div class="rank-same" id="rank-same"></div>
+          <div class="rank-split only-cmp" id="rank-split" data-wf="6"></div>
+        </div>
+      </div>
+
+      <div class="loadout" id="builds">
+        <div class="sec-head">
+          <span class="lbl">Items</span>
+          <button class="shop-now" id="shop-now" data-wf="1" title="The shops the item picker draws from"></button>
+          <span class="pin" data-n="1">1</span>
+          <span class="hint" id="items-hint"></span>
+        </div>
+        <div class="build a" data-b="a">
+          <div class="b-head"><span class="tag a sm">A</span><input class="b-name" id="name-a" value="Crit" aria-label="Name of build A" spellcheck="false"><span class="b-gold"><b>0</b> gold</span>
+            <div class="b-acts"><button class="act" title="Empty all six slots">Clear</button></div></div>
+          <div class="slots"></div>
+        </div>
+        <div class="build b only-cmp" data-b="b">
+          <div class="b-head"><span class="tag b sm">B</span><input class="b-name" id="name-b" value="Bruiser" aria-label="Name of build B" spellcheck="false"><span class="b-gold"><b>0</b> gold</span>
+            <div class="b-acts"><button class="act">Copy A</button><button class="act">Remove</button></div></div>
+          <div class="slots"></div>
+        </div>
+        <button class="add-b only-solo" id="add-b"><span class="tag b sm">B</span>Add a second build to compare<span class="hint">Same champion and level</span></button>
+
+        <div class="picker" id="picker" role="dialog" aria-label="Choose an item" hidden>
+          <div class="picker-ctl">
+            <div class="picker-top"><span class="picker-for" id="picker-for"></span><button class="esc" id="picker-x">Esc</button></div>
+            <input class="search" type="search" id="item-q" placeholder="Search items" autocomplete="off" aria-label="Search items">
+            <div class="chips" id="item-chips"></div>
+            <div class="shop" id="shop" data-wf="1">
+              <span class="lbl">Shop</span>
+              <button class="chip locked" aria-pressed="true" title="Always included">Summoner's Rift</button>
+              <button class="chip" data-shop="aram" aria-pressed="false">+ ARAM</button>
+              <button class="chip" data-shop="arena" aria-pressed="false">+ Arena</button>
+              <span class="pin" data-n="1">1</span>
+            </div>
+          </div>
+          <div class="picker-grid" id="item-grid"></div>
+          <div class="picker-foot" id="item-foot"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. target: unchanged -->
+    <section class="pane pane-target" data-pane="target" role="tabpanel" aria-label="Target" hidden>
+      <div class="who">
+        <svg class="who-ico" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="24" cy="12" r="5.5"/><path d="M10 23h28M24 18v24M17 42h14"/><circle cx="24" cy="29" r="5"/></svg>
+        <div class="who-txt"><span class="who-name">Target dummy</span><span class="who-sub">Stands still. Set its numbers on the right.</span></div>
+      </div>
+      <div class="tune">
+        <div class="sec-head"><span class="lbl">Target stats</span>
+          <div class="presets"><button class="chip">Squishy</button><button class="chip">Bruiser</button><button class="chip">Tank</button></div></div>
+        <div class="dials">
+          <div class="dial"><label class="lbl">Health</label><input type="number" value="2400"><input type="range" value="2400" min="500" max="8000"><span class="dial-note">Effective 4,320 vs physical, 3,600 vs magic</span></div>
+          <div class="dial"><label class="lbl">Armor</label><input type="number" value="80"><input type="range" value="80" min="0" max="400"><span class="dial-note">Blocks 44% of physical damage</span></div>
+          <div class="dial"><label class="lbl">Magic resist</label><input type="number" value="50"><input type="range" value="50" min="0" max="400"><span class="dial-note">Blocks 33% of magic damage</span></div>
+        </div>
+      </div>
+      <div class="t-row2">
+        <div class="hits">
+          <div class="sec-head"><span class="lbl">Health after the combo</span><span class="hint">one tick = 100 HP</span></div>
+          <div class="hp a"><span class="tag a sm">A</span><div class="hpbar" id="bar-a"><i></i></div><span class="hp-txt"><b id="left-a">–</b> left</span></div>
+          <div class="hp b only-cmp"><span class="tag b sm">B</span><div class="hpbar" id="bar-b"><i></i></div><span class="hp-txt"><b id="left-b">–</b> left</span></div>
+        </div>
+        <div class="t-inv">
+          <div class="sec-head"><span class="lbl">Target items</span><span class="soon">soon</span></div>
+          <div class="t-slots" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+          <p>Their items will add to the stats above.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. breakdown -->
+    <section class="pane pane-break" data-pane="break" role="tabpanel" aria-label="Breakdown" hidden>
+      <div class="table">
+        <div class="row cols">
+          <span>Qty</span><span>Source</span><span>Type</span><span></span>
+          <span class="only-cmp"><span class="tag a xs">A</span></span>
+          <span class="only-cmp"><span class="tag b xs">B</span></span>
+          <span class="only-cmp">Gap</span>
+          <span class="only-solo">Damage</span><span class="only-solo">Share</span>
+        </div>
+        <div class="lines" id="lines"></div>
+        <div class="row total" id="total-row"></div>
+      </div>
+      <aside class="bside" id="bside"></aside>
+    </section>
+
+    <!-- 4. more stats -->
+    <section class="pane pane-more" data-pane="stats" role="tabpanel" aria-label="More stats" hidden>
+      <div class="more-grid" id="more-grid"></div>
+      <div class="ahead" id="ahead" data-wf="4"></div>
+    </section>
+  </main>
+  <footer class="legal">itemize.lol isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.</footer>
+</div>
+
+<div class="wfnote" id="note" role="dialog" aria-live="polite" hidden></div>
+
+<script>
+(() => {
+'use strict';
+/* Data: the engine's results and the item list, written in by the script that made this file. */
+const DATA = {"numbers":{"a":{"ranks":{"q":5,"w":1,"e":3,"r":2},"stats":{"hp":1555,"hpBonus":0,"mana":0,"ad":282,"adBase":82,"adBonus":200,"ap":0,"armor":72,"armorBase":72,"armorBonus":0,"mr":50,"as":1.37,"asBonus":1.01,"crit":0.5,"critDmg":2.185,"leth":0,"apen":0,"mpenF":0,"mpenP":0,"ah":0,"ms":406,"ls":0.15,"ov":0,"range":175,"gold":11000},"combo":{"avg":{"lines":{"aa":748.31,"q":657.15,"w":0,"e":93.33,"r":361.11,"p":0,"items":115.37},"raw":{"aa":1346.96,"q":1182.87,"w":0,"e":140,"r":650,"p":0,"items":207.67},"hpLeft":425},"none":{"lines":{"aa":469.9,"q":462.26,"w":0,"e":93.33,"r":361.11,"p":0,"items":107.26},"raw":{"aa":845.81,"q":832.07,"w":0,"e":140,"r":650,"p":0,"items":193.07},"hpLeft":906},"all":{"lines":{"aa":1026.72,"q":852.04,"w":0,"e":93.33,"r":361.11,"p":0,"items":123.48},"raw":{"aa":1848.1,"q":1533.67,"w":0,"e":140,"r":650,"p":0,"items":222.26},"hpLeft":0}},"total":1975,"totalRaw":3527,"blocked":1552,"phys":1882,"magic":93,"dps":393,"ttk":6.11,"perHit":{"aa":{"non":156.63,"crit":342.24,"avg":249.44,"mult":2.18},"q":{"non":231.13,"crit":426.02,"avg":328.57,"mult":1.84}}},"b":{"ranks":{"q":5,"w":1,"e":3,"r":2},"stats":{"hp":1955,"hpBonus":400,"mana":0,"ad":142,"adBase":82,"adBonus":60,"ap":0,"armor":147,"armorBase":72,"armorBonus":75,"mr":50,"as":1.17,"asBonus":0.71,"crit":0.5,"critDmg":1.9,"leth":0,"apen":0,"mpenF":0,"mpenP":0,"ah":15,"ms":406,"ls":0,"ov":0,"range":175,"gold":10350},"combo":{"avg":{"lines":{"aa":343.02,"q":373.44,"w":0,"e":74.67,"r":244.44,"p":0,"items":0},"raw":{"aa":617.43,"q":672.2,"w":0,"e":112,"r":440,"p":0,"items":0},"hpLeft":1364},"none":{"lines":{"aa":236.56,"q":298.93,"w":0,"e":74.67,"r":244.44,"p":0,"items":0},"raw":{"aa":425.81,"q":538.07,"w":0,"e":112,"r":440,"p":0,"items":0},"hpLeft":1545},"all":{"lines":{"aa":449.47,"q":447.96,"w":0,"e":74.67,"r":244.44,"p":0,"items":0},"raw":{"aa":809.04,"q":806.33,"w":0,"e":112,"r":440,"p":0,"items":0},"hpLeft":1183}},"total":1036,"totalRaw":1842,"blocked":806,"phys":961,"magic":75,"dps":134,"ttk":17.93,"perHit":{"aa":{"non":78.85,"crit":149.82,"avg":114.34,"mult":1.9},"q":{"non":149.46,"crit":223.98,"avg":186.72,"mult":1.5}}},"b2":{"ranks":{"q":3,"w":1,"e":5,"r":2},"stats":{"hp":1955,"hpBonus":400,"mana":0,"ad":142,"adBase":82,"adBonus":60,"ap":0,"armor":147,"armorBase":72,"armorBonus":75,"mr":50,"as":1.17,"asBonus":0.71,"crit":0.5,"critDmg":1.9,"leth":0,"apen":0,"mpenF":0,"mpenP":0,"ah":15,"ms":406,"ls":0,"ov":0,"range":175,"gold":10350},"combo":{"avg":{"lines":{"aa":343.02,"q":317.89,"w":0,"e":94.67,"r":244.44,"p":0,"items":0},"raw":{"aa":617.43,"q":572.2,"w":0,"e":142,"r":440,"p":0,"items":0},"hpLeft":1400},"none":{"lines":{"aa":236.56,"q":243.37,"w":0,"e":94.67,"r":244.44,"p":0,"items":0},"raw":{"aa":425.81,"q":438.07,"w":0,"e":142,"r":440,"p":0,"items":0},"hpLeft":1581},"all":{"lines":{"aa":449.47,"q":392.41,"w":0,"e":94.67,"r":244.44,"p":0,"items":0},"raw":{"aa":809.04,"q":706.33,"w":0,"e":142,"r":440,"p":0,"items":0},"hpLeft":1219}},"total":1000,"totalRaw":1772,"blocked":772,"phys":905,"magic":95,"dps":134,"ttk":17.93,"perHit":{"aa":{"non":78.85,"crit":149.82,"avg":114.34,"mult":1.9},"q":{"non":121.69,"crit":196.2,"avg":158.94,"mult":1.61}}}},"items":[[1001,"Boots",300,0,1,"Boots","sr",{"moveSpeed":25}],[1004,"Faerie Charm",200,1,1,"","sr",{}],[1006,"Rejuvenation Bead",300,2,1,"","sr",{}],[1011,"Giant's Belt",900,3,1,"Health","sr",{"hp":350}],[1018,"Cloak of Agility",600,4,1,"CriticalStrike","sr",{"critChance":0.15}],[1026,"Blasting Wand",850,5,1,"SpellDamage","sr",{"ap":45}],[1027,"Sapphire Crystal",300,6,1,"","sr",{"mana":300}],[1028,"Ruby Crystal",400,7,1,"Health","sr",{"hp":150}],[1029,"Cloth Armor",300,8,1,"Armor","sr",{"armor":15}],[1031,"Chain Vest",800,9,1,"Armor","sr",{"armor":40}],[1033,"Null-Magic Mantle",400,10,1,"SpellBlock","sr",{"mr":20}],[1036,"Long Sword",350,11,1,"Damage","sr",{"ad":10}],[1037,"Pickaxe",875,12,1,"Damage","sr",{"ad":25}],[1038,"B. F. Sword",1300,13,1,"Damage","sr",{"ad":40}],[1042,"Dagger",250,14,1,"AttackSpeed","sr",{"attackSpeed":0.1}],[1043,"Recurve Bow",700,15,1,"AttackSpeed OnHit","sr",{"attackSpeed":0.15}],[1052,"Amplifying Tome",400,16,1,"SpellDamage","sr",{"ap":20}],[1053,"Vampiric Scepter",900,17,1,"Damage","sr",{"ad":15,"lifeSteal":0.07}],[1054,"Doran's Shield",450,18,0,"Health","sr",{"hp":110}],[1055,"Doran's Blade",450,19,0,"Health Damage","sr",{"ad":10,"hp":80,"omnivamp":0.025}],[1056,"Doran's Ring",400,20,0,"Health SpellDamage","sr",{"ap":18,"hp":90}],[1057,"Negatron Cloak",850,21,1,"SpellBlock","sr",{"mr":45}],[1058,"Needlessly Large Rod",1200,22,1,"SpellDamage","sr",{"ap":65}],[1082,"Dark Seal",350,23,1,"Health SpellDamage","sr",{"ap":15,"hp":50}],[1083,"Cull",450,24,0,"Damage OnHit","sr",{"ad":7}],[1086,"Doran's Bow",400,25,0,"Damage AttackSpeed","sr",{"ad":8,"attackSpeed":0.15,"omnivamp":0.015}],[1101,"Scorchclaw Pup",450,26,0,"","sr",{}],[1102,"Gustwalker Hatchling",450,27,0,"","sr",{}],[1103,"Mosstomper Seedling",450,28,0,"","sr",{}],[1120,"Doran's Helm",450,29,0,"Health SpellBlock Armor","sr",{"hp":150,"armor":8,"mr":8}],[2019,"Steel Sigil",1100,30,1,"Armor Damage","sr",{"ad":15,"armor":30}],[2020,"The Brutalizer",1337,31,1,"Damage CooldownReduction ArmorPenetration","sr",{"ad":25,"abilityHaste":10,"lethality":5}],[2021,"Tunneler",1150,32,1,"Health Damage","sr",{"ad":15,"hp":250}],[2022,"Glowing Mote",250,33,1,"CooldownReduction","sr",{"abilityHaste":5}],[2051,"Guardian's Horn",950,34,0,"Health","aram",{"hp":150}],[2065,"Shurelya's Battlesong",2200,35,0,"SpellDamage CooldownReduction AbilityHaste","sr",{"ap":50,"abilityHaste":15,"movePct":0.04}],[2420,"Seeker's Armguard",1600,36,1,"Armor SpellDamage","sr",{"ap":40,"armor":25}],[2421,"Shattered Armguard",1600,37,1,"","sr",{"ap":40,"armor":25}],[2501,"Overlord's Bloodmail",3300,38,0,"Health Damage","sr",{"ad":30,"hp":550}],[2502,"Unending Despair",2800,39,0,"Health Armor CooldownReduction AbilityHaste","sr",{"hp":400,"armor":50,"abilityHaste":15}],[2503,"Blackfire Torch",2800,40,0,"SpellDamage CooldownReduction AbilityHaste","sr",{"ap":80,"mana":600,"abilityHaste":20}],[2504,"Kaenic Rookern",2900,41,0,"Health SpellBlock","sr",{"hp":400,"mr":80}],[2508,"Fated Ashes",900,42,1,"SpellDamage","sr",{"ap":30}],[2510,"Dusk and Dawn",3100,43,0,"Health AttackSpeed SpellDamage OnHit AbilityHaste","sr",{"ap":60,"hp":300,"attackSpeed":0.2,"abilityHaste":20}],[2512,"Fiendhunter Bolts",2650,44,0,"CriticalStrike AttackSpeed AbilityHaste","sr",{"attackSpeed":0.45,"critChance":0.25,"movePct":0.04}],[2517,"Endless Hunger",3100,45,0,"Damage AbilityHaste","sr",{"ad":65,"omnivamp":0.05}],[2520,"Bastionbreaker",3000,46,0,"Damage ArmorPenetration AbilityHaste","sr",{"ad":55,"abilityHaste":15,"lethality":22}],[2522,"Actualizer",2800,47,0,"SpellDamage AbilityHaste","sr",{"ap":90,"mana":300,"abilityHaste":10}],[2523,"Hexoptics C44",2800,48,0,"Damage CriticalStrike","sr",{"ad":55,"critChance":0.25}],[2524,"Bandlepipes",2300,49,0,"Health SpellBlock Armor AttackSpeed AbilityHaste","sr",{"hp":200,"armor":20,"mr":20,"abilityHaste":15}],[2525,"Protoplasm Harness",2600,50,0,"Health AbilityHaste","sr",{"hp":600,"abilityHaste":20}],[2526,"Whispering Circlet",2250,51,0,"Health","sr",{"hp":200,"mana":300}],[3003,"Archangel's Staff",2900,52,0,"SpellDamage AbilityHaste","sr",{"ap":70,"mana":600,"abilityHaste":25}],[3004,"Manamune",2900,53,0,"Damage CooldownReduction OnHit AbilityHaste","sr",{"ad":35,"mana":500,"abilityHaste":15}],[3006,"Berserker's Greaves",1100,54,1,"AttackSpeed Boots","sr",{"attackSpeed":0.3,"moveSpeed":45}],[3008,"Gluttonous Greaves",1000,55,1,"Boots","sr",{"moveSpeed":45,"omnivamp":0.04}],[3009,"Boots of Swiftness",1000,56,1,"Boots","sr",{"moveSpeed":55}],[3020,"Sorcerer's Shoes",1100,57,1,"Boots MagicPenetration","sr",{"magicPenFlat":12,"moveSpeed":45}],[3024,"Glacial Buckler",900,58,1,"Armor CooldownReduction AbilityHaste","sr",{"mana":300,"armor":25,"abilityHaste":10}],[3026,"Guardian Angel",3200,59,0,"Armor Damage","sr",{"ad":55,"armor":45}],[3031,"Infinity Edge",3500,60,0,"CriticalStrike Damage","sr",{"ad":75,"critChance":0.25,"critDamage":0.3}],[3032,"Yun Tal Wildarrows",3000,61,0,"Damage CriticalStrike AttackSpeed","sr",{"ad":50,"attackSpeed":0.45}],[3033,"Mortal Reminder",3000,62,0,"Damage CriticalStrike ArmorPenetration","sr",{"ad":35,"critChance":0.25,"armorPenPct":0.3}],[3035,"Last Whisper",1450,63,1,"ArmorPenetration Damage","sr",{"ad":20,"armorPenPct":0.18}],[3036,"Lord Dominik's Regards",3300,64,0,"Damage CriticalStrike ArmorPenetration","sr",{"ad":35,"critChance":0.25,"armorPenPct":0.35}],[3041,"Mejai's Soulstealer",1500,65,0,"Health SpellDamage","sr",{"ap":20,"hp":100}],[3044,"Phage",1100,66,1,"Health Damage","sr",{"ad":15,"hp":200}],[3046,"Phantom Dancer",2650,67,0,"CriticalStrike AttackSpeed","sr",{"attackSpeed":0.65,"critChance":0.25,"movePct":0.1}],[3047,"Plated Steelcaps",1200,68,1,"Armor Boots","sr",{"armor":25,"moveSpeed":45}],[3050,"Zeke's Convergence",2200,69,0,"Health SpellBlock Armor AbilityHaste","sr",{"hp":300,"armor":25,"mr":25,"abilityHaste":10}],[3051,"Hearthbound Axe",1200,70,1,"Damage AttackSpeed","sr",{"ad":20,"attackSpeed":0.2}],[3053,"Sterak's Gage",3200,71,0,"Health Damage","sr",{"hp":400}],[3057,"Sheen",900,72,1,"OnHit AbilityHaste","sr",{"abilityHaste":10}],[3065,"Spirit Visage",2700,73,0,"Health SpellBlock CooldownReduction AbilityHaste","sr",{"hp":400,"mr":50,"abilityHaste":10}],[3066,"Winged Moonplate",800,74,1,"Health","sr",{"hp":200,"movePct":0.04}],[3067,"Kindlegem",800,75,1,"Health CooldownReduction AbilityHaste","sr",{"hp":200,"abilityHaste":10}],[3068,"Sunfire Aegis",2800,76,0,"Health Armor AbilityHaste","sr",{"hp":350,"armor":50,"abilityHaste":10}],[3070,"Tear of the Goddess",400,77,1,"","sr",{"mana":240}],[3071,"Black Cleaver",3000,78,0,"Health Damage CooldownReduction OnHit ArmorPenetration AbilityHaste","sr",{"ad":45,"hp":400,"abilityHaste":20}],[3072,"Bloodthirster",3400,79,0,"Damage","sr",{"ad":80,"lifeSteal":0.15}],[3073,"Experimental Hexplate",3000,80,0,"Health Damage AttackSpeed CooldownReduction AbilityHaste","sr",{"ad":40,"hp":450,"attackSpeed":0.2}],[3074,"Ravenous Hydra",3300,81,0,"Damage CooldownReduction OnHit AbilityHaste","sr",{"ad":65,"abilityHaste":15,"lifeSteal":0.12}],[3075,"Thornmail",2450,82,0,"Health Armor","sr",{"hp":150,"armor":75}],[3076,"Bramble Vest",800,83,1,"Armor","sr",{"armor":30}],[3077,"Tiamat",1200,84,1,"Damage OnHit","sr",{"ad":25}],[3078,"Trinity Force",3333,85,0,"Health Damage AttackSpeed CooldownReduction OnHit AbilityHaste","sr",{"ad":36,"hp":333,"attackSpeed":0.3,"abilityHaste":15}],[3082,"Warden's Mail",1000,86,1,"Armor","sr",{"armor":40}],[3083,"Warmog's Armor",3100,87,0,"Health","sr",{"hp":1000}],[3084,"Heartsteel",3000,88,0,"Health","sr",{"hp":900}],[3085,"Runaan's Hurricane",2650,89,0,"CriticalStrike AttackSpeed OnHit","sr",{"attackSpeed":0.4,"critChance":0.25,"movePct":0.05}],[3086,"Zeal",1200,90,1,"CriticalStrike AttackSpeed","sr",{"attackSpeed":0.15,"critChance":0.15,"movePct":0.04}],[3087,"Statikk Shiv",3000,91,0,"Damage AttackSpeed SpellDamage OnHit","sr",{"ad":45,"ap":45,"attackSpeed":0.3,"movePct":0.04}],[3089,"Rabadon's Deathcap",3500,92,0,"SpellDamage","sr",{"ap":130}],[3091,"Wit's End",2800,93,0,"SpellBlock AttackSpeed OnHit","sr",{"mr":45,"attackSpeed":0.5}],[3094,"Rapid Firecannon",2650,94,0,"CriticalStrike AttackSpeed","sr",{"attackSpeed":0.35,"critChance":0.25,"movePct":0.04}],[3095,"Stormrazor",3200,95,0,"Damage CriticalStrike AttackSpeed","sr",{"ad":50,"attackSpeed":0.25,"critChance":0.25}],[3100,"Lich Bane",2900,96,0,"SpellDamage OnHit AbilityHaste","sr",{"ap":100,"abilityHaste":10,"movePct":0.06}],[3102,"Banshee's Veil",3000,97,0,"SpellBlock SpellDamage","sr",{"ap":105,"mr":40}],[3107,"Redemption",2300,98,0,"SpellDamage CooldownReduction AbilityHaste","sr",{"ap":30,"abilityHaste":15}],[3108,"Fiendish Codex",850,99,1,"SpellDamage CooldownReduction AbilityHaste","sr",{"ap":25,"abilityHaste":10}],[3109,"Knight's Vow",2300,100,0,"Health Armor CooldownReduction AbilityHaste","sr",{"hp":200,"armor":40,"abilityHaste":10}],[3110,"Frozen Heart",2500,101,0,"Armor CooldownReduction AbilityHaste","sr",{"mana":400,"armor":75,"abilityHaste":20}],[3111,"Mercury's Treads",1250,102,1,"Boots SpellBlock","sr",{"mr":20,"moveSpeed":45}],[3112,"Guardian's Orb",950,103,0,"Health SpellDamage","aram",{"ap":50,"hp":150}],[3113,"Aether Wisp",900,104,1,"SpellDamage","sr",{"ap":30,"movePct":0.04}],[3114,"Forbidden Idol",600,105,1,"","sr",{}],[3115,"Nashor's Tooth",2900,106,0,"AttackSpeed SpellDamage OnHit AbilityHaste","sr",{"ap":80,"attackSpeed":0.5,"abilityHaste":15}],[3116,"Rylai's Crystal Scepter",2600,107,0,"Health SpellDamage","sr",{"ap":65,"hp":400}],[3118,"Malignance",2700,108,0,"SpellDamage AbilityHaste","sr",{"ap":90,"mana":600,"abilityHaste":15}],[3119,"Winter's Approach",2400,109,0,"Health AbilityHaste","sr",{"hp":550,"mana":500,"abilityHaste":15}],[3123,"Executioner's Calling",800,110,1,"Damage","sr",{"ad":15}],[3124,"Guinsoo's Rageblade",3000,111,0,"Damage AttackSpeed SpellDamage OnHit","sr",{"ad":30,"ap":30,"attackSpeed":0.25}],[3133,"Caulfield's Warhammer",1050,112,1,"Damage CooldownReduction AbilityHaste","sr",{"ad":20,"abilityHaste":10}],[3134,"Serrated Dirk",1000,113,1,"Damage ArmorPenetration","sr",{"ad":20,"lethality":10}],[3135,"Void Staff",3000,114,0,"MagicPenetration SpellDamage","sr",{"ap":95,"magicPenPct":0.4}],[3137,"Cryptbloom",3000,115,0,"SpellDamage MagicPenetration AbilityHaste","sr",{"ap":75,"abilityHaste":20,"magicPenPct":0.3}],[3139,"Mercurial Scimitar",3200,116,0,"SpellBlock Damage","sr",{"ad":50,"mr":35,"lifeSteal":0.1}],[3140,"Quicksilver Sash",1300,117,1,"SpellBlock","sr",{"mr":30}],[3142,"Youmuu's Ghostblade",2800,118,0,"Damage ArmorPenetration","sr",{"ad":55,"lethality":18,"movePct":0.04}],[3143,"Randuin's Omen",2700,119,0,"Health Armor","sr",{"hp":350,"armor":75}],[3144,"Scout's Slingshot",600,120,1,"AttackSpeed","sr",{"attackSpeed":0.2}],[3145,"Hextech Alternator",1100,121,1,"SpellDamage","sr",{"ap":45}],[3146,"Hextech Gunblade",3000,122,0,"Damage SpellDamage","sr",{"ad":40,"ap":80,"omnivamp":0.1}],[3147,"Haunting Guise",1300,123,1,"Health SpellDamage","sr",{"ap":30,"hp":200}],[3152,"Hextech Rocketbelt",2650,124,0,"Health SpellDamage CooldownReduction AbilityHaste","sr",{"ap":60,"hp":350,"abilityHaste":10}],[3153,"Blade of The Ruined King",3200,125,0,"Damage AttackSpeed OnHit","sr",{"ad":40,"attackSpeed":0.25,"lifeSteal":0.1}],[3155,"Hexdrinker",1300,126,1,"Damage SpellBlock","sr",{"ad":25,"mr":25}],[3156,"Maw of Malmortius",3100,127,0,"SpellBlock Damage AbilityHaste","sr",{"ad":60,"mr":40,"abilityHaste":15}],[3157,"Zhonya's Hourglass",3250,128,0,"Armor SpellDamage","sr",{"ap":105,"armor":50}],[3158,"Ionian Boots of Lucidity",900,129,1,"Boots CooldownReduction","sr",{"abilityHaste":10,"moveSpeed":45}],[3161,"Spear of Shojin",3100,130,0,"Health Damage AbilityHaste","sr",{"ad":45,"hp":450}],[3165,"Morellonomicon",2850,131,0,"Health SpellDamage CooldownReduction AbilityHaste","sr",{"ap":75,"hp":350,"abilityHaste":15}],[3168,"Immortal Path",1000,132,0,"Boots","sr",{"moveSpeed":45,"omnivamp":0.04}],[3170,"Swiftmarch",1000,133,0,"Boots","sr",{"moveSpeed":65}],[3171,"Crimson Lucidity",900,134,0,"CooldownReduction Boots","sr",{"abilityHaste":20,"moveSpeed":45}],[3172,"Gunmetal Greaves",1100,135,0,"AttackSpeed","sr",{"attackSpeed":0.45,"moveSpeed":45,"lifeSteal":0.05}],[3173,"Chainlaced Crushers",1250,136,0,"SpellBlock Boots","sr",{"mr":25,"moveSpeed":45}],[3174,"Armored Advance",1200,137,0,"Armor Boots","sr",{"armor":35,"moveSpeed":45}],[3175,"Spellslinger's Shoes",1100,138,0,"Boots MagicPenetration","sr",{"magicPenFlat":20,"magicPenPct":0.08,"moveSpeed":45}],[3177,"Guardian's Blade",950,139,0,"Health Damage AbilityHaste","aram",{"ad":30,"hp":150,"abilityHaste":15}],[3179,"Umbral Glaive",2800,140,0,"Damage CooldownReduction ArmorPenetration AbilityHaste","sr",{"ad":60,"abilityHaste":15,"lethality":18}],[3181,"Hullbreaker",3000,141,0,"Health Damage","sr",{"ad":40,"hp":500,"movePct":0.04}],[3184,"Guardian's Hammer",950,142,0,"Health Damage","aram",{"ad":25,"hp":150,"lifeSteal":0.05}],[3190,"Locket of the Iron Solari",2200,143,0,"Health SpellBlock Armor AbilityHaste","sr",{"hp":200,"armor":30,"mr":30,"abilityHaste":10}],[3211,"Spectre's Cowl",1250,144,1,"Health SpellBlock","sr",{"hp":200,"mr":35}],[3222,"Mikael's Blessing",2300,145,0,"Health CooldownReduction AbilityHaste","sr",{"hp":250,"abilityHaste":15}],[3302,"Terminus",3000,146,0,"Damage AttackSpeed OnHit MagicPenetration ArmorPenetration","sr",{"ad":30,"attackSpeed":0.35}],[3504,"Ardent Censer",2200,147,0,"AttackSpeed SpellDamage","sr",{"ap":45,"movePct":0.04}],[3508,"Essence Reaver",3050,148,0,"Damage CriticalStrike CooldownReduction OnHit AbilityHaste","sr",{"ad":50,"critChance":0.25,"abilityHaste":20}],[3742,"Dead Man's Plate",2900,149,0,"Health Armor","sr",{"hp":350,"armor":55,"movePct":0.04}],[3748,"Titanic Hydra",3300,150,0,"Health Damage OnHit","sr",{"ad":40,"hp":600}],[3801,"Crystalline Bracer",800,151,1,"Health","sr",{"hp":200}],[3802,"Lost Chapter",1200,152,1,"SpellDamage CooldownReduction AbilityHaste","sr",{"ap":40,"mana":300,"abilityHaste":10}],[3803,"Catalyst of Aeons",1300,153,1,"Health","sr",{"hp":300,"mana":375}],[3814,"Edge of Night",3000,154,0,"Health Damage ArmorPenetration","sr",{"ad":50,"hp":250,"lethality":15}],[3865,"World Atlas",400,155,0,"Health","sr",{}],[3869,"Celestial Opposition",400,156,0,"Health","sr",{"hp":200}],[3870,"Dream Maker",400,157,0,"Health","sr",{"hp":200}],[3871,"Zaz'Zak's Realmspike",400,158,0,"Health","sr",{"hp":200}],[3876,"Solstice Sleigh",400,159,0,"Health","sr",{"hp":200}],[3877,"Bloodsong",400,160,0,"Health","sr",{"hp":200}],[3916,"Oblivion Orb",800,161,1,"SpellDamage","sr",{"ap":25}],[4005,"Imperial Mandate",2400,162,0,"SpellDamage CooldownReduction AbilityHaste","sr",{"ap":60,"abilityHaste":15}],[4401,"Force of Nature",2800,163,0,"Health SpellBlock","sr",{"hp":400,"mr":55,"movePct":0.04}],[4628,"Horizon Focus",2700,164,0,"SpellDamage AbilityHaste","sr",{"ap":75,"abilityHaste":25}],[4629,"Cosmic Drive",3000,165,0,"Health SpellDamage AbilityHaste","sr",{"ap":70,"hp":350,"abilityHaste":25,"movePct":0.04}],[4630,"Blighting Jewel",1100,166,1,"MagicPenetration SpellDamage","sr",{"ap":25,"magicPenPct":0.13}],[4632,"Verdant Barrier",1600,167,1,"SpellBlock SpellDamage","sr",{"ap":40,"mr":25}],[4633,"Riftmaker",3100,168,0,"Health SpellDamage CooldownReduction","sr",{"ap":70,"hp":350,"abilityHaste":15}],[4642,"Bandleglass Mirror",900,169,1,"SpellDamage CooldownReduction AbilityHaste","sr",{"ap":20,"abilityHaste":10}],[4645,"Shadowflame",3200,170,0,"SpellDamage MagicPenetration","sr",{"ap":110,"magicPenFlat":15}],[4646,"Stormsurge",2800,171,0,"SpellDamage MagicPenetration","sr",{"ap":90,"magicPenFlat":15,"movePct":0.06}],[6333,"Death's Dance",3300,172,0,"Armor Damage AbilityHaste","sr",{"ad":60,"armor":50,"abilityHaste":15}],[6609,"Chempunk Chainsword",3000,173,0,"Health Damage CooldownReduction AbilityHaste","sr",{"ad":45,"hp":450,"abilityHaste":15}],[6610,"Sundered Sky",3100,174,0,"Health Damage CooldownReduction AbilityHaste","sr",{"ad":40,"hp":400,"abilityHaste":10}],[6616,"Staff of Flowing Water",2250,175,0,"SpellDamage CooldownReduction AbilityHaste","sr",{"ap":35,"abilityHaste":10}],[6617,"Moonstone Renewer",2200,176,0,"Health SpellDamage CooldownReduction AbilityHaste","sr",{"ap":25,"hp":200,"abilityHaste":20}],[6620,"Echoes of Helia",2200,177,0,"Health SpellDamage CooldownReduction AbilityHaste","sr",{"ap":35,"hp":200,"abilityHaste":20}],[6621,"Dawncore",2500,178,0,"SpellDamage","sr",{"ap":45}],[6631,"Stridebreaker",3300,179,0,"Health Damage AttackSpeed","sr",{"ad":40,"hp":450,"attackSpeed":0.25}],[6653,"Liandry's Torment",3000,180,0,"Health SpellDamage","sr",{"ap":60,"hp":300}],[6655,"Luden's Echo",2750,181,0,"SpellDamage CooldownReduction AbilityHaste","sr",{"ap":100,"mana":600,"abilityHaste":10}],[6657,"Rod of Ages",2600,182,0,"Health SpellDamage","sr",{"ap":45,"hp":350,"mana":500}],[6660,"Bami's Cinder",900,183,1,"Health AbilityHaste","sr",{"hp":150,"abilityHaste":5}],[6662,"Iceborn Gauntlet",2900,184,0,"Health Armor CooldownReduction OnHit AbilityHaste","sr",{"hp":300,"armor":50,"abilityHaste":15}],[6664,"Hollow Radiance",2800,185,0,"Health SpellBlock AbilityHaste","sr",{"hp":400,"mr":40,"abilityHaste":10}],[6665,"Jak'Sho, The Protean",3200,186,0,"Health SpellBlock Armor","sr",{"hp":350,"armor":45,"mr":45}],[6670,"Noonquiver",1300,187,1,"Damage CriticalStrike","sr",{"ad":15,"critChance":0.2}],[6672,"Kraken Slayer",3000,188,0,"Damage AttackSpeed OnHit","sr",{"ad":45,"attackSpeed":0.4,"movePct":0.04}],[6673,"Immortal Shieldbow",3000,189,0,"Damage CriticalStrike","sr",{"ad":55,"critChance":0.25}],[6675,"Navori Flickerblade",2650,190,0,"CriticalStrike AttackSpeed","sr",{"attackSpeed":0.4,"critChance":0.25,"movePct":0.04}],[6676,"The Collector",3000,191,0,"Damage CriticalStrike ArmorPenetration","sr",{"ad":50,"critChance":0.25,"lethality":10}],[6690,"Rectrix",775,192,1,"Damage","sr",{"ad":15,"movePct":0.04}],[6692,"Eclipse",2900,193,0,"Damage CooldownReduction AbilityHaste","sr",{"ad":60,"abilityHaste":15}],[6694,"Serylda's Grudge",3000,194,0,"Damage CooldownReduction ArmorPenetration AbilityHaste","sr",{"ad":45,"abilityHaste":15,"armorPenPct":0.35}],[6695,"Serpent's Fang",2500,195,0,"Damage ArmorPenetration","sr",{"ad":55,"lethality":15}],[6696,"Axiom Arc",2750,196,0,"Damage ArmorPenetration AbilityHaste","sr",{"ad":55,"abilityHaste":20,"lethality":18}],[6697,"Hubris",2800,197,0,"Damage CooldownReduction ArmorPenetration AbilityHaste","sr",{"ad":55,"abilityHaste":10,"lethality":18}],[6698,"Profane Hydra",2850,198,0,"Damage CooldownReduction ArmorPenetration AbilityHaste","sr",{"ad":55,"abilityHaste":10,"lethality":18}],[6699,"Voltaic Cyclosword",3000,199,0,"Damage CooldownReduction ArmorPenetration AbilityHaste","sr",{"ad":55,"abilityHaste":10,"lethality":10}],[8010,"Bloodletter's Curse",2900,200,0,"Health SpellDamage CooldownReduction MagicPenetration","sr",{"ap":65,"hp":400,"abilityHaste":15}],[8020,"Abyssal Mask",2650,201,0,"Health SpellBlock CooldownReduction AbilityHaste","sr",{"hp":350,"mr":45,"abilityHaste":15}],[663039,"Atma's Reckoning",2500,202,0,"Health CriticalStrike","arena",{"hp":500,"critChance":0.2}],[663056,"Demon King's Crown",2500,203,0,"Health Armor Damage AttackSpeed SpellDamage AbilityHaste","arena",{}],[663058,"Shield of Molten Stone",2500,204,0,"Health Armor","arena",{"hp":250,"armor":80}],[663059,"Cloak of Starry Night",2500,205,0,"Health SpellBlock","arena",{"hp":250,"mr":60}],[663060,"Sword of the Divine",2500,206,0,"Damage CriticalStrike SpellDamage","arena",{"critChance":0.5}],[663064,"Veigar's Talisman of Ascension",900,207,0,"","arena",{}],[663172,"Zephyr",2500,208,0,"AttackSpeed CooldownReduction OnHit","arena",{"attackSpeed":0.4,"abilityHaste":25,"movePct":0.08}],[663193,"Gargoyle Stoneplate",2500,209,0,"SpellBlock Armor CooldownReduction AbilityHaste","arena",{"armor":55,"mr":55,"abilityHaste":10,"movePct":0.08}],[664011,"Sword of Blossoming Dawn",2500,210,0,"Health SpellDamage CooldownReduction OnHit AbilityHaste","arena",{"ap":35,"hp":150,"abilityHaste":10}],[664644,"Crown of the Shattered Queen",2500,211,0,"Health SpellDamage AbilityHaste","arena",{"ap":65,"hp":250,"mana":600,"abilityHaste":15}],[667101,"Gambler's Blade",2500,212,0,"Damage MagicPenetration ArmorPenetration AbilityHaste","arena",{"abilityHaste":10,"lethality":15,"magicPenFlat":15,"movePct":0.15}],[667109,"Cruelty",2500,213,0,"Armor SpellDamage","arena",{"ap":60,"armor":25,"mr":25}],[667112,"Flesheater",2500,214,0,"Damage SpellDamage MagicPenetration ArmorPenetration","arena",{"hp":500,"abilityHaste":20}]],"aram":[["Lifeline",1600],["Spectral Cutlass",2800],["Rite of Ruin",2500],["Void Immolation",6000],["Ultra Hydra",6000],["Wooglet's Witchcap",6000],["Prototype Hex Core",750],["Hex Core mk-1",1500],["Hex Core mk-2",2250],["Perfect Hex Core",3000],["Golden Spatula",2500]],"arena":[["Perplexity",2500],["Wordless Promise",2500],["Hellfire Hatchet",2500],["Ghostcrawlers",1000],["Darksteel Talons",2750],["Fulmination",2750],["Force Of Entropy",2750],["Sanguine Gift",2750],["Hamstringer",2750],["Turbo Chemtank",2750],["Hexbolt Companion",2750],["Reaper's Toll",2750],["Demonic Embrace",3000],["Dragonheart",2750],["Decapitator",2750],["Runecarver",2750],["Regicide",2750],["Kinkou Jitte",2750],["Lightning Rod",2750],["Diamond-Tipped Spear",2750],["Twilight's Edge",2750],["Black Hole Gauntlet",2750],["Puppeteer",2750]],"statIcons":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIwAAAAUCAYAAABf9dUQAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAFkUlEQVRoge2aP4gkRRTGB4XTxOyC8oZbmLUjk3PYjjVbJxMGhjsaJxZxKxGE4SYwF3e4RkEoJjQxMpG+WcHI3MBAl0Z2TOxKFgc5WBA8Sqq7qvt1df3p6unZ4LgHH8v0VNVsd//6e6+qejB4GS90ZCcIZyEKehmrp3G8AxF6xtXnmNlqHGSrcUpX73zf15hLzPASs3SJGRNKlphN1Ha7ixnrQ7b/Zbplk+mWxdMtS6dbxoRScWxivC4hCrITlHJw9r0etTFGJHp9RKIvRyT6dUSiG/H3kdppRKJT0GY7ItHnPj+KSDZBhP4n9N6+J1GHZczoanzTx5gCDmYQvi1gplsWTK9YAiDRq2gTmG40DRGjIUpoiN7qek14//LDiETJEZmzpj58ekTmd4S+07eZXxyR+RuuH0Rr+iZa0yu0piwXyVJEsqBHWLhOB4eFhQmVT3V50zczvLuYTbxU9NECM92ydzVQYOE2XFgDk/YhFLBwaG5oiD62nT8N0fv0BN1VnYr3zz+MSBSPSKQDAUCTg2Nsc5/Mv3HdCLSmP5Ww5MDkqqjdE5ZsNTbabrYaG20bxuITlizOGDNpCdKT7ANcotVvwBDgNIDJnaWeeoxjC3hgqmo8hNxZCliGrNC9n2k4fKAbj4YoVlMYPwaBSe3AtNIftguDSPakBksFDFc8OCwseVvXmBwCGyyLOjDMBIyAIHZoYgWmco4UAlA6S6FAAayA5qqCGQZ3lgoYKRQb3Kg2Bq+DIDCsB2CYs24xA8PT02RfWOhqHKvg8M+yXZs01AswmyrNWBSbgBFQSLeYOGqZ2NZPDeEsEBiWF8UhKtuL1MXkrIh/J4/t5TASNCHjE1zUKgosTf3mAsUBSwLqGK1csHgCkxwQmFh1CiXlmKGRUBldZvhABQYolrWKAAnDdORRw7QCRptWEMlw6SJ2YLjLYF9Yrs/DV6/Pw6+uz0OmE2ibtilwPYDBrYD58WFd7YCRcOS/IdJPDscHitS6BbQ1PsAQgGaKuvcMfL6k4fAO/F4CE/QAjHa2U0s7TmByaAIfZ7HBAoHhDqSB5VMBjK/DJHCcTsBsZtgCjJqO4hbAYDUtmYCBNUkTmIa+bgAjoMF7AIOd7tIeGOxTs9hgURzG6F58iuwBTKL2321mqQJB0MJhghpcm1l6q8CUdcnQSxCYV/haDHSNlsAYp8VoTS+dkDSBaVipDhZZzHoAY1zv8XCYp7r+YtZTu+mlc+iBmTRgEynqNlJSPTV1BAakptQDGN7WeCO8YAGzpsaJaVyCA0BX4+ctgTFCvThjj0yzIEWJaYyaowiXKY9XQORAKbDA4jjoXPTCdtVMyrlUURS4w387A6NC41io+9MGCw+0pn/14TCmlEJX48s2wNjcZXHGaAtgnIuLO+kymgU8uaqrOVYrgJ3Tah00dais02oaolNR8CYeNYwdGAiNDZb7ZP626yKiNf22g8M0bg6vVXTj09X4BxcwjtrlI12NImoamaZar0TvoJsoEBjhAmnMY+EullsEXgt3J+iu2FeS2wT9AMNjRKJjmJ7geovLWWTwGY+16CUNPffZW2rhMJ+Z+i4xO36M2T8AFu405WarnD0NPGJXpKakloJgiuIpqA4Vb6s9X8VR9t4aMOxiYxoOf+8FGOA0SRdYZPBl//bAZE/ajsv3hmyLdDZn4bHELBYO8uwxZl9ovl8OOsZOXbgrwIGg1GodU/S5+WgKGg5fU6fOnYGRIRb2vPd7GtNr+9YA3mOHurbeYqtZeCwxCwQsHJrjwQFiV7gNrGvKVGVylUO93mCZVu83Szpk5OlpTc/Rmv6C1vTvXMWWQeyThsTsqNwGEOBwSLALFOXFqFt5e2xXpSlj+mkTXV+ggiGW/eOq4O2xhnkZL0ZkZa0CC10oP2D+B6G8cOS96RubAAAAAElFTkSuQmCC"};
+
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const nf = n => Math.round(n).toLocaleString('en-US');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pct = (x, d = 0) => (Math.round(x * 100 * 10 ** d) / 10 ** d) + '%';
+
+const N = DATA.numbers;               // a; b (B on A's ranks); b2 (B on its own ranks)
+const ITEMS = new Map(DATA.items.map(([id, name, gold, pos, comp, tags, mode, stats]) =>
+  [id, {id, name, gold, pos, comp: !!comp, tags: tags ? tags.split(' ') : [], mode, stats}]));
+const EXTRA = {
+  aram: DATA.aram.map(([name, gold]) => ({name, gold, tags: [], mode: 'aram', ph: true})),
+  arena: DATA.arena.map(([name, gold]) => ({name, gold, tags: [], mode: 'arena', ph: true})),
+};
+const HP = 2400, DEF = {aa: 3, q: 2, w: 0, e: 1, r: 1};
+const KIT = {p: 'Way of the Wanderer', q: 'Steel Tempest', w: 'Wind Wall', e: 'Sweeping Blade', r: 'Last Breath'};
+const MAX = {q: 5, w: 5, e: 5, r: 3};
+const LINES = ['aa', 'q', 'w', 'e', 'r', 'p', 'items'];
+const SHOP = {aram: 'ARAM', arena: 'Arena'};
+
+const S = {
+  compare: true, ranks: 'split', crit: 'avg', tab: 'build', glance: 'icons',
+  combo: {...DEF},
+  shop: {aram: false, arena: false},
+  builds: {a: [3006, 3031, 3072, 6672, null, null], b: [3047, 6675, 6333, 3053, null, null]},
+};
+const resA = () => N.a, resB = () => S.ranks === 'split' ? N.b2 : N.b;
+const nameOf = k => $(`#name-${k}`).value || `Build ${k.toUpperCase()}`;
+
+/* ---------- the numbers ---------- */
+/* Each line is the engine's for the default combo, rescaled by its count. Kraken Slayer's proc
+   (the item line) comes every third attack, and Steel Tempest counts as one. */
+function lineVal(R, k) {
+  const base = R.combo[S.crit].lines[k];
+  if (k === 'p') return base;
+  if (k === 'items') {
+    const n0 = Math.floor((DEF.aa + DEF.q) / 3), n = Math.floor((S.combo.aa + S.combo.q) / 3);
+    return n0 ? base / n0 * n : 0;
+  }
+  return DEF[k] ? base / DEF[k] * S.combo[k] : 0;
+}
+function result(R) {
+  const lines = Object.fromEntries(LINES.map(k => [k, lineVal(R, k)]));
+  const total = LINES.reduce((s, k) => s + lines[k], 0);
+  return {R, lines, total, left: Math.max(0, HP - total), kills: total >= HP, blocked: R.total ? R.blocked * total / R.total : 0};
+}
+
+/* ---------- hero ---------- */
+/* The combo in words, for the band: "3 autos, 2× Q, E and R". */
+function comboText() {
+  const parts = [];
+  if (S.combo.aa) parts.push(`${S.combo.aa} auto${S.combo.aa === 1 ? '' : 's'}`);
+  for (const k of ['q', 'w', 'e', 'r']) if (S.combo[k]) parts.push(S.combo[k] > 1 ? `${S.combo[k]}× ${k.toUpperCase()}` : k.toUpperCase());
+  if (!parts.length) return 'Nothing in the combo';
+  return parts.length === 1 ? parts[0] : parts.slice(0, -1).join(', ') + ' and ' + parts.at(-1);
+}
+/* The dropdown behind the pencil: a count per action. */
+function renderSteps() {
+  $('#steps').innerHTML = ['aa', 'q', 'w', 'e', 'r'].map(k => {
+    const dead = k === 'w', name = k === 'aa' ? 'Auto attacks' : KIT[k];
+    const face = k === 'aa' ? 'AA' : `<i class="ico kit ${k}"></i>`;
+    const ctl = dead ? '<span class="none">no damage</span>'
+      : `<button data-d="-1" aria-label="One fewer: ${esc(name)}">−</button><output></output><button data-d="1" aria-label="One more: ${esc(name)}">+</button>`;
+    return `<div class="step${dead ? ' dead' : ''}" data-k="${k}"><span class="sk">${face}</span><span class="nm">${esc(name)}${k === 'aa' ? '' : `<small>${k.toUpperCase()}</small>`}</span>${ctl}</div>`;
+  }).join('');
+}
+function paintHero(A, B) {
+  const when = {avg: '', none: ', no crits', all: ', all crits'}[S.crit];
+  for (const [k, r] of [['a', A], ['b', B]]) {
+    if (!r) continue;
+    $(`#tot-${k}`).textContent = nf(r.total);
+    $(`#h-bar-${k}`).style.setProperty('--w', Math.min(100, r.total / HP * 100).toFixed(1) + '%');
+    $(`#h-cap-${k}`).innerHTML = (r.kills ? '<b>Kills</b> the target, 2,400 HP' : `<b>${Math.round(r.total / HP * 100)}%</b> of the target's 2,400 HP`) + when;
+  }
+  $('.tot.a').classList.toggle('win', !B || A.total >= B.total);
+  $('.tot.b').classList.toggle('win', !!B && B.total > A.total);
+  const ra = A.R, rb = B && B.R;
+  const put = (id, text, win) => { const el = $(id); $('i', el).textContent = text; el.classList.toggle('win', win); };
+  put('#dps-a', nf(ra.dps), !rb || ra.dps >= rb.dps);
+  put('#dps-b', rb ? nf(rb.dps) : '–', !!rb && rb.dps > ra.dps);
+  put('#ttk-a', ra.ttk.toFixed(1) + ' s', !rb || ra.ttk <= rb.ttk);
+  put('#ttk-b', rb ? rb.ttk.toFixed(1) + ' s' : '–', !!rb && rb.ttk < ra.ttk);
+}
+/* The column heads use the game's own stat icons (the ones item tooltips show), one strip in this order. */
+document.documentElement.style.setProperty('--stat-icons', `url("${DATA.statIcons}")`);
+const GLANCE = [
+  {k: 'hp', word: 'Health', name: 'Health', get: s => s.hp, why: s => `${nf(s.hp - s.hpBonus)} base + ${nf(s.hpBonus)} from items`},
+  {k: 'mana', word: 'Mana', name: 'Mana', get: s => s.mana || null, why: () => 'Yasuo has no mana: he uses Flow'},
+  {k: 'ad', word: 'AD', name: 'Attack damage', get: s => s.ad, why: s => `${nf(s.adBase)} base + ${nf(s.adBonus)} bonus`},
+  {k: 'ap', word: 'AP', name: 'Ability power', get: s => s.ap, why: () => 'Ability power'},
+  {k: 'armor', word: 'Armor', name: 'Armor', get: s => s.armor, why: s => `${nf(s.armorBase)} base + ${nf(s.armorBonus)} from items`},
+  {k: 'mr', word: 'MR', name: 'Magic resist', get: s => s.mr, why: () => 'Magic resist'},
+  {k: 'crit', word: 'Crit', name: 'Crit chance', get: s => s.crit, why: s => `${pct(s.crit)} crit chance; crits deal ${pct(s.critDmg, 1)}`},
+];
+function paintGlance() {
+  const sa = resA().stats, sb = resB().stats, B = S.compare, icons = S.glance === 'icons';
+  const head = `<span class="gl-h first"><span class="pin" data-n="3">3</span></span>`
+    + GLANCE.map((g, i) => icons ? `<span class="gl-h" title="${g.name}"><i class="si" style="background-position:${(i / (GLANCE.length - 1) * 100).toFixed(3)}% 0" aria-label="${g.name}"></i></span>` : `<span class="gl-h">${g.word}</span>`).join('');
+  const row = (k, s, o) => `<span class="gl-t">${B ? `<span class="tag ${k} sm">${k.toUpperCase()}</span>` : ''}</span>` + GLANCE.map(g => {
+    const v = g.get(s), w = g.get(o);
+    const cls = v === null ? 'none' : !B || v === w ? 'same' : v > w ? 'win' : 'lose';
+    const text = v === null ? '–' : g.k === 'crit' ? pct(v) : nf(v);
+    return `<span class="gl-v ${k} ${cls}" title="${esc(g.name + ': ' + g.why(s))}">${text}</span>`;
+  }).join('');
+  $('#glance').innerHTML = head + row('a', sa, sb) + (B ? row('b', sb, sa) : '');
+}
+
+/* ---------- build tab ---------- */
+function buildRuler() {
+  $('#ruler').innerHTML = Array.from({length: 18}, (_, i) => {
+    const l = i + 1, r = {6: 'R1', 11: 'R2', 16: 'R3'}[l];
+    return `<button data-l="${l}"${r ? ` data-r="${r}"` : ''} class="${r ? 'ult ' : ''}${l <= 11 ? 'past' : ''}${l === 11 ? ' now' : ''}" aria-label="Level ${l}"><span>${l}</span></button>`;
+  }).join('');
+}
+const pipsOf = (k, n) => Array.from({length: MAX[k]}, (_, i) => `<span class="pip${i < n ? ' on' : ''}"></span>`).join('');
+const ORDERS = ['Q › E › W', 'Q › W › E', 'W › Q › E', 'W › E › Q', 'E › Q › W', 'E › W › Q', 'Set by hand'];
+const orderSel = (pick, label) => `<select class="order" aria-label="${label}">${ORDERS.map(o => `<option${o === pick ? ' selected' : ''}>${o}</option>`).join('')}</select>`;
+function paintRanks() {
+  const ra = N.a.ranks, rb = resB().ranks;
+  $('#rank-same').innerHTML = `<div class="skill-row">
+      <div class="skill"><div class="skill-ico"><i class="ico kit p"></i><span class="k">P</span></div><div class="pips-none">passive</div></div>
+      ${['q', 'w', 'e', 'r'].map(k => `<div class="skill" title="${KIT[k]}"><div class="skill-ico"><i class="ico kit ${k}"></i><span class="k">${k.toUpperCase()}</span><span class="rk">${ra[k]}</span></div><div class="pips">${pipsOf(k, ra[k])}</div></div>`).join('')}
+    </div>
+    <div class="plan"><label class="lbl">Max order</label>${orderSel('Q › E › W', 'Max order')}<span class="pts"><b>11</b> of 11 points spent</span></div>`;
+  const row = (b, r, o, order) => `<div class="rrow ${b}"><span class="tag ${b} sm">${b.toUpperCase()}</span>
+      <div class="rs"><div class="ib"><i class="ico kit p"></i></div></div>
+      ${['q', 'w', 'e', 'r'].map(k => `<div class="rs${r[k] !== o[k] ? ' diff' : ''}${!r[k] ? ' zero' : ''}" title="${KIT[k]}, rank ${r[k]}"><div class="ib"><i class="ico kit ${k}"></i><span class="k">${k.toUpperCase()}</span></div><span class="pips">${pipsOf(k, r[k])}</span><b>${r[k]}</b></div>`).join('')}
+      <div class="plan">${orderSel(order, `Max order of build ${b.toUpperCase()}`)}<span class="pts"><b>11</b> of 11</span></div></div>`;
+  $('#rank-split').innerHTML = row('a', ra, rb, 'Q › E › W') + row('b', rb, ra, 'E › Q › W');
+  const link = $('#rank-link'), linked = S.ranks === 'same';
+  link.setAttribute('aria-pressed', linked);
+  link.setAttribute('aria-label', linked ? 'Unlink the ranks of A and B' : 'Link the ranks of A and B');
+  link.title = linked ? 'Linked: A and B share these ranks. Click to give each build its own.' : 'Unlinked: each build has its own ranks. Click to share one set.';
+}
+function itemIco(id) {
+  const it = ITEMS.get(id), n = it?.pos;
+  if (n === undefined) return '<i class="ico"></i>';
+  const x = (n % 15) / 14 * 100, y = Math.floor(n / 15) / 14 * 100;
+  return `<i class="ico items" style="background-position:${+x.toFixed(3)}% ${+y.toFixed(3)}%"></i>`;
+}
+const modeBadge = m => m && m !== 'sr' ? `<span class="md">${m}</span>` : '';
+let pick = null, itemFilter = 0;
+function renderBuilds() {
+  const sets = {a: new Set(S.builds.a.filter(Boolean)), b: new Set(S.builds.b.filter(Boolean))};
+  for (const k of ['a', 'b']) {
+    const other = sets[k === 'a' ? 'b' : 'a'], row = $(`.build[data-b="${k}"]`);
+    $('.slots', row).innerHTML = S.builds[k].map((id, i) => {
+      const sel = pick && pick.b === k && pick.i === i ? ' sel' : '';
+      if (!id) return `<div class="slot empty${sel}" role="button" tabindex="0" data-b="${k}" data-i="${i}"></div>`;
+      const it = ITEMS.get(id);
+      return `<div class="slot${other.has(id) ? '' : ' uniq'}${sel}" role="button" tabindex="0" data-b="${k}" data-i="${i}" title="${esc(it.name)}">${itemIco(id)}${modeBadge(it.mode)}</div>`;
+    }).join('');
+    $('.b-gold b', row).textContent = nf(S.builds[k].reduce((s, id) => s + (ITEMS.get(id)?.gold || 0), 0));
+  }
+  const on = Object.keys(S.shop).filter(m => S.shop[m]);
+  $('#shop-now').textContent = on.length ? `Summoner's Rift + ${on.map(m => SHOP[m]).join(' + ')}` : "Summoner's Rift items";
+  $('#items-hint').textContent = !S.compare ? 'Click a slot to change it'
+    : S.ranks === 'split' ? 'Both builds use the champion and level above; ranks are per build. Underlined items differ.'
+    : 'Both builds use the champion, level and ranks above. Underlined items differ.';
+  paintTabs();
+}
+
+/* the item picker, with the shop it draws from */
+const ITEM_FILTERS = [
+  ['All', null], ['Attack damage', ['Damage']], ['Ability power', ['SpellDamage']], ['Attack speed', ['AttackSpeed']],
+  ['Crit', ['CriticalStrike']], ['On-hit', ['OnHit']], ['Penetration', ['ArmorPenetration', 'MagicPenetration']],
+  ['Haste', ['AbilityHaste', 'CooldownReduction']], ['Defense', ['Health', 'Armor', 'SpellBlock']], ['Boots', ['Boots']],
+];
+function openPicker(b, i) {
+  pick = {b, i};
+  $('#picker').hidden = false;
+  $('#picker-for').innerHTML = `<span class="tag ${b} sm">${b.toUpperCase()}</span>Slot ${i + 1}`;
+  renderBuilds();
+  const q = $('#item-q'); q.value = ''; renderItems(); q.focus();
+}
+function closePicker() { if (!pick) return; pick = null; $('#picker').hidden = true; renderBuilds(); }
+const initials = name => name.replace(/[^A-Za-z ]/g, '').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+function footIdle() { $('#item-foot').innerHTML = '<span>Hover an item for details. In the wireframe a pick fills the slot; the damage numbers stay as they are.</span>'; }
+function renderItems() {
+  const q = $('#item-q').value.trim().toLowerCase(), f = ITEM_FILTERS[itemFilter][1];
+  const match = it => (!q || it.name.toLowerCase().includes(q)) && (!f || it.tags.some(t => f.includes(t)));
+  const byName = (x, y) => x.name.localeCompare(y.name);
+  const cell = it => it.ph
+    ? `<button class="pi ph" data-ph="${esc(it.name)}" data-mode="${it.mode}" aria-label="${esc(it.name)}">${initials(it.name)}<span class="md">${it.mode}</span></button>`
+    : `<button class="pi" data-id="${it.id}" aria-label="${esc(it.name)}, ${nf(it.gold)} gold">${itemIco(it.id)}${modeBadge(it.mode)}</button>`;
+  const all = [...ITEMS.values()];
+  const sr = all.filter(i => i.mode === 'sr' && match(i));
+  const fin = sr.filter(i => !i.comp).sort(byName), comp = sr.filter(i => i.comp).sort(byName);
+  let html = (fin.length ? `<div class="grp">Finished items</div>${fin.map(cell).join('')}` : '')
+    + (comp.length ? `<div class="grp">Components</div>${comp.map(cell).join('')}` : '');
+  const missed = [];
+  for (const m of ['aram', 'arena']) {
+    const list = [...all.filter(i => i.mode === m && match(i)).sort(byName), ...EXTRA[m].filter(match)];
+    if (!list.length) continue;
+    if (S.shop[m]) html += `<div class="grp">${SHOP[m]} <em>added; dashed tiles are not in the dataset yet</em></div>${list.map(cell).join('')}`;
+    else missed.push(m);
+  }
+  if (!sr.length && q && missed.length) html = `<div class="miss">No Summoner's Rift item matches. The ${missed.map(m => SHOP[m]).join(' and ')} shop${missed.length > 1 ? 's have' : ' has'} some: ${missed.map(m => `<button class="chip" data-shop="${m}">+ ${SHOP[m]}</button>`).join('')}</div>` + html;
+  $('#item-grid').innerHTML = html || '<div class="grp">No items match</div>';
+  footIdle();
+}
+function choose(id) {
+  if (!pick) return;
+  S.builds[pick.b][pick.i] = id;
+  closePicker();
+}
+function setShop(m) {
+  S.shop[m] = !S.shop[m];
+  $$('#shop .chip[data-shop]').forEach(c => c.setAttribute('aria-pressed', !!S.shop[c.dataset.shop]));
+  renderItems(); renderBuilds();
+}
+
+/* ---------- breakdown tab ---------- */
+const TYPE = {physical: ['p', 'physical'], magic: ['m', 'magic'], none: ['none', 'no damage']};
+function renderLines() {
+  $('#lines').innerHTML = LINES.map(k => {
+    const key = k === 'aa' ? 'AA' : k === 'items' ? '+' : k.toUpperCase();
+    const name = k === 'aa' ? 'Auto attack' : k === 'items' ? 'Item effects' : KIT[k];
+    const castable = ['aa', 'q', 'w', 'e', 'r'].includes(k), dead = k === 'w', crits = k === 'aa' || k === 'q';
+    const qty = !castable ? '<span class="q"></span>' : dead ? '<span class="q">–</span>'
+      : `<label class="q"><input type="number" data-q="${k}" value="${S.combo[k]}" min="0" max="30" aria-label="How many"><span>×</span></label>`;
+    return `<div class="row line${crits ? ' crits' : ''}" data-k="${k}">${qty}
+      <span class="src"><span class="k">${key}</span><span class="nm">${esc(name)}</span></span><span class="ty none"></span>
+      <span class="bars"><i class="a"></i><i class="b only-cmp"></i></span>
+      <span class="n a"><i>–</i></span><span class="n b only-cmp"><i>–</i></span>
+      <span class="g only-cmp"><i></i></span><span class="sh only-solo">–</span></div>`
+      + (crits ? `<div class="critrow" data-k="${k}" data-wf="5"><span></span><div class="cr"><span class="cr-l">One hit</span><span class="cr-b a"></span><span class="cr-b b only-cmp"></span></div></div>` : '');
+  }).join('');
+  $('#total-row').innerHTML = `<span class="tl">Total</span><span class="n a"><i>–</i></span><span class="n b only-cmp"><i>–</i></span><span class="g only-cmp"><i></i></span><span class="sh only-solo">100%</span>`;
+}
+function gap(el, a, b) {
+  const d = Math.round(a) - Math.round(b);
+  el.className = `g only-cmp ${d > 0 ? 'a' : d < 0 ? 'b' : ''}`;
+  $('i', el).textContent = d ? '+' + nf(Math.abs(d)) : '';
+}
+/* How a build's crit multiplier is made: the base, crit damage from items added to it, then the passive. */
+function multWhy(b) {
+  const extra = S.builds[b].filter(Boolean).map(id => ITEMS.get(id)).filter(it => it.stats.critDamage);
+  const sum = 2 + extra.reduce((s, it) => s + it.stats.critDamage, 0);
+  return (extra.length ? `200% base + ${extra.map(it => `${pct(it.stats.critDamage)} ${it.name}`).join(' + ')} = ${pct(sum, 1)}` : '200% base')
+    + `, × 95% from Way of the Wanderer = ${pct(sum * .95, 1)}`;
+}
+function critCells(k, b, R) {
+  const h = R.perHit[k], s = R.stats;
+  const mult = k === 'aa' ? pct(s.critDmg, 1) : '×' + h.mult.toFixed(2);
+  const why = k === 'aa' ? multWhy(b)
+    : `Steel Tempest crits for ${[20, 45, 70, 95, 120][R.ranks.q - 1]} + 105% AD × ${pct(s.critDmg, 1)}: only its AD part crits, so the hit as a whole does ×${h.mult.toFixed(2)}.`;
+  const on = m => S.crit === m ? ' on' : '';
+  return `<span class="tag ${b} xs">${b.toUpperCase()}</span>
+    <span class="cv${on('none')}"><b>${nf(h.non)}</b>no crit</span>
+    <span class="cv${on('all')}" title="${esc(why)}"><b>${nf(h.crit)}</b>crit<em>${mult}</em></span>
+    <span class="cv${on('avg')}"><b>${nf(h.avg)}</b>avg at ${pct(s.crit)}</span>`;
+}
+function paintLines(A, B) {
+  const max = Math.max(1, ...LINES.map(k => Math.max(A.lines[k], B ? B.lines[k] : 0)));
+  for (const k of LINES) {
+    const row = $(`.line[data-k="${k}"]`), va = A.lines[k], vb = B ? B.lines[k] : 0;
+    const type = {aa: 'physical', q: 'physical', w: 'none', e: 'magic', r: 'physical', p: 'none', items: va || vb ? 'physical' : 'none'}[k];
+    const ty = $('.ty', row);
+    ty.className = `ty ${TYPE[type][0]}`;
+    ty.textContent = k === 'items' && type === 'none' ? '–' : TYPE[type][1];
+    row.classList.toggle('off', !Math.round(va) && !Math.round(vb));
+    const [ba, bb] = $$('.bars i', row);
+    ba.style.setProperty('--w', (va / max * 100).toFixed(1) + '%');
+    bb.style.setProperty('--w', (vb / max * 100).toFixed(1) + '%');
+    $('.n.a i', row).textContent = Math.round(va) ? nf(va) : '–';
+    $('.n.b i', row).textContent = Math.round(vb) ? nf(vb) : '–';
+    $('.n.a', row).classList.toggle('win', !B || va > vb);
+    $('.n.b', row).classList.toggle('win', !!B && vb > va);
+    gap($('.g', row), va, vb);
+    $('.sh', row).textContent = Math.round(va) ? Math.round(va / A.total * 100) + '%' : '–';
+    const input = $('input', row);
+    if (input && document.activeElement !== input) input.value = S.combo[k];
+  }
+  for (const k of ['aa', 'q']) {
+    const row = $(`.critrow[data-k="${k}"]`);
+    $('.cr-b.a', row).innerHTML = critCells(k, 'a', resA());
+    $('.cr-b.b', row).innerHTML = B ? critCells(k, 'b', resB()) : '';
+  }
+  const tot = $('#total-row');
+  $('.n.a i', tot).textContent = nf(A.total);
+  $('.n.b i', tot).textContent = B ? nf(B.total) : '–';
+  $('.n.a', tot).classList.toggle('win', !B || A.total > B.total);
+  $('.n.b', tot).classList.toggle('win', !!B && B.total > A.total);
+  gap($('.g', tot), A.total, B ? B.total : 0);
+}
+function mixRow(k, r) {
+  const magic = Math.round(r.lines.e / r.total * 100), phys = 100 - magic;
+  return `<div class="mixrow"><span class="tag ${k} sm">${k.toUpperCase()}</span><span class="split"><i class="p" style="width:${phys}%"></i><i class="m" style="width:${magic}%"></i></span><span>${phys}% physical, ${magic}% magic</span></div>`;
+}
+function verdicts(A, B) {
+  const say = {a: [], b: []};
+  if (Math.round(A.total) !== Math.round(B.total)) {
+    const w = A.total > B.total ? 'a' : 'b', [x, y] = w === 'a' ? [A, B] : [B, A];
+    let best = null;
+    for (const k of LINES) {
+      const l = x.lines[k], o = y.lines[k];
+      if (o > 0 && l / o >= 1.3 && (!best || l - o > best.d)) best = {k, d: l - o, r: l / o};
+    }
+    const who = best && ({aa: 'autos hit', p: 'passive hits', items: 'items hit'}[best.k] || best.k.toUpperCase() + ' hits');
+    say[w].push(`<b>Burst.</b> +${Math.round((x.total / y.total - 1) * 100)}% combo${best ? `, ${who} ${best.r.toFixed(1)}× harder` : ''}`);
+  }
+  const da = A.R.dps, db = B.R.dps;
+  if (da !== db) {
+    const w = da > db ? 'a' : 'b';
+    say[w].push(`<b>Long fights.</b> +${Math.round((Math.max(da, db) / Math.min(da, db) - 1) * 100)}% DPS, kills ${Math.abs(A.R.ttk - B.R.ttk).toFixed(1)} s sooner`);
+  }
+  return ['a', 'b'].map(k => `<div class="vd"><span class="tag ${k} sm">${k.toUpperCase()}</span><p>${say[k].join('. ') || 'Behind on this combo and in long fights'}</p></div>`).join('');
+}
+function paintSide(A, B) {
+  const cb = (k, R) => `<div class="cb"><span class="tag ${k} sm">${k.toUpperCase()}</span><span><b>${pct(R.stats.crit)}</b> chance, crits deal <b>${pct(R.stats.critDmg, 1)}</b></span><p>${esc(multWhy(k))}</p></div>`;
+  $('#bside').innerHTML = `
+    <div class="bs"><div class="sec-head"><span class="lbl">Yasuo options</span></div>
+      <label class="opt"><input type="number" value="0" min="0"><span>Sweeping Blade stacks from earlier dashes</span></label>
+      <label class="opt"><input type="checkbox"><span>Last Breath's armor penetration active</span></label>
+      <label class="opt"><input type="number" value="0" min="0"><span>Target's bonus armor (for Last Breath's armor penetration)</span></label></div>
+    <div class="bs" data-wf="5"><div class="sec-head"><span class="lbl">Crits</span><span class="pin" data-n="5">5</span></div>
+      ${cb('a', resA())}${B ? cb('b', resB()) : ''}
+      <div class="notes"><p>Crit chance: the 25% from items, doubled by Way of the Wanderer.</p>
+        <p><b>Can crit:</b> auto attacks; Steel Tempest, its AD part only.</p>
+        <p><b>Can't crit:</b> Sweeping Blade, Last Breath, item effects.</p></div></div>
+    <div class="bs"><span class="lbl">Damage mix</span>${mixRow('a', A)}${B ? mixRow('b', B) : ''}</div>
+    <div class="bs"><span class="lbl">Blocked by the target</span>
+      <div class="pair"><span class="mv a"><span class="tag a sm only-cmp">A</span><i>${nf(A.blocked)}</i></span>${B ? `<span class="mv b"><span class="tag b sm">B</span><i>${nf(B.blocked)}</i></span>` : ''}</div>
+      <span class="hint">Damage lost to armor and magic resist</span></div>
+    ${B ? `<div class="bs"><span class="lbl">Where each build wins</span>${verdicts(A, B)}</div>` : ''}
+    <div class="bs"><span class="lbl">What these numbers assume</span><div class="notes">
+      <p>Sweeping Blade: Sweeping Blade has no stacks unless "Sweeping Blade stacks from earlier dashes" is set: one enemy cannot be dashed through again before they run out.</p>
+      <p>Last Breath: Last Breath needs an airborne target, such as one hit by the whirlwind of the third Steel Tempest.</p>
+      <p>Last Breath: The armor penetration applies to basic attacks and Steel Tempest after Last Breath is cast in the combo, or throughout with "Last Breath's armor penetration active". Below 100% critical strike chance it is scaled down by the chance.</p>
+      <p>Last Breath: It counts only against the amount set as the target's bonus armor; left at 0 it adds nothing.</p></div></div>`;
+}
+
+/* ---------- more stats tab ---------- */
+/* Every stat the calculation returns. The old Stats tab had twelve; the rest are marked new. */
+const n0 = v => nf(v), p0 = v => pct(v), p1 = v => pct(v, 1), as2 = v => v.toFixed(2);
+const MORE = [
+  ['Offense', [
+    ['Attack damage', s => s.ad, n0, s => `${nf(s.adBase)} base + ${nf(s.adBonus)}`],
+    ['Ability power', s => s.ap, n0, s => s.ap ? 'all from items' : 'none'],
+    ['Attack speed', s => s.as, as2, s => `0.697 base, +${Math.round(s.asBonus * 100)}%`],
+    ['Crit chance', s => s.crit, p0, () => 'doubled by passive'],
+    ['Crit damage', s => s.critDmg, p1, () => 'what a crit deals', true],
+    ['Attack range', s => s.range, n0, () => 'melee', true],
+  ]],
+  ['Penetration and tempo', [
+    ['Lethality', s => s.leth, n0, s => s.leth ? 'flat armor penetration' : 'none'],
+    ['Armor penetration', s => s.apen, p0, s => s.apen ? 'percent' : 'none', true],
+    ['Magic penetration', s => s.mpenF, n0, s => s.mpenF ? 'flat' : 'none'],
+    ['Magic penetration %', s => s.mpenP, p0, s => s.mpenP ? 'percent' : 'none', true],
+    ['Ability haste', s => s.ah, n0, s => s.ah ? `${Math.round(s.ah / (100 + s.ah) * 100)}% shorter cooldowns` : 'none'],
+    ['Move speed', s => s.ms, n0, () => '345 base'],
+  ]],
+  ['Health and sustain', [
+    ['Health', s => s.hp, n0, s => `${nf(s.hp - s.hpBonus)} base + ${nf(s.hpBonus)}`],
+    ['Mana', s => s.mana, v => v ? nf(v) : '–', () => 'no mana, uses Flow'],
+    ['Armor', s => s.armor, n0, s => `${nf(s.armorBase)} base + ${nf(s.armorBonus)}`],
+    ['Magic resist', s => s.mr, n0, () => 'base at level 11'],
+    ['Life steal', s => s.ls, p0, s => s.ls ? 'attacks and Q' : 'none', true],
+    ['Omnivamp', s => s.ov, p0, s => s.ov ? 'on all damage' : 'none', true],
+  ]],
+];
+function paintMore() {
+  const sa = resA().stats, sb = resB().stats, B = S.compare;
+  let diff = 0, all = 0;
+  $('#more-grid').innerHTML = MORE.map(([group, rows]) => {
+    const head = B ? `<div class="srow shead"><span class="lbl">${group}</span><span class="tag a xs">A</span><span class="tag b xs">B</span><span class="lbl">Gap</span></div>`
+      : `<div class="srow shead"><span class="lbl">${group}</span><span></span><span></span></div>`;
+    return `<div>${head}${rows.map(([label, get, fmt, note, isNew]) => {
+      const a = get(sa), b = get(sb), tag = isNew ? '<span class="new" title="Not on the Stats tab today">new</span>' : '';
+      all++;
+      if (!B) return `<div class="srow"><span class="sn">${label}${tag}</span><span class="n">${fmt(a)}</span><span class="note">${esc(note(sa))}</span></div>`;
+      if (a === b) return `<div class="srow same"><span class="sn">${label}${tag}</span><span class="n">${fmt(a)}</span><span class="n">${fmt(b)}</span><span class="g">same</span></div>`;
+      diff++;
+      const w = a > b ? 'a' : 'b', d = Math.abs(a - b);
+      return `<div class="srow"><span class="sn">${label}${tag}</span><span class="n${w === 'a' ? ' win' : ''}">${fmt(a)}</span><span class="n${w === 'b' ? ' win' : ''}">${fmt(b)}</span><span class="g ${w}">+${fmt(d)}</span></div>`;
+    }).join('')}</div>`;
+  }).join('');
+  $('#ts-stats').textContent = B ? `All ${all}, ${diff} differ; where each is ahead` : `All ${all} stats`;
+}
+/* Where each build is ahead: every stat of the table above that one build has more of, and by how much.
+   Stats that match are named underneath, leaving out the ones both builds have none of. */
+function paintAhead() {
+  const el = $('#ahead');
+  if (!S.compare) { el.innerHTML = '<span class="hint">With a second build, this lists where each one is ahead of the other.</span>'; return; }
+  const sa = resA().stats, sb = resB().stats, rows = MORE.flatMap(g => g[1]);
+  const side = (k, s, o) => {
+    const up = rows.filter(([, get]) => get(s) > get(o));
+    return `<div class="ah ${k}"><div class="ah-head"><span class="tag ${k} sm">${k.toUpperCase()}</span>${esc(nameOf(k))}</div>`
+      + (up.map(([label, get, fmt]) => `<div class="ah-row"><b>+${fmt(get(s) - get(o))}</b><span>${label}</span></div>`).join('')
+        || '<div class="ah-none">Ahead on nothing</div>') + '</div>';
+  };
+  const same = rows.filter(([, get]) => get(sa) === get(sb) && get(sa)).map(([label, get, fmt]) => `${label.toLowerCase()} <b>${fmt(get(sa))}</b>`);
+  el.innerHTML = `<div class="sec-head"><span class="lbl">Where each build is ahead</span></div>
+    <div class="ah-cols">${side('a', sa, sb)}${side('b', sb, sa)}</div>
+    ${same.length ? `<p class="ah-same">Same in both: ${same.join(', ')}.</p>` : ''}`;
+}
+
+/* ---------- target tab ---------- */
+function paintTarget(A, B) {
+  for (const [k, r] of [['a', A], ['b', B]]) {
+    if (!r) continue;
+    $(`#bar-${k}`).style.setProperty('--left', (r.left / HP * 100).toFixed(1) + '%');
+    $(`#left-${k}`).textContent = nf(r.left);
+  }
+}
+
+/* ---------- tabs and the rest ---------- */
+function paintTabs() {
+  const na = S.builds.a.filter(Boolean).length, nb = S.builds.b.filter(Boolean).length;
+  $('#ts-build').textContent = 'Yasuo, level 11, ' + (S.compare ? `${na} and ${nb} items${S.ranks === 'split' ? ', ranks per build' : ''}` : `${na} items`);
+}
+function setTab(t) {
+  S.tab = t;
+  $$('.tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
+  $$('.pane').forEach(p => p.hidden = p.dataset.pane !== t);
+  if (t !== 'build') closePicker();
+}
+function paint() {
+  const A = result(resA()), B = S.compare ? result(resB()) : null;
+  $$('.step').forEach(el => { const k = el.dataset.k; if (k !== 'w') { $('output', el).textContent = S.combo[k]; el.classList.toggle('zero', !S.combo[k]); } });
+  $('#combo-sum').textContent = comboText();
+  paintHero(A, B); paintGlance(); paintLines(A, B); paintSide(A, B); paintMore(); paintAhead(); paintTarget(A, B); paintRanks(); paintTabs();
+  if (noteFor) mark(noteFor);
+}
+function setCompare(on) {
+  S.compare = on;
+  document.body.dataset.compare = on ? 'on' : 'off';
+  $$('#cmp-seg button').forEach(b => b.setAttribute('aria-checked', (b.dataset.cmp === 'on') === on));
+  if (!on && pick && pick.b === 'b') closePicker();
+  renderBuilds(); paint();
+}
+
+/* ---------- the six changes ---------- */
+const NOTES = {
+  1: {tab: 'build', title: "Summoner's Rift items by default", short: 'The picker shows only Summoner\'s Rift items, with buttons to add ARAM and Arena.',
+    html: `<p>The item picker shows only Summoner's Rift items. <b>+ ARAM</b> and <b>+ Arena</b> add those shops; their items carry a badge, in the picker and in a slot. The button next to "Items" says which shops are on and opens the picker. A search that finds nothing on the Rift offers the other shops.</p>
+      <span class="k">Why you saw other items</span><p>The pipeline already keeps Summoner's Rift items only, but Data Dragon lists 17 others as Rift items: 13 with ids 66xxxx (Gambler's Blade, Cruelty, Flesheater, Demon King's Crown and more, whose names match Arena items) and ARAM's four Guardian's items. Today they sit in the picker with everything else.</p>
+      <span class="k">What it needs</span><p>The pipeline tags each item with the modes it is sold in, and keeps ARAM and Arena items too (the dashed tiles here: they are not in the dataset yet). Arena sells its own copies of Rift items with different stats, and Data Dragon's ARAM list still holds dozens of long-removed items, so each mode needs its own filter. The share link carries the shop choice.</p>`},
+  2: {tab: null, title: 'The combo on the main page', short: 'One line in the totals band; the pencil opens it for editing.',
+    html: `<p>The combo is one line in the totals band ("3 autos, 2× Q, E and R"), so it is on screen whichever tab is open. The pencil, or the line itself, drops down a count per action with − and +; Wind Wall is greyed because it deals no damage. Reset goes back to three autos and one of each.</p>
+      <span class="k">What was there</span><p>This page could already change the combo, but only in the Breakdown tab's Qty column, which is easy to miss. That column stays and edits the same counts.</p>
+      <span class="k">What it needs</span><p>Nothing new from the API. In the wireframe a count rescales its line; the real page recalculates.</p>`},
+  3: {tab: null, title: 'Stats at a glance, instead of "B ahead by n"', short: 'Health, mana, AD, AP, armor, MR and crit for both builds, beside the totals.',
+    html: `<p>Health, mana, AD, AP, armor, magic resist and crit chance for both builds, beside the totals. Where the builds differ, the higher number is in its build's colour; hover a number for where it comes from, or an icon for its name. Mana shows – for a champion without it.</p>
+      <span class="k">Column heads</span><p>Icons or words; try both: <span class="seg sm" role="radiogroup" aria-label="Column heads"><button role="radio" data-gl="icons">Icons</button><button role="radio" data-gl="words">Words</button></span></p>
+      <p>The icons are the game's own: the ones item tooltips put beside a stat, cut from its <b>texticons.png</b>. Riot's developer policy allows game art in a product like this one, as with the item icons; what it keeps off-limits is its logos and trademarks.</p>
+      <span class="k">What it needs</span><p>The numbers are already in the calc result. The pipeline mirrors texticons.png from CommunityDragon and cuts the seven icons into a strip in web/art/, as it does the item sheet. The game publishes no map of that sheet, so where each icon sits is written down once and checked each patch: an icon that moved should stop the build, like a model that no longer binds.</p>`},
+  4: {tab: 'stats', title: 'More stats', short: 'All 18 stats, then where each build is ahead of the other.',
+    html: `<p>Replaces the Stats tab. It lists all 18 stats the calculation returns (Stats showed 12; the new ones are marked). Below them, where each build is ahead: every stat one build has more of, by how much, A's on the left and B's on the right. Stats that match are named underneath, leaving out the ones neither build has.</p>
+      <span class="k">What it needs</span><p>Nothing new: it is the table's Gap column, sorted by the build that has more.</p>`},
+  5: {tab: 'break', title: 'Crit, no crit and average', short: 'Each line that can crit shows all three; "Crits" switches the whole combo.',
+    html: `<span class="k">How crit works today</span><p>Crits are averaged. An attack deals AD × (1 + chance × (multiplier − 1)). An ability with its own crit formula deals its normal amount plus chance × (crit − normal). Only that average is shown anywhere.</p>
+      <p>The multiplier is 200% from the game files (Ashe 100%). Crit damage from items is added to it: Infinity Edge's +30% makes 230%. A passive can then scale the whole crit: Yasuo's deal 95%, so 218.5%. An ability uses its own formula, and that formula decides what crits: Steel Tempest crits for its base + 105% AD × multiplier, so only its AD part crits.</p>
+      <span class="k">New</span><p>Under each line that can crit, one hit without a crit, with a crit (and its multiplier; hover for how it is made), and the average at the build's chance. <b>Crits</b> in the totals band switches the whole combo between Average, Never and Always. DPS and time to kill stay on the average. The Breakdown's side column explains each build's chance and multiplier.</p>
+      <span class="k">What it needs</span><p>The engine reports each line's damage with no crits and with every crit (the same fight at 0% and 100%), and the multiplier each crit-capable hit used.</p>`},
+  6: {tab: 'build', title: 'Ranks per build', short: 'A chain button links or unlinks the two builds\' ranks.',
+    html: `<p>When comparing, the chain next to "Ability ranks" links the two builds' ranks. Linked is today's single row, and stays the default. Unlinked, each build gets its own ranks and max order: here A maxes Q and B maxes E, and ranks that differ are underlined in the build's colour, as items are.</p>
+      <span class="k">What it needs</span><p>The calc request takes ranks per build, and the share link carries both sets.</p>`},
+};
+let noteFor = null;
+function mark(n) {
+  $$('.hl').forEach(el => el.classList.remove('hl'));
+  $$('.pin.open').forEach(el => el.classList.remove('open'));
+  if (!n) return;
+  $$(`[data-wf="${n}"]`).forEach(el => el.classList.add('hl'));
+  $$(`.pin[data-n="${n}"]`).forEach(el => el.classList.add('open'));
+}
+function openNote(n, pin) {
+  const note = $('#note'), d = NOTES[n];
+  if (noteFor === n && !note.hidden) return closeNote();
+  noteFor = n;
+  note.innerHTML = `<button class="esc x" id="note-x">Esc</button><h3><span class="pin">${n}</span>${esc(d.title)}</h3>${d.html}`;
+  paintGlanceSwitch();
+  note.hidden = false;
+  // centred on the pin, but clear of the region the pin sits in, so what the note describes stays visible
+  const r = pin.getBoundingClientRect(), box = (pin.closest('[data-wf]') || pin).getBoundingClientRect();
+  const w = note.offsetWidth, h = note.offsetHeight, gapPx = 10;
+  let left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8);
+  let top = box.bottom + gapPx;
+  if (top + h > innerHeight - 8) top = Math.max(8, box.top - gapPx - h);
+  note.style.left = left + 'px'; note.style.top = top + 'px';
+  mark(n);
+}
+function closeNote() { $('#note').hidden = true; noteFor = null; mark(null); }
+const paintGlanceSwitch = () => $$('#note [data-gl]').forEach(b => b.setAttribute('aria-checked', b.dataset.gl === S.glance));
+function go(n) {
+  setMenu(null);
+  const d = NOTES[n];
+  if (d.tab) setTab(d.tab);
+  if (n === 6 && !S.compare) setCompare(true);
+  const pin = $$(`.pin[data-n="${n}"]`).find(p => p.offsetParent !== null && !p.closest('#note') && !p.closest('.wf-menu'));
+  if (pin) { noteFor = null; openNote(n, pin); }
+}
+/* One dropdown open at a time: the list of changes or the combo. A .menu-btn names its panel in
+   aria-controls; the combo has two (its line and its pencil), so both follow the panel. */
+let menuOpen = null;
+function setMenu(id) {
+  const next = id && id !== menuOpen ? id : null;
+  const show = (panel, on) => { $('#' + panel).hidden = !on; $$(`[aria-controls="${panel}"]`).forEach(b => b.setAttribute('aria-expanded', on)); };
+  if (menuOpen) show(menuOpen, false);
+  menuOpen = next;
+  if (menuOpen) show(menuOpen, true);
+}
+
+/* ---------- wiring ---------- */
+function wire() {
+  $('#wf-menu').innerHTML = `<p>A wireframe of the tabs page with six changes. The numbers are the engine's for Yasuo at level 11 against the 2,400 HP / 80 armor / 50 MR dummy; the switches swap between precomputed results.</p>`
+    + Object.entries(NOTES).map(([n, d]) => `<button class="wfi" role="menuitem" data-go="${n}"><span class="pin">${n}</span><b>${esc(d.title)}</b><span>${esc(d.short)}</span></button>`).join('');
+  $('#wf-menu').addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) go(+b.dataset.go); });
+  document.addEventListener('click', e => {
+    const pin = e.target.closest('.pin[data-n]');
+    if (pin) { e.preventDefault(); e.stopPropagation(); openNote(+pin.dataset.n, pin); return; }
+    if (e.target.closest('#note-x')) { closeNote(); return; }
+    const gl = e.target.closest('[data-gl]');
+    if (gl) { S.glance = gl.dataset.gl; paintGlance(); paintGlanceSwitch(); mark(noteFor); return; }
+    // the changes menu opens a note itself, so a click in it must not close one
+    if (!e.target.closest('#note') && !e.target.closest('.wf-menu')) closeNote();
+    const mb = e.target.closest('.menu-btn');
+    if (mb) setMenu(mb.getAttribute('aria-controls'));
+    else if (menuOpen && !e.target.closest('.menu')) setMenu(null);
+  });
+
+  $('.tabs').addEventListener('click', e => { const t = e.target.closest('.tab'); if (t) setTab(t.dataset.tab); });
+  $('#cmp-seg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setCompare(b.dataset.cmp === 'on'); });
+  $('#add-b').addEventListener('click', () => setCompare(true));
+  $('#crit-seg').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    S.crit = b.dataset.crit; document.body.dataset.crit = S.crit;
+    $$('#crit-seg button').forEach(x => x.setAttribute('aria-checked', x === b));
+    paint();
+  });
+  $('#rank-link').addEventListener('click', () => {
+    S.ranks = S.ranks === 'split' ? 'same' : 'split'; document.body.dataset.ranks = S.ranks;
+    renderBuilds(); paint();
+  });
+  $('#combo-reset').addEventListener('click', () => { S.combo = {aa: 3, q: 1, w: 0, e: 1, r: 1}; paint(); });
+  $('#steps').addEventListener('click', e => {
+    const b = e.target.closest('button[data-d]'); if (!b) return;
+    const k = b.closest('.step').dataset.k;
+    S.combo[k] = Math.max(0, Math.min(30, S.combo[k] + +b.dataset.d));
+    paint();
+  });
+  $('#lines').addEventListener('input', e => {
+    const k = e.target.dataset.q; if (!k) return;
+    S.combo[k] = Math.max(0, Math.min(30, Math.round(+e.target.value) || 0));
+    paint();
+  });
+  for (const k of ['a', 'b']) $(`#name-${k}`).addEventListener('input', () => { $(`.nm-${k}`).textContent = nameOf(k); paintAhead(); });
+
+  const builds = $('#builds');
+  builds.addEventListener('click', e => {
+    if (e.target.closest('#shop-now')) { openPicker('a', Math.max(0, S.builds.a.findIndex(v => !v))); return; }
+    const slot = e.target.closest('.slot'); if (slot) openPicker(slot.dataset.b, +slot.dataset.i);
+  });
+  $('#item-chips').innerHTML = ITEM_FILTERS.map(([l], i) => `<button class="chip" data-f="${i}" aria-pressed="${i === 0}">${l}</button>`).join('');
+  $('#item-chips').addEventListener('click', e => {
+    const c = e.target.closest('.chip'); if (!c) return;
+    itemFilter = +c.dataset.f;
+    $$('#item-chips .chip').forEach(x => x.setAttribute('aria-pressed', x === c));
+    renderItems();
+  });
+  $('#picker').addEventListener('click', e => { const c = e.target.closest('[data-shop]'); if (c) setShop(c.dataset.shop); });
+  $('#item-q').addEventListener('input', renderItems);
+  $('#item-q').addEventListener('keydown', e => { if (e.key === 'Enter') { const f = $('#item-grid .pi[data-id]'); if (f) choose(+f.dataset.id); } });
+  $('#item-grid').addEventListener('click', e => { const p = e.target.closest('.pi[data-id]'); if (p) choose(+p.dataset.id); });
+  $('#item-grid').addEventListener('mouseover', e => {
+    const p = e.target.closest('.pi'); if (!p) return;
+    if (p.dataset.ph) {
+      $('#item-foot').innerHTML = `<b>${esc(p.dataset.ph)}</b><span>${SHOP[p.dataset.mode]} item. Not in the dataset yet: the pipeline keeps Summoner's Rift items only.</span>`;
+      return;
+    }
+    const it = ITEMS.get(+p.dataset.id);
+    const about = it.mode === 'arena' ? `Mode item (id ${it.id}). Data Dragon lists it for Summoner's Rift, which is how it reaches today's picker; its name matches an Arena item.`
+      : it.mode === 'aram' ? 'ARAM starter. Data Dragon lists it for Summoner\'s Rift as well, which is how it reaches today\'s picker.'
+      : it.tags.join(', ');
+    $('#item-foot').innerHTML = `<b>${esc(it.name)}</b><span class="g">${nf(it.gold)} g</span><span>${esc(about)}</span>`;
+  });
+  $('#item-grid').addEventListener('mouseleave', footIdle);
+  $('#picker-x').addEventListener('click', closePicker);
+  document.addEventListener('mousedown', e => { if (pick && !e.target.closest('#picker') && !e.target.closest('.slot') && !e.target.closest('#shop-now')) closePicker(); });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { if (!$('#note').hidden) closeNote(); else if (menuOpen) setMenu(null); else closePicker(); return; }
+    if (e.ctrlKey || e.metaKey || e.altKey || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    const tab = {1: 'build', 2: 'target', 3: 'break', 4: 'stats'}[e.key];
+    if (tab) setTab(tab);
+  });
+  addEventListener('resize', closeNote);
+}
+
+buildRuler(); renderSteps(); renderLines(); wire(); renderBuilds(); paint();
+const want = /[#&]tab=(build|target|break|stats)\b/.exec(location.hash);
+if (want) setTab(want[1]);
+const pinN = /[#&]note=([1-6])\b/.exec(location.hash);
+if (pinN) go(+pinN[1]);
+if (/[#&]picker\b/.test(location.hash)) { openPicker('a', 4); const s = /[#&]shop=([a-z,]+)/.exec(location.hash); if (s) for (const m of s[1].split(',')) if (m in S.shop) setShop(m); }
+})();
+</script>
+</body>
+</html>

@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 import { rawDir } from './paths.ts';
 
 export const DDRAGON = 'https://ddragon.leagueoflegends.com';
-const CDRAGON = 'https://raw.communitydragon.org';
+export const CDRAGON = 'https://raw.communitydragon.org';
 /** Community Dragon's lookup service: finds a picture by what it is instead of by file name. */
 export const CDRAGON_CDN = 'https://cdn.communitydragon.org';
 const USER_AGENT = `itemize.lol-pipeline/0.1 (${process.env.ITEMIZE_CONTACT ?? 'https://itemize.lol'})`;

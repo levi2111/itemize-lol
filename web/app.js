@@ -20,12 +20,18 @@ const S = {
   level: 13,
   ranks: {q:5, w:1, e:5, r:2},
   order: 'qew',
+  // B's own ranks and max order, used while comparing with the ranks unlinked (the tabs page's chain button)
+  split: false,
+  ranksB: {q:5, w:1, e:5, r:2},
+  orderB: 'qew',
   builds: {a:[6672,3006,3124,3115,null,null], b:[6655,3020,3115,4645,null,null]},
   compare: true,
   target: 'dummy',
   dummy: {hp:2400, ar:80, mr:50},
   enemy: {id:'Ornn', name:'Ornn', level:13},
   combo: {aa:3, q:1, w:1, e:0, r:0},
+  crits: 'average',                 // how the combo counts critical strikes: average, never or always
+  shops: {aram: false, arena: false},   // shops the item picker adds to Summoner's Rift's
   items: new Map(),
   champs: [],
   res: null,                        // {a, b}: the last results, b null with one build
@@ -72,6 +78,20 @@ function useArt(art) {
     root.setProperty(`--${k}-rows`, art[k].rows);
     warm(url).then(() => document.body.classList.add(`has-${k}`));
   }
+  // the game's stat icons, one strip in the order art.stats gives
+  if (art.stats) {
+    const url = artUrl('stats.webp');
+    root.setProperty('--art-stats', `url("${url}")`);
+    root.setProperty('--stats-n', art.stats.length);
+    warm(url).then(() => document.body.classList.add('has-stats'));
+  }
+}
+/* One of the game's stat icons, by its id in the art index (hp, mana, ad, ap, armor, mr, crit). */
+function statIco(id, name) {
+  const n = ART?.stats?.indexOf(id) ?? -1;
+  if (n < 0) return '';
+  const x = ART.stats.length > 1 ? n / (ART.stats.length - 1) * 100 : 0;
+  return `<i class="si" style="background-position:${+x.toFixed(3)}% 0" role="img" aria-label="${esc(name)}"></i>`;
 }
 function tile(k, id) {
   const n = spot[k].get(id), s = ART?.[k];
@@ -106,8 +126,8 @@ async function recalc() {
   document.body.classList.add('loading');
   const body = {
     champion: S.champ.id, level: S.level, ranks: S.ranks, options: S.options,
-    builds: (S.compare ? ['a', 'b'] : ['a']).map(k => ({items: S.builds[k].filter(Boolean)})),
-    target: targetBody(), combo: {counts: S.combo},
+    builds: (S.compare ? ['a', 'b'] : ['a']).map(k => ({items: S.builds[k].filter(Boolean), ...(k === 'b' && S.split && {ranks: S.ranksB})})),
+    target: targetBody(), combo: {counts: S.combo, crits: S.crits},
   };
   try {
     const out = await api('/calc', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)});
@@ -134,7 +154,7 @@ function setTab(t) {
 function paintTabs() {
   if (RECEIPT) return;
   const na = S.builds.a.filter(Boolean).length, nb = S.builds.b.filter(Boolean).length, v = readDials(), e = S.enemy;
-  $('#ts-build').textContent = `${S.champ.name}, level ${S.level}, ` + (S.compare ? `${na} and ${nb} items` : `${na} items`);
+  $('#ts-build').textContent = `${S.champ.name}, level ${S.level}, ` + (S.compare ? `${na} and ${nb} items${S.split ? ', ranks per build' : ''}` : `${na} items`);
   $('#ts-target').textContent = S.target === 'raw' ? 'None, raw output'
     : `${S.target === 'dummy' ? 'Dummy' : e.name + ' Lv ' + e.level}, ${nf(v.hp)} HP, ${v.ar} armor, ${v.mr} MR`;
 }
@@ -168,11 +188,37 @@ function paintSub() {
     $('#l-sub').textContent = `${S.champ.name} at level ${S.level}, items included`;
     return;
   }
-  $('#h-ctx').textContent = `${S.champ.name}, level ${S.level}, ` +
-    (t === 'raw' ? 'no target' : t === 'dummy' ? 'against a dummy' : `against ${e.name} at level ${e.level}`);
-  $('#h-combo').textContent = comboText();
-  $('#h-mode').textContent = t === 'raw' ? 'Raw output.' : 'After mitigation.';
+  $('#combo-sum').textContent = comboText();
+  paintSteps();
   paintTabs();
+}
+/* The combo's dropdown on the tabs page: a count per action, the same counts as the Breakdown's Qty column.
+   Built once per kit; paintSteps fills in the counts. */
+const deadSlot = k => SLOTS.includes(k) && S.view?.slots[k] && !S.view.slots[k].damaging;
+function renderSteps() {
+  const el = $('#steps');
+  if (!el) return;
+  el.innerHTML = ACTIONS.map(k => {
+    const name = k === 'aa' ? 'Auto attacks' : S.view?.slots[k]?.name || k.toUpperCase() + ' ability', dead = deadSlot(k);
+    const face = k === 'aa' ? 'AA' : `<i class="ico kit ${k}"></i>`;
+    const ctl = dead ? '<span class="none">no damage</span>'
+      : `<button data-d="-1" aria-label="One fewer: ${esc(name)}">−</button><output></output><button data-d="1" aria-label="One more: ${esc(name)}">+</button>`;
+    return `<div class="step${dead ? ' dead' : ''}" data-k="${k}"><span class="sk">${face}</span><span class="nm">${esc(name)}${k === 'aa' ? '' : `<small>${k.toUpperCase()}</small>`}</span>${ctl}</div>`;
+  }).join('');
+  paintSteps();
+}
+function paintSteps() {
+  for (const el of $$('#steps .step')) {
+    const k = el.dataset.k, out = $('output', el);
+    if (out) out.textContent = S.combo[k];
+    el.classList.toggle('zero', !S.combo[k]);
+  }
+  // the Breakdown's Qty column shows the same counts; the one being typed in is left alone
+  for (const input of $$('#lines input[data-q]')) if (document.activeElement !== input) input.value = S.combo[input.dataset.q];
+}
+function defaultCombo() {
+  S.combo = {aa: 3};
+  for (const k of SLOTS) S.combo[k] = deadSlot(k) ? 0 : 1;
 }
 const maxRank = k => S.view?.slots[k]?.maxRank || (k === 'r' ? 3 : 5);
 /* The old picture goes blank at once and the new one fades in when it has arrived. */
@@ -183,13 +229,16 @@ function paintSplash(el, id) {
   if (!ready.has(url)) el.classList.add('wait');
   warm(url).then(() => { if (el.dataset.src === url) el.src = url; });
 }
+/* The kit strip is set on each part of the page that shows ability icons: the ranks, and on the tabs
+   page also the per-build ranks and the combo's dropdown. */
 function paintKit() {
   const row = $('#skill-row'), url = kitUrl(S.champ.id);
   if (row.dataset.kit === url) return;
   row.dataset.kit = url;
-  const put = () => { row.style.setProperty('--art-kit', `url("${url}")`); row.classList.add('has-kit'); };
+  const els = [row, $('#rank-split'), $('#combo-menu')].filter(Boolean);
+  const put = () => els.forEach(el => { el.style.setProperty('--art-kit', `url("${url}")`); el.classList.add('has-kit'); });
   if (ready.has(url)) return put();
-  row.classList.remove('has-kit');
+  els.forEach(el => el.classList.remove('has-kit'));
   warm(url).then(() => { if (row.dataset.kit === url) put(); });
 }
 function nameKit() {
@@ -202,11 +251,11 @@ async function loadKit() {
     if (S.champ !== c) return;
     S.view = view;
   } catch (e) { if (S.champ === c) S.view = null; }
-  for (const k of SLOTS) S.ranks[k] = Math.min(S.ranks[k], maxRank(k));
+  for (const k of SLOTS) { S.ranks[k] = Math.min(S.ranks[k], maxRank(k)); S.ranksB[k] = Math.min(S.ranksB[k], maxRank(k)); }
   // a shared link may carry options this kit no longer has
   const known = new Set((S.view?.options || []).map(o => o.id));
   for (const id of Object.keys(S.options)) if (!known.has(id)) delete S.options[id];
-  nameKit(); paintSkills(); renderLines(); renderOpts(); schedule();
+  nameKit(); paintSkills(); renderLines(); renderSteps(); renderOpts(); schedule();
 }
 function setChamp(c) {
   S.champ = c; S.view = null; S.options = {};
@@ -215,8 +264,9 @@ function setChamp(c) {
   S.combo = {aa:3, q:1, w:1, e:1, r:1};
   comboFresh = true;
   if (S.order === 'manual') { S.order = 'qew'; $('#order').value = 'qew'; }
-  autoRanks();
-  paintChamp(); nameKit(); paintSkills(); renderLines(); loadKit();
+  if (S.orderB === 'manual') S.orderB = 'qew';
+  S.ranks = autoRanks(S.order); S.ranksB = autoRanks(S.orderB);
+  paintChamp(); nameKit(); paintSkills(); renderLines(); renderSteps(); loadKit();
 }
 let comboFresh = false;
 
@@ -238,15 +288,59 @@ function paintLevel() {
   });
   paintSub();
 }
-function autoRanks() {
-  const ord = [...S.order], r = {q:0, w:0, e:0, r:0};
+/* The ranks a max order gives at the current level. */
+function autoRanks(order) {
+  const ord = [...order], r = {q:0, w:0, e:0, r:0};
   for (let l = 1; l <= S.level; l++) {
     if ((l === 6 || l === 11 || l === 16) && r.r < maxRank('r')) { r.r++; continue; }
     const cap = Math.ceil(l / 2);
     const k = l <= 3 ? ord[l - 1] : (ord.find(x => r[x] < maxRank(x) && r[x] < cap) || ord.find(x => r[x] < maxRank(x)));
     if (k) r[k]++;
   }
-  S.ranks = r;
+  return r;
+}
+const pointsText = (r, short) => {
+  const used = r.q + r.w + r.e + r.r;
+  return used > S.level ? `<b>${used}</b> of ${S.level}${short ? '' : ' points'}, ${used - S.level} too many`
+    : `<b>${used}</b> of ${S.level}${short ? '' : ' points spent'}`;
+};
+/* Comparing with the ranks unlinked: a compact row per build, each with its own pips and max order.
+   A rank that differs from the other build's is underlined in its build's colour, as items are. */
+function paintSplit() {
+  const el = $('#rank-split');
+  if (!el) return;
+  const link = $('#rank-link');
+  link.setAttribute('aria-pressed', !S.split);
+  link.setAttribute('aria-label', S.split ? 'Link the ranks of A and B' : 'Unlink the ranks of A and B');
+  link.title = S.split ? 'Unlinked: each build has its own ranks. Click to share A\'s.' : 'Linked: A and B share these ranks. Click to give each build its own.';
+  document.body.dataset.ranks = S.split ? 'split' : 'same';
+  if (!S.split) { el.innerHTML = ''; return; }
+  const options = $('#order').innerHTML;
+  const row = (b, r, o, order) => `<div class="rrow ${b}"><span class="tag ${b} sm">${b.toUpperCase()}</span>
+      <div class="rs"><div class="ib" title="${esc(S.view?.slots.p?.name || 'Passive')}"><i class="ico kit p"></i></div></div>
+      ${SLOTS.map(k => `<div class="rs${r[k] !== o[k] ? ' diff' : ''}${!r[k] ? ' zero' : ''}" title="${esc(S.view?.slots[k]?.name || k.toUpperCase())}, rank ${r[k]}"><div class="ib"><i class="ico kit ${k}"></i><span class="k">${k.toUpperCase()}</span></div>`
+        + `<span class="pips">${Array.from({length: maxRank(k)}, (_, i) => `<button class="pip${i < r[k] ? ' on' : ''}" data-b="${b}" data-k="${k}" data-n="${i + 1}" aria-label="Build ${b.toUpperCase()}, ${k.toUpperCase()} rank ${i + 1}"></button>`).join('')}</span><b>${r[k]}</b></div>`).join('')}
+      <div class="plan"><select data-ob="${b}" aria-label="Max order of build ${b.toUpperCase()}">${options}</select><span class="pts${r.q + r.w + r.e + r.r > S.level ? ' over' : ''}">${pointsText(r, true)}</span></div></div>`;
+  el.innerHTML = row('a', S.ranks, S.ranksB, S.order) + row('b', S.ranksB, S.ranks, S.orderB);
+  $('select[data-ob="a"]', el).value = S.order;
+  $('select[data-ob="b"]', el).value = S.orderB;
+}
+function setSplit(on) {
+  S.split = on;
+  // unlinking starts B from A's ranks
+  if (on) { S.ranksB = {...S.ranks}; S.orderB = S.order; }
+  paintSkills(); renderBuilds(); schedule();
+}
+function setOrder(b, order) {
+  if (b === 'b') { S.orderB = order; if (order !== 'manual') S.ranksB = autoRanks(order); }
+  else { S.order = order; $('#order').value = order; if (order !== 'manual') S.ranks = autoRanks(order); }
+  paintSkills(); schedule();
+}
+function setRank(b, k, n) {
+  const r = b === 'b' ? S.ranksB : S.ranks;
+  r[k] = r[k] === n ? n - 1 : n;
+  if (b === 'b') S.orderB = 'manual'; else { S.order = 'manual'; $('#order').value = 'manual'; }
+  paintSkills(); schedule();
 }
 function paintSkills() {
   for (const k of SLOTS) {
@@ -258,12 +352,13 @@ function paintSkills() {
   }
   const used = S.ranks.q + S.ranks.w + S.ranks.e + S.ranks.r, pts = $('#pts');
   pts.classList.toggle('over', used > S.level);
-  pts.innerHTML = used > S.level ? `<b>${used}</b> of ${S.level} points, ${used - S.level} too many`
-    : `<b>${used}</b> of ${S.level} points spent`;
+  pts.innerHTML = pointsText(S.ranks);
+  paintSplit();
 }
 function setLevel(n) {
   S.level = Math.max(1, Math.min(18, n));
-  if (S.order !== 'manual') autoRanks();
+  if (S.order !== 'manual') S.ranks = autoRanks(S.order);
+  if (S.orderB !== 'manual') S.ranksB = autoRanks(S.orderB);
   paintLevel(); paintSkills(); schedule();
 }
 
@@ -276,12 +371,31 @@ function renderBuilds() {
     $('.slots', row).innerHTML = S.builds[k].map((id, i) => {
       const sel = pick && pick.b === k && pick.i === i ? ' sel' : '';
       if (!id) return `<div class="slot empty${sel}" role="button" tabindex="0" data-b="${k}" data-i="${i}" aria-label="Build ${K}, slot ${i + 1}, empty"></div>`;
-      const name = esc(S.items.get(id)?.name || 'Item ' + id);
-      return `<div class="slot${other.has(id) ? '' : ' uniq'}${sel}" role="button" tabindex="0" data-b="${k}" data-i="${i}" title="${name}" aria-label="Build ${K}, slot ${i + 1}, ${name}">${itemIco(id)}<button class="rm" data-rm aria-label="Remove ${name}">×</button></div>`;
+      const it = S.items.get(id), name = esc(it?.name || 'Item ' + id), shop = shopOf(it);
+      return `<div class="slot${other.has(id) ? '' : ' uniq'}${sel}" role="button" tabindex="0" data-b="${k}" data-i="${i}" title="${name}${shop ? `, ${SHOP[shop]} item` : ''}" aria-label="Build ${K}, slot ${i + 1}, ${name}">${itemIco(id)}${badge(it)}<button class="rm" data-rm aria-label="Remove ${name}">×</button></div>`;
     }).join('');
     $('.b-gold b', row).textContent = nf(S.builds[k].reduce((s, id) => s + (S.items.get(id)?.gold || 0), 0));
   }
+  const now = $('#shop-now');
+  if (now) {
+    const on = Object.keys(S.shops).filter(m => S.shops[m]);
+    now.textContent = on.length ? `Summoner's Rift + ${on.map(m => SHOP[m]).join(' + ')}` : "Summoner's Rift items";
+    $('#items-hint').textContent = !S.compare ? 'Click a slot to change it'
+      : S.split ? 'Both builds use the champion and level above; ranks are per build. Underlined items differ.'
+      : 'Both builds use the champion, level and ranks above. Underlined items differ.';
+  }
   paintTabs();
+}
+/* The shops: Summoner's Rift's items are always offered; ARAM's and Arena's own can be added.
+   An item the Rift does not sell is marked with its shop, in the picker and in a slot. */
+const SHOP = {sr: "Summoner's Rift", aram: 'ARAM', arena: 'Arena'};
+const ADDABLE = ['aram', 'arena'];
+const shopOf = it => it?.shops && !it.shops.includes('sr') ? it.shops[0] : null;
+const badge = it => shopOf(it) ? `<span class="md">${shopOf(it)}</span>` : '';
+function setShop(m) {
+  S.shops[m] = !S.shops[m];
+  $$('#shop .chip[data-shop]').forEach(c => c.setAttribute('aria-pressed', !!S.shops[c.dataset.shop]));
+  renderItems(); renderBuilds();
 }
 function pickerLabel() {
   $('#picker-for').innerHTML = `<span class="tag ${pick.b} sm">${pick.b.toUpperCase()}</span>Slot ${pick.i + 1}`;
@@ -299,13 +413,25 @@ function closePicker() {
 function footIdle() { $('#item-foot').innerHTML = '<span>Hover an item for details. Enter picks the first result.</span>'; }
 function renderItems() {
   const q = $('#item-q').value.trim().toLowerCase(), f = ITEM_FILTERS[itemFilter][1];
-  const list = [...S.items.values()].filter(it => (!q || it.name.toLowerCase().includes(q)) && (!f || it.tags.some(t => f.includes(t))))
-    .sort((x, y) => x.name.localeCompare(y.name));
-  const cell = it => `<button class="pi" data-id="${it.id}" aria-label="${esc(it.name)}, ${nf(it.gold)} gold">${itemIco(it.id)}</button>`;
-  const fin = list.filter(i => !i.component), comp = list.filter(i => i.component);
-  $('#item-grid').innerHTML = (fin.length ? `<div class="grp">Finished items</div>${fin.map(cell).join('')}` : '')
-    + (comp.length ? `<div class="grp">Components</div>${comp.map(cell).join('')}` : '')
-    || '<div class="grp">No items match</div>';
+  const match = it => (!q || it.name.toLowerCase().includes(q)) && (!f || it.tags.some(t => f.includes(t)));
+  const sold = (it, m) => (it.shops || ['sr']).includes(m);
+  const all = [...S.items.values()].filter(match).sort((x, y) => x.name.localeCompare(y.name));
+  const cell = it => `<button class="pi" data-id="${it.id}" aria-label="${esc(it.name)}, ${nf(it.gold)} gold${shopOf(it) ? ', ' + SHOP[shopOf(it)] : ''}">${itemIco(it.id)}${badge(it)}</button>`;
+  const sr = all.filter(i => sold(i, 'sr'));
+  const fin = sr.filter(i => !i.component), comp = sr.filter(i => i.component);
+  let html = (fin.length ? `<div class="grp">Finished items</div>${fin.map(cell).join('')}` : '')
+    + (comp.length ? `<div class="grp">Components</div>${comp.map(cell).join('')}` : '');
+  // an added shop lists what the Rift does not sell: its own items, and its copies of Rift items
+  const shown = new Set(sr), missed = [];
+  for (const m of ADDABLE) {
+    const list = all.filter(i => !shown.has(i) && sold(i, m));
+    if (!list.length) continue;
+    if (!S.shops[m]) { missed.push(m); continue; }
+    list.forEach(i => shown.add(i));
+    html += `<div class="grp">${SHOP[m]} <em>its own items and its copies of Rift items</em></div>${list.map(cell).join('')}`;
+  }
+  if (!sr.length && missed.length) html = `<div class="miss">No Summoner's Rift item matches. The ${missed.map(m => SHOP[m]).join(' and ')} shop${missed.length > 1 ? 's have' : ' has'} some: ${missed.map(m => `<button class="chip" data-shop="${m}">+ ${SHOP[m]}</button>`).join('')}</div>` + html;
+  $('#item-grid').innerHTML = html || '<div class="grp">No items match</div>';
   footIdle();
 }
 function choose(id) {
@@ -327,7 +453,11 @@ function openChamps(who) {
 }
 function closeChamps() { $('#champ-modal').hidden = true; }
 const nameOf = k => $(`#name-${k}`).value || `Build ${k.toUpperCase()}`;
-function paintNames() { if (!RECEIPT) for (const k of ['a', 'b']) $(`#h-name-${k}`).textContent = nameOf(k); }
+function paintNames() {
+  if (RECEIPT) return;
+  for (const k of ['a', 'b']) $(`#h-name-${k}`).textContent = nameOf(k);
+  if (S.res) paintAhead(S.res.a.stats, S.compare ? S.res.b?.stats : null);
+}
 function renderChamps() {
   const q = $('#champ-q').value.trim().toLowerCase(), r = ROLES[role];
   const list = S.champs.filter(c => (!q || c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)) && (r === 'All' || c.tags.includes(r)));
@@ -373,8 +503,9 @@ function paintTarget() {
     $(`#left-${k}`).textContent = r ? nf(left) : '–';
     if (RECEIPT) continue;
     $(`#h-bar-${k}`).style.setProperty('--w', (r ? share : 0).toFixed(1) + '%');
-    $(`#h-cap-${k}`).innerHTML = !r ? '' : raw ? 'Before armor and magic resist'
-      : r.combo.kills ? `<b>Kills</b> the target, ${nf(v.hp)} HP` : `<b>${Math.round(share)}%</b> of the target's ${nf(v.hp)} HP`;
+    const when = {never: ', no crits', always: ', all crits'}[r?.combo.crits] || '';
+    $(`#h-cap-${k}`).innerHTML = !r ? '' : (raw ? 'Before armor and magic resist'
+      : r.combo.kills ? `<b>Kills</b> the target, ${nf(v.hp)} HP` : `<b>${Math.round(share)}%</b> of the target's ${nf(v.hp)} HP`) + when;
   }
   $$('#presets .chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.preset === `${v.hp},${v.ar},${v.mr}`));
   const e = S.enemy, eb = $('#enemy-btn');
@@ -394,12 +525,17 @@ function setTarget(t) {
   $$('#tseg button').forEach(b => b.setAttribute('aria-checked', b.dataset.t === t));
   if (t === 'champ') enemyStats(); else { writeDials(S.dummy); paintTarget(); schedule(); }
 }
+function setCrits(m) {
+  S.crits = m;
+  $$('#crit-seg button').forEach(b => b.setAttribute('aria-checked', b.dataset.crit === m));
+  schedule();
+}
 function setCompare(on) {
   S.compare = on;
   document.body.dataset.compare = on ? 'on' : 'off';
   $$('#cmp-seg button').forEach(b => b.setAttribute('aria-checked', (b.dataset.cmp === 'on') === on));
   if (!on && pick && pick.b === 'b') closePicker();
-  paintTabs(); schedule();
+  renderBuilds(); schedule();
 }
 
 /* ---------- breakdown ---------- */
@@ -423,12 +559,14 @@ function renderLines() {
       <span class="src"><span class="k">${key}</span><span class="nm">${esc(name)}</span><span class="note" data-fixed="${word || (dead ? 'no damage' : '')}"${word ? ` title="${esc(slot.notes.join(' ') || word)}"` : ''}></span></span>
       <span class="n a"><i>–</i><small></small></span><span class="n b only-cmp"><i>–</i><small></small></span>
       <span class="n sh only-solo">–</span></div>`;
-    const badge = word ? ` <span class="est" title="${esc(slot.notes.join(' ') || word)}">${word}</span>` : '';
+    const status = word ? ` <span class="est" title="${esc(slot.notes.join(' ') || word)}">${word}</span>` : '';
+    // under a line that can crit: one hit without a crit, with one, and on average (filled in by paintLines)
+    const crit = castable ? `<div class="critrow" data-k="${k}" hidden><span></span><div class="cr"><span class="cr-l" title="The line's total in each way of counting crits, divided by its count">One hit</span><span class="cr-b a"></span><span class="cr-b b only-cmp"></span></div></div>` : '';
     return `<div class="row line" data-k="${k}">${qty}
-      <span class="src"><span class="k">${key}</span><span class="nm">${esc(name)}</span>${badge}</span><span class="ty none"></span>
+      <span class="src"><span class="k">${key}</span><span class="nm">${esc(name)}</span>${status}</span><span class="ty none"></span>
       <span class="bars"><i class="a"></i><i class="b only-cmp"></i></span>
       <span class="n a"><i>–</i><small></small></span><span class="n b only-cmp"><i>–</i><small></small></span>
-      <span class="g only-cmp"><i></i></span><span class="sh only-solo">–</span></div>`;
+      <span class="g only-cmp"><i></i></span><span class="sh only-solo">–</span></div>${crit}`;
   }).join('');
   // the default combo can only be trimmed once the kit says which abilities deal damage
   if (S.view) comboFresh = false;
@@ -479,6 +617,13 @@ function paintLines() {
     gap($('.g', row), va, vb);
     $('.sh', row).textContent = va && A.combo.total.dealt ? Math.round(va / A.combo.total.dealt * 100) + '%' : '–';
     $('.nm', row).title = lineParts(a, b);
+    const cr = $(`.critrow[data-k="${k}"]`);
+    if (!cr) continue;
+    const ca = critCells(k, 'a', a, A), cb = B ? critCells(k, 'b', b, B) : '';
+    cr.hidden = !ca && !cb;
+    row.classList.toggle('crits', !cr.hidden);
+    $('.cr-b.a', cr).innerHTML = ca;
+    $('.cr-b.b', cr).innerHTML = cb;
   }
   const ta = A.combo.total.dealt, tb = B ? B.combo.total.dealt : 0, tot = $('#total-row');
   $('.n.a i', tot).textContent = nf(ta);
@@ -486,6 +631,57 @@ function paintLines() {
   $('.n.a', tot).classList.toggle('win', !B || ta > tb);
   $('.n.b', tot).classList.toggle('win', !!B && tb > ta);
   gap($('.g', tot), ta, tb);
+}
+
+/* ---------- crits ---------- */
+const pct = (x, d = 0) => (Math.round(x * 100 * 10 ** d) / 10 ** d) + '%';
+const buildItems = k => S.builds[k].filter(Boolean).map(id => S.items.get(id)).filter(Boolean);
+/* How a build's crit chance is made: what its items give, and what the champion's kit makes of it. */
+function chanceWhy(k, R) {
+  const items = buildItems(k).reduce((s, it) => s + (it.stats?.critChance || 0), 0), total = R.stats.critChance;
+  if (!items && !total) return 'No crit chance';
+  if (Math.abs(items - total) < 0.0005) return `Crit chance: ${pct(items)} from items`;
+  return `Crit chance: ${pct(items)} from items, ${pct(total)} with ${S.champ.name}'s kit${total >= 1 && items < 1 ? ' (at most 100%)' : ''}`;
+}
+/* How a build's crit multiplier is made: the champion's base, crit damage from items added to it, then the kit. */
+function multWhy(k, R) {
+  const base = S.champ.critDamage ?? 2, extra = buildItems(k).filter(it => it.stats?.critDamage), total = R.stats.critDamage;
+  const sum = base + extra.reduce((s, it) => s + it.stats.critDamage, 0);
+  let text = `${pct(base)} base` + (extra.length ? ` + ${extra.map(it => `${pct(it.stats.critDamage)} ${it.name}`).join(' + ')} = ${pct(sum, 1)}` : '');
+  if (Math.abs(total - sum) > 0.0005) text += `, × ${pct(total / sum, 1)} from ${S.champ.name}'s kit = ${pct(total, 1)}`;
+  return 'Crits deal ' + text;
+}
+/* One hit of a line that can crit, in each build: without a crit, with one (and its multiplier), and the
+   average at the build's chance. The hit is the line's total over its count; the way the combo is counting
+   crits is marked. */
+function critCells(k, b, line, R) {
+  const n = line?.qty || 0, c = line?.crits;
+  if (!c || !n || !c.always.dealt) return '';
+  const one = m => nf(c[m].dealt / n), on = m => R.combo.crits === m ? ' on' : '';
+  const ratio = c.never.raw ? c.always.raw / c.never.raw : 0;
+  const mult = k === 'aa' ? pct(R.stats.critDamage, 1) : ratio ? '×' + ratio.toFixed(2) : '';
+  const why = k === 'aa' ? multWhy(b, R)
+    : `${lineLabel(k)[1]} does ×${ratio.toFixed(2)} when it crits${ratio < R.stats.critDamage - 0.005 ? ': only part of it can crit' : ''}. ${multWhy(b, R)}.`;
+  return `<span class="tag ${b} xs only-cmp">${b.toUpperCase()}</span>
+    <span class="cv${on('never')}"><b>${one('never')}</b>no crit</span>
+    <span class="cv${on('always')}" title="${esc(why)}"><b>${one('always')}</b>crit${mult ? `<em>${mult}</em>` : ''}</span>
+    <span class="cv${on('average')}"><b>${one('average')}</b>avg at ${pct(R.stats.critChance)}</span>`;
+}
+/* The Breakdown's side column on crits: each build's chance and multiplier, and which sources can crit. */
+function critSide(A, B) {
+  const of = (r, k) => r?.combo.lines.find(l => l.key === k);
+  const can = [], cannot = [];
+  for (const k of LINES) {
+    const a = of(A, k), b = of(B, k);
+    if (!a) continue;
+    if (a.crits || b?.crits) can.push(lineLabel(k)[1]);
+    else if (a.total.raw || b?.total.raw) cannot.push(lineLabel(k)[1]);
+  }
+  if (!can.length) return '';
+  const cb = (k, R) => `<div class="cb"><span class="tag ${k} sm">${k.toUpperCase()}</span><span><b>${pct(R.stats.critChance)}</b> chance, crits deal <b>${pct(R.stats.critDamage, 1)}</b></span><p>${esc(chanceWhy(k, R))}. ${esc(multWhy(k, R))}.</p></div>`;
+  return `<div class="bs"><span class="lbl">Crits</span>${cb('a', A)}${B ? cb('b', B) : ''}
+    <div class="notes"><p><b>Can crit:</b> ${esc(can.join(', '))}.</p>${cannot.length ? `<p><b>Can't crit:</b> ${esc(cannot.join(', '))}.</p>` : ''}
+      <p>"Crits" above the totals counts them at the average, never or always. DPS and time to kill stay on the average.</p></div></div>`;
 }
 
 /* A build's damage by type: the two bars of its split, and the same in words. */
@@ -537,7 +733,7 @@ function assumptions() {
 }
 function paintSide() {
   const A = S.res.a, B = S.compare ? S.res.b : null, raw = S.target === 'raw', notes = assumptions();
-  $('#bside').innerHTML = `
+  $('#bside').innerHTML = `${critSide(A, B)}
     <div class="bs"><span class="lbl">Damage mix</span>${mixRow('a', A)}${B ? mixRow('b', B, true) : ''}</div>
     <div class="bs"><span class="lbl">Blocked by the target</span>
       <div class="pair">
@@ -557,12 +753,7 @@ function paintHero() {
   $('.tot.b .tot-n i').textContent = B ? nf(tb) : '–';
   $('.tot.a').classList.toggle('win', !B || ta >= tb);
   $('.tot.b').classList.toggle('win', !!B && tb > ta);
-  if (B) {
-    const w = tb > ta ? 'b' : 'a', d = Math.abs(Math.round(ta) - Math.round(tb)), lo = Math.min(ta, tb), lead = $('.lead');
-    lead.className = `lead ${w} only-cmp`;
-    $('.lead-main', lead).innerHTML = d ? `<span class="tag ${w} sm">${w.toUpperCase()}</span>ahead by <i>${nf(d)}</i>` : 'Dead even';
-    $('.lead-sub', lead).innerHTML = d && lo > 0 ? `<span>+${((Math.max(ta, tb) / lo - 1) * 100).toFixed(1)}%</span> on this combo` : '';
-  }
+  paintGlance(A, B);
   const [dps, ttk] = $$('.metric');
   const put = (box, k, text, win) => { const el = $(`.mv.${k}`, box); $('i', el).textContent = text; el.classList.toggle('win', win); };
   const da = A.dps.dealt, db = B ? B.dps.dealt : 0;
@@ -571,6 +762,32 @@ function paintHero() {
   const ka = A.timeToKill ?? Infinity, kb = B ? B.timeToKill ?? Infinity : Infinity;
   put(ttk, 'a', killTime(A), !raw && (!B || ka <= kb) && ka < Infinity);
   put(ttk, 'b', killTime(B), !raw && !!B && kb < ka);
+}
+
+/* Stats at a glance, beside the totals: seven stats for each build, under the game's own icons. Where
+   the builds differ the higher number is in its build's colour; a number's tooltip says where it comes from. */
+const GLANCE = [
+  {k: 'hp', name: 'Health', get: s => s.hp.total, why: s => `${nf(s.hp.base)} base + ${nf(s.hp.bonus)} bonus`},
+  {k: 'mana', name: 'Mana', get: s => s.mana.total || null, why: s => s.mana.total ? `${nf(s.mana.base)} base + ${nf(s.mana.bonus)} bonus`
+    : `${S.champ.name} has no mana${S.view?.resource && S.view.resource !== 'None' ? `: uses ${S.view.resource}` : ''}`},
+  {k: 'ad', name: 'Attack damage', get: s => s.ad.total, why: s => `${nf(s.ad.base)} base + ${nf(s.ad.bonus)} bonus`},
+  {k: 'ap', name: 'Ability power', get: s => s.ap.total, why: s => s.ap.total ? 'All of it bonus' : 'None'},
+  {k: 'armor', name: 'Armor', get: s => s.armor.total, why: s => `${nf(s.armor.base)} base + ${nf(s.armor.bonus)} bonus`},
+  {k: 'mr', name: 'Magic resist', get: s => s.mr.total, why: s => `${nf(s.mr.base)} base + ${nf(s.mr.bonus)} bonus`},
+  {k: 'crit', name: 'Crit chance', get: s => s.critChance, why: s => `${pct(s.critChance)} crit chance; crits deal ${pct(s.critDamage, 1)}`},
+];
+function paintGlance(A, B) {
+  const el = $('#glance');
+  if (!el) return;
+  const text = (g, v) => v === null ? '–' : g.k === 'crit' ? pct(v) : nf(v);
+  const head = '<span class="gl-h first"></span>' + GLANCE.map(g => `<span class="gl-h" title="${g.name}">${statIco(g.k, g.name)}</span>`).join('');
+  const row = (k, s, o) => `<span class="gl-t">${o ? `<span class="tag ${k} sm">${k.toUpperCase()}</span>` : ''}</span>` + GLANCE.map(g => {
+    // compared as shown, so two numbers that read the same are not told apart
+    const v = text(g, g.get(s)), w = o && text(g, g.get(o)), win = o && v !== w && g.get(s) > g.get(o);
+    const cls = g.get(s) === null ? 'none' : !o || v === w ? 'same' : win ? 'win' : 'lose';
+    return `<span class="gl-v ${k} ${cls}" title="${esc(`${g.name}: ${g.why(s)}`)}">${v}</span>`;
+  }).join('');
+  el.innerHTML = head + row('a', A.stats, B?.stats) + (B ? row('b', B.stats, A.stats) : '');
 }
 
 /* ---------- the receipt page ---------- */
@@ -660,21 +877,73 @@ function statGroups(A, B) {
 /* A stat is a number, or text that starts with one ("25%", "18 + 35%"). */
 const statText = x => typeof x === 'number' ? (Number.isInteger(x) ? nf(x) : x.toFixed(2)) : x;
 const statNum = x => typeof x === 'number' ? x : parseFloat(x) || 0;
+/* The tabs page's More stats: every stat the calculation returns, as [label, value, format, note]. */
+const n0 = v => nf(v), p0 = v => pct(v), p1 = v => pct(v, 1), as2 = v => v.toFixed(2);
+const baseNote = l => l.bonus ? `${nf(l.base)} base + ${nf(l.bonus)}` : `base at level ${S.level}`;
+const MORE = [
+  ['Offense', [
+    ['Attack damage', s => s.ad.total, n0, s => baseNote(s.ad)],
+    ['Ability power', s => s.ap.total, n0, s => s.ap.total ? 'all of it bonus' : 'none'],
+    ['Attack speed', s => s.attackSpeed.total, as2, s => `${s.attackSpeed.base} base, +${Math.round(s.attackSpeed.bonus * 100)}%`],
+    ['Crit chance', s => s.critChance, p0, s => s.critChance ? 'chance a hit that can crit does' : 'none'],
+    ['Crit damage', s => s.critDamage, p1, () => 'what a crit deals'],
+    ['Attack range', s => s.attackRange, n0, () => S.champ.ranged ? 'ranged' : 'melee'],
+  ]],
+  ['Penetration and tempo', [
+    ['Lethality', s => s.lethality, n0, s => s.lethality ? 'flat armor penetration' : 'none'],
+    ['Armor penetration', s => s.armorPenPct, p0, s => s.armorPenPct ? 'percent' : 'none'],
+    ['Magic penetration', s => s.magicPenFlat, n0, s => s.magicPenFlat ? 'flat' : 'none'],
+    ['Magic penetration %', s => s.magicPenPct, p0, s => s.magicPenPct ? 'percent' : 'none'],
+    ['Ability haste', s => s.abilityHaste, n0, s => s.abilityHaste ? `${Math.round(s.abilityHaste / (100 + s.abilityHaste) * 100)}% shorter cooldowns` : 'none'],
+    ['Move speed', s => s.moveSpeed.total, n0, s => baseNote(s.moveSpeed)],
+  ]],
+  ['Health and sustain', [
+    ['Health', s => s.hp.total, n0, s => baseNote(s.hp)],
+    ['Mana', s => s.mana.total, v => v ? nf(v) : '–', s => s.mana.total ? baseNote(s.mana) : 'no mana'],
+    ['Armor', s => s.armor.total, n0, s => baseNote(s.armor)],
+    ['Magic resist', s => s.mr.total, n0, s => baseNote(s.mr)],
+    ['Life steal', s => s.lifeSteal, p0, s => s.lifeSteal ? 'on attacks' : 'none'],
+    ['Omnivamp', s => s.omnivamp, p0, s => s.omnivamp ? 'on all damage' : 'none'],
+  ]],
+];
 function renderStats() {
-  const A = S.res.a, B = S.compare ? S.res.b : null, groups = statGroups(A, B);
-  $('#stats-pane').innerHTML = groups.map(([group, rows]) => {
+  const A = S.res.a, B = S.compare ? S.res.b : null, sa = A.stats, sb = B?.stats;
+  let diff = 0, all = 0;
+  $('#more-grid').innerHTML = MORE.map(([group, rows]) => {
     const head = B
       ? `<div class="srow shead"><span class="lbl">${group}</span><span class="tag a xs">A</span><span class="tag b xs">B</span><span class="lbl">Gap</span></div>`
       : `<div class="srow shead"><span class="lbl">${group}</span><span></span><span></span></div>`;
-    return `<div class="sgroup">${head}${rows.map(([label, a, b, note]) => {
-      if (!B) return `<div class="srow"><span class="sn">${label}</span><span class="n">${statText(a)}</span><span class="note">${esc(note)}</span></div>`;
-      if (a === b) return `<div class="srow same"><span class="sn">${label}</span><span class="n">${statText(a)}</span><span class="n">${statText(b)}</span><span class="g">same</span></div>`;
-      const w = statNum(a) >= statNum(b) ? 'a' : 'b', d = Math.abs(statNum(b) - statNum(a));
-      return `<div class="srow"><span class="sn">${label}</span><span class="n${w === 'a' ? ' win' : ''}">${statText(a)}</span><span class="n${w === 'b' ? ' win' : ''}">${statText(b)}</span><span class="g ${w}">+${statText(+d.toFixed(2))}${String(a).endsWith('%') ? '%' : ''}</span></div>`;
+    return `<div>${head}${rows.map(([label, get, fmt, note]) => {
+      all++;
+      const a = get(sa);
+      if (!B) return `<div class="srow"><span class="sn">${label}</span><span class="n">${fmt(a)}</span><span class="note">${esc(note(sa))}</span></div>`;
+      const b = get(sb);
+      // compared as shown: two numbers that read the same are the same
+      if (fmt(a) === fmt(b)) return `<div class="srow same"><span class="sn">${label}</span><span class="n">${fmt(a)}</span><span class="n">${fmt(b)}</span><span class="g">same</span></div>`;
+      diff++;
+      const w = a > b ? 'a' : 'b';
+      return `<div class="srow"><span class="sn">${label}</span><span class="n${w === 'a' ? ' win' : ''}">${fmt(a)}</span><span class="n${w === 'b' ? ' win' : ''}">${fmt(b)}</span><span class="g ${w}">+${fmt(Math.abs(a - b))}</span></div>`;
     }).join('')}</div>`;
   }).join('');
-  const all = groups.flatMap(g => g[1]), diff = all.filter(r => r[1] !== r[2]).length;
-  $('#ts-stats').textContent = B ? `${diff} of ${all.length} differ` : `${S.champ.name} with items`;
+  $('#ts-stats').textContent = B ? `All ${all}, ${diff} differ; where each is ahead` : `All ${all} stats`;
+  paintAhead(sa, sb);
+}
+/* Where each build is ahead: every stat above that one build has more of, and by how much. Stats that
+   match are named underneath, leaving out the ones neither build has. */
+function paintAhead(sa, sb) {
+  const el = $('#ahead');
+  if (!sb) { el.innerHTML = '<span class="hint">With a second build, this lists where each one is ahead of the other.</span>'; return; }
+  const rows = MORE.flatMap(g => g[1]);
+  const side = (k, s, o) => {
+    const up = rows.filter(([, get, fmt]) => fmt(get(s)) !== fmt(get(o)) && get(s) > get(o));
+    return `<div class="ah ${k}"><div class="ah-head"><span class="tag ${k} sm">${k.toUpperCase()}</span>${esc(nameOf(k))}</div>`
+      + (up.map(([label, get, fmt]) => `<div class="ah-row"><b>+${fmt(get(s) - get(o))}</b><span>${label}</span></div>`).join('')
+        || '<div class="ah-none">Ahead on nothing</div>') + '</div>';
+  };
+  const same = rows.filter(([, get, fmt]) => fmt(get(sa)) === fmt(get(sb)) && get(sa)).map(([label, get, fmt]) => `${label.toLowerCase()} <b>${fmt(get(sa))}</b>`);
+  el.innerHTML = `<div class="sec-head"><span class="lbl">Where each build is ahead</span></div>
+    <div class="ah-cols">${side('a', sa, sb)}${side('b', sb, sa)}</div>
+    ${same.length ? `<p class="ah-same">Same in both: ${same.join(', ')}.</p>` : ''}`;
 }
 /* The receipt page's strip along the bottom: the same twelve stats, one cell each. */
 function renderLedger() {
@@ -748,12 +1017,15 @@ function setOpt(input) {
 
 /* ---------- menus ---------- */
 /* A .menu-btn opens the panel its aria-controls names; one is open at a time. The settings gear is
-   one, and so is the receipt page's button for the champion's options. */
+   one, and so is the receipt page's button for the champion's options. The combo's dropdown has two,
+   its line and its pencil, so a button toggles its panel whichever of them opened it. */
 let menu = null;                    // the button of the open menu
 function setMenu(btn) {
-  const show = (b, on) => { b.setAttribute('aria-expanded', on); $('#' + b.getAttribute('aria-controls')).hidden = !on; };
+  const panel = b => b?.getAttribute('aria-controls');
+  const show = (b, on) => { $$(`[aria-controls="${panel(b)}"]`).forEach(x => x.setAttribute('aria-expanded', on)); $('#' + panel(b)).hidden = !on; };
+  const same = btn && menu && panel(btn) === panel(menu);
   if (menu) show(menu, false);
-  menu = btn === menu ? null : btn;
+  menu = same ? null : btn;
   if (menu) show(menu, true);
 }
 /* The two layouts are two pages, so choosing the other one is a link. The choice is remembered
@@ -771,7 +1043,10 @@ function setLayout(link) {
 function encodeState() {
   const s = {c: S.champ.id, l: S.level, r: SLOTS.map(k => S.ranks[k]), o: S.order, a: S.builds.a, b: S.builds.b, n: [$('#name-a').value, $('#name-b').value],
     m: S.compare ? 1 : 0, t: S.target, d: S.target === 'raw' ? S.dummy : readDials(), e: [S.enemy.id, S.enemy.level], q: ACTIONS.map(k => S.combo[k]),
-    ...(Object.keys(S.options).length && {x: S.options})};
+    ...(Object.keys(S.options).length && {x: S.options}),
+    ...(S.crits !== 'average' && {k: S.crits}),
+    ...(S.split && {rb: SLOTS.map(k => S.ranksB[k]), ob: S.orderB}),
+    ...(ADDABLE.some(m => S.shops[m]) && {sh: ADDABLE.filter(m => S.shops[m])})};
   return btoa(unescape(encodeURIComponent(JSON.stringify(s)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 /* A build arrives in the link, or from the other layout's page when the visitor has just swapped. */
@@ -800,6 +1075,14 @@ function applyState(s) {
   if (Array.isArray(s.q)) ACTIONS.forEach((k, i) => S.combo[k] = int(s.q[i], 0, 30, 0));
   // ids are checked against the kit once it has loaded
   if (s.x && typeof s.x === 'object') for (const [id, v] of Object.entries(s.x).slice(0, 24)) if (Number.isFinite(+v)) S.options[id] = Math.round(+v);
+  // the receipt page has no switch for crits and shows one set of ranks, so there they stay at the average and A's
+  if (['average', 'never', 'always'].includes(s.k) && !RECEIPT) S.crits = s.k;
+  if (Array.isArray(s.rb) && !RECEIPT) {
+    S.split = true;
+    SLOTS.forEach((k, i) => S.ranksB[k] = int(s.rb[i], 0, 6, 0));
+    if (typeof s.ob === 'string' && $(`#order option[value="${CSS.escape(s.ob)}"]`)) S.orderB = s.ob;
+  }
+  if (Array.isArray(s.sh)) for (const m of ADDABLE) S.shops[m] = s.sh.includes(m);
 }
 
 /* ---------- wiring ---------- */
@@ -825,23 +1108,33 @@ function wire() {
     if (!d) return;
     e.preventDefault(); setLevel(S.level + d); $(`#ruler button[data-l="${S.level}"]`).focus();
   });
-  $('#order').addEventListener('change', e => { S.order = e.target.value; if (S.order !== 'manual') autoRanks(); paintSkills(); schedule(); });
-  $('#skill-row').addEventListener('click', e => {
-    const p = e.target.closest('.pip'); if (!p) return;
-    const k = p.dataset.k, n = +p.dataset.n;
-    S.ranks[k] = S.ranks[k] === n ? n - 1 : n;
-    S.order = 'manual'; $('#order').value = 'manual'; paintSkills(); schedule();
-  });
+  $('#order').addEventListener('change', e => setOrder('a', e.target.value));
+  $('#skill-row').addEventListener('click', e => { const p = e.target.closest('.pip'); if (p) setRank('a', p.dataset.k, +p.dataset.n); });
+  // the tabs page: the chain that links the builds' ranks, and each build's own row when unlinked
+  $('#rank-link')?.addEventListener('click', () => setSplit(!S.split));
+  $('#rank-split')?.addEventListener('click', e => { const p = e.target.closest('.pip'); if (p) setRank(p.dataset.b, p.dataset.k, +p.dataset.n); });
+  $('#rank-split')?.addEventListener('change', e => { const s = e.target.closest('select[data-ob]'); if (s) setOrder(s.dataset.ob, s.value); });
   $('#lines').addEventListener('input', e => {
     const k = e.target.dataset.q; if (!k) return;
     S.combo[k] = Math.max(0, Math.min(30, Math.round(+e.target.value) || 0));
     paintSub(); schedule(true);
   });
+  // the tabs page: the combo's dropdown, and how crits count
+  $('#steps')?.addEventListener('click', e => {
+    const b = e.target.closest('button[data-d]'); if (!b) return;
+    const k = b.closest('.step').dataset.k;
+    S.combo[k] = Math.max(0, Math.min(30, S.combo[k] + +b.dataset.d));
+    paintSub(); schedule();
+  });
+  $('#combo-reset')?.addEventListener('click', () => { defaultCombo(); paintSub(); schedule(); });
+  $('#crit-seg')?.addEventListener('click', e => { const b = e.target.closest('button[data-crit]'); if (b) setCrits(b.dataset.crit); });
   $('#opts').addEventListener('input', e => { if (e.target.matches('input[data-o]')) setOpt(e.target); });
   $('#opts').addEventListener('click', e => { if (e.target.closest('#opts-reset')) { S.options = {}; paintOpts(); schedule(); } });
 
   const builds = $('#builds');
   builds.addEventListener('click', e => {
+    // the shops button opens the picker on A's first empty slot
+    if (e.target.closest('#shop-now')) { openPicker('a', Math.max(0, S.builds.a.findIndex(v => !v))); return; }
     const slot = e.target.closest('.slot'); if (!slot) return;
     const b = slot.dataset.b, i = +slot.dataset.i;
     if (e.target.closest('[data-rm]')) { S.builds[b][i] = null; renderBuilds(); schedule(); return; }
@@ -863,13 +1156,14 @@ function wire() {
   $('#item-grid').addEventListener('click', e => { const p = e.target.closest('.pi'); if (p) choose(+p.dataset.id); });
   $('#item-grid').addEventListener('mouseover', e => {
     const p = e.target.closest('.pi'); if (!p) return;
-    const it = S.items.get(+p.dataset.id);
-    const about = it.status === 'unmodeled' ? 'Stats are counted; its passive is not yet.' : it.plaintext || it.tags.join(', ');
+    const it = S.items.get(+p.dataset.id), shop = shopOf(it);
+    const about = (shop ? `${SHOP[shop]} item. ` : '') + (it.status === 'unmodeled' ? 'Stats are counted; its passive is not yet.' : it.plaintext || it.tags.join(', '));
     $('#item-foot').innerHTML = `<b>${esc(it.name)}</b><span class="g">${nf(it.gold)} g</span><span>${esc(about)}</span>`;
   });
   $('#item-grid').addEventListener('mouseleave', footIdle);
+  $('#picker').addEventListener('click', e => { const c = e.target.closest('[data-shop]'); if (c) setShop(c.dataset.shop); });
   $('#picker-x').addEventListener('click', closePicker);
-  document.addEventListener('mousedown', e => { if (pick && !e.target.closest('#picker') && !e.target.closest('.slot')) closePicker(); });
+  document.addEventListener('mousedown', e => { if (pick && !e.target.closest('#picker') && !e.target.closest('.slot') && !e.target.closest('#shop-now')) closePicker(); });
 
   $('#champ-btn').addEventListener('click', () => openChamps('atk'));
   $('#enemy-btn').addEventListener('click', () => openChamps('enemy'));
@@ -943,7 +1237,8 @@ async function boot() {
   useArt(art);
   $('#patch').textContent = meta.displayPatch;
   $('#legal').textContent = meta.legal;
-  S.champs = champs.map(c => ({id: c.id, key: c.key, name: c.name, title: c.title, tags: c.tags || []})).sort((x, y) => x.name.localeCompare(y.name));
+  S.champs = champs.map(c => ({id: c.id, key: c.key, name: c.name, title: c.title, tags: c.tags || [], ranged: !!c.ranged, critDamage: c.stats?.critDamage}))
+    .sort((x, y) => x.name.localeCompare(y.name));
   S.items = new Map(items.map(i => [i.id, i]));
   S.champ = S.champs.find(c => c.id === S.champ.id) || S.champs[0];
 
@@ -959,7 +1254,9 @@ async function boot() {
   $$('#tseg button').forEach(b => b.setAttribute('aria-checked', b.dataset.t === S.target));
   writeDials(S.dummy);
 
-  paintLevel(); paintSkills(); paintChamp(); renderBuilds(); renderLines(); paintTarget();
+  $$('#crit-seg button').forEach(b => b.setAttribute('aria-checked', b.dataset.crit === S.crits));
+  $$('#shop .chip[data-shop]').forEach(c => c.setAttribute('aria-pressed', !!S.shops[c.dataset.shop]));
+  paintLevel(); paintSkills(); paintChamp(); renderBuilds(); renderLines(); renderSteps(); paintTarget();
   if (S.target === 'champ') enemyStats();
   await loadKit();
 }
