@@ -82,10 +82,20 @@ export interface FightOptions {
   crits?: CritMode;
   /** the build's runes */
   runes?: RuneData[];
-  /** Set by a caller that keeps a clock (the lab's timeline): damage spread over time (a rule's `over`) is
-      handed to it instance by instance, each with its delay in seconds, to be dealt when the clock gets there.
-      Without it the damage is dealt at once and the duration is only reported. */
-  defer?: (delay: number, deal: () => void) => void;
+  /** Set by a caller that keeps a clock (the lab's timeline): damage spread over time (a rule's `over`) is still
+      worked out at once, as the calculation does, but each instance is also listed in `landings` with the delay
+      after which it reaches the target, so the caller can show it landing then. */
+  spread?: boolean;
+}
+
+/** One instance of damage spread over time, and how long after its firing it lands. */
+export interface Landing {
+  delay: number;
+  owner: string;
+  rule: string;
+  type: DamageType;
+  raw: number;
+  dealt: number;
 }
 
 export class Fight {
@@ -105,6 +115,8 @@ export class Fight {
   private action = 0;
   stats!: StatBlock;
   time = 0;
+  /** edge to edge distance to the target, kept by a caller that tracks positions (the lab); formulas read it as `distance` */
+  distance = 0;
 
   private readonly options = new Map<string, number>();
   /** items' settings as this fight settled them, by the item's namespace and the control's id */
@@ -128,13 +140,17 @@ export class Fight {
   private settled = false;
 
   private build: BuildInput;
-  private readonly defer: FightOptions['defer'];
+  private readonly spreads: boolean;
+  /** instances of damage spread over time, in the order they were dealt (only with FightOptions.spread) */
+  readonly landings: Landing[] = [];
+  /** while a rule with a duration fires: when the instance being dealt lands, and how many parts a single deal is shown in */
+  private landing: { delay: number; seconds: number; parts: number } | undefined;
 
   constructor(champ: ChampionData, items: ItemData[], build: BuildInput, target: TargetInput | null, opts: FightOptions = {}) {
     this.champ = champ;
     this.items = items;
     this.build = build;
-    this.defer = opts.defer;
+    this.spreads = !!opts.spread;
     this.level = build.level;
     this.ranks = build.ranks;
     this.sustained = !!opts.sustained;
@@ -281,6 +297,7 @@ export class Fight {
       case 'hasTarget': return this.target ? 1 : 0;
       case 'adFromLevels': return this.stats.ad.base - this.champ.stats.ad;
       case 'adaptivePhysical': return this.adaptivePhysical ? 1 : 0;
+      case 'distance': return this.distance;
     }
     if (name.startsWith('target.')) return this.targetVar(name.slice(7));
     if (name.startsWith('hit.')) return this.hitType === name.slice(4) ? 1 : 0;
@@ -433,6 +450,20 @@ export class Fight {
     try { this.computeStats(this.build); } finally { this.settled = true; }
   }
 
+  /** Evaluates a formula as the champion's own, as a timeline's conditions need: its options, counters and helper
+      formulas, the target, and `spell`'s values at the rank of `slot` (the passive's rank of 1 when left out). */
+  value(e: Expr, spell?: string, slot: Slot = 'p'): number {
+    const base = this.owners.find(o => o.champion && o.slot === slot)!;
+    const sp = spell ? this.spellScope(spell) : undefined;
+    return this.eval(e, sp ? { ...base, scope: sp } : base);
+  }
+  /** A champion counter's value, and setting it: for a timeline's own bookkeeping of stacks. */
+  counter(name: string): number { return this.counters.get(name) ?? 0; }
+  setCounter(name: string, v: number): void {
+    const max = this.champ.counters[name]?.max;
+    this.counters.set(name, max ? Math.min(v, this.eval(max, undefined)) : v);
+  }
+
   /** Adaptive damage and stats are physical while bonus attack damage is above ability power; on a tie the champion's own default decides. */
   get adaptivePhysical(): boolean {
     const ad = this.stats.ad.bonus, ap = this.stats.ap.total;
@@ -501,6 +532,10 @@ export class Fight {
     const raw = this.amplify(owner.source, type, amount);
     const dealt = !this.target || type === 'true' ? raw : raw * damageMultiplier(this.resistance(type));
     if (this.target) this.target.hp = Math.max(0, this.target.hp - dealt);
+    const l = this.landing;
+    if (l) for (let k = 0; k < l.parts; k++) {
+      this.landings.push({ delay: l.parts > 1 ? l.seconds * k / l.parts : l.delay, owner: owner.key, rule, type, raw: raw / l.parts, dealt: dealt / l.parts });
+    }
     const last = this.hits.at(-1);
     if (last && last.owner === owner.key && last.rule === rule && last.type === type) { last.raw += raw; last.dealt += dealt; last.instances++; }
     else this.hits.push({ line: owner.line, owner: owner.key, rule, label, type, raw, dealt, instances: 1, crit });
@@ -536,21 +571,18 @@ export class Fight {
     const crit = !!rule.crit;
     const type: DamageType = rule.type === 'adaptive' ? (this.adaptivePhysical ? 'physical' : 'magic') : rule.type;
     const seconds = rule.over ? this.eval(rule.over, owner) : 0;
-    if (this.defer && seconds > 0 && !this.quiet && count > 0) {
-      // a caller with a clock gets the instances one by one; a count that is not whole is dealt in quarter-second ticks
-      const n = whole ? count : Math.max(1, Math.round(seconds / 0.25));
-      const share = whole ? 1 : count / n;
-      const casting = this.casting;
-      for (let i = 0; i < n; i++) {
-        this.defer(seconds * i / n, () => {
-          const was = this.casting;
-          this.casting = casting;
-          try { this.deal(owner, rule.id, label, type, one() * share, crit); } finally { this.casting = was; }
-        });
+    const spread = this.spreads && seconds > 0 && !this.quiet;
+    if (whole) {
+      for (let i = 0; i < count; i++) {
+        if (spread) this.landing = { delay: seconds * i / count, seconds, parts: 1 };
+        landed = this.deal(owner, rule.id, label, type, one(), crit) || landed;
       }
-      landed = true;
-    } else if (whole) for (let i = 0; i < count; i++) landed = this.deal(owner, rule.id, label, type, one(), crit) || landed;
-    else if (count > 0) landed = this.deal(owner, rule.id, label, type, one() * count, crit);
+    } else if (count > 0) {
+      // a count that is not whole is one deal, shown landing in as many even parts as its nearest whole number
+      if (spread) this.landing = { delay: 0, seconds, parts: Math.max(1, Math.round(count)) };
+      landed = this.deal(owner, rule.id, label, type, one() * count, crit);
+    }
+    this.landing = undefined;
     // without a caller's clock the damage is still dealt at once: the duration is only reported
     if (landed && rule.over) {
       if (seconds > 0) {
@@ -649,13 +681,8 @@ export class Fight {
     try {
       // "after using an ability" effects are armed by the cast itself, so the same cast's on-hit can spend them
       this.trigger('ability');
-      let deferred = false;
-      for (const rule of owner.rules) {
-        if (rule.on !== 'cast') continue;
-        // damage handed to a caller's clock has not landed yet, but the cast still dealt damage
-        if (this.fire(owner, rule) && this.defer && rule.over) deferred = true;
-      }
-      if (deferred || this.hits.reduce((s, h) => s + h.raw, 0) > before) this.trigger('spell');
+      for (const rule of owner.rules) if (rule.on === 'cast') this.fire(owner, rule);
+      if (this.hits.reduce((s, h) => s + h.raw, 0) > before) this.trigger('spell');
       this.trigger('after');
     } finally { this.casting = undefined; }
     this.time += this.champ.spells[this.champ.models[action].spell]?.castTime ?? DEFAULT_CAST_TIME;

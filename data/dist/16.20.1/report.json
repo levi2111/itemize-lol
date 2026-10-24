@@ -47,7 +47,15 @@
   "item 226698 Profane Hydra (arena copy of 6698)",
   "item 228020 Abyssal Mask (arena copy of 8020)"
  ],
- "unlocked": [],
+ "unlocked": [
+  "rune 5001 Health Scaling",
+  "rune 5005 Attack Speed",
+  "rune 5007 Ability Haste",
+  "rune 5008 Adaptive Force",
+  "rune 5010 Move Speed",
+  "rune 5011 Health",
+  "rune 5013 Tenacity and Slow Resist"
+ ],
  "unknownParts": {
   "PercentageOfBuffNameElapsed": 3
  },
