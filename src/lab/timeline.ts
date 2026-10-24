@@ -60,6 +60,8 @@ interface Plan {
   variants: CompiledVariant[];
   requires?: Expr;
   allows: Action[];
+  recasts?: { count: number; window: number; gap: number; cooldownFrom: 'first' | 'last' };
+  charges?: { count: number; recharge?: number };
 }
 
 export type Behaviour = 'stand' | 'away' | 'toward' | 'strafe';
@@ -249,9 +251,12 @@ export function play(s: Scenario): Played {
       const c = (f: string | number | undefined) => f === undefined ? undefined : compileFormula(f, s.champ, timing.spell);
       return { src: v, within: c(v.within), beyond: c(v.beyond), when: c(v.when), timing, options: v.options, label: describe(v) };
     });
+    const num = (f: string | number) => val(compileFormula(f, s.champ, base.spell), base.spell);
     plans[slot] = {
       base, variants, allows: src?.allows ?? [],
       ...(src?.requires !== undefined && { requires: compileFormula(src.requires, s.champ, base.spell) }),
+      ...(src?.recasts && { recasts: { count: Math.max(1, Math.round(num(src.recasts.count))), window: num(src.recasts.window), gap: src.recasts.gap !== undefined ? num(src.recasts.gap) : 0, cooldownFrom: src.recasts.cooldownFrom ?? 'last' } }),
+      ...(src?.charges && { charges: { count: Math.max(1, Math.round(num(src.charges.count))), ...(src.charges.recharge !== undefined && { recharge: num(src.charges.recharge) }) } }),
     };
   }
   // page edits replace the action's own values (not its variants')
@@ -277,6 +282,10 @@ export function play(s: Scenario): Played {
   const gap = () => Math.max(0, centre() - rA - rB);
   const targetSpeed = t0.stats.moveSpeed.total;
   const ready: Record<CastSlot, number> = { q: 0, w: 0, e: 0, r: 0 };
+  /** a recast chain in progress: casts made, when the next must come by, the first cast's time */
+  const chain: Partial<Record<CastSlot, { n: number; expires: number; first: number }>> = {};
+  /** charges: the times at which each spent charge comes back */
+  const recharging: Record<CastSlot, number[]> = { q: [], w: [], e: [], r: [] };
   let nextAttack = 0, cursor = 0, main: Busy | undefined, woven: Busy | undefined;
   let dash: { dx: number; dy: number; speed: number; left: number } | undefined;
   const shots: Shot[] = [];
@@ -286,8 +295,9 @@ export function play(s: Scenario): Played {
   const state: Record<string, number> = {};
   let last: HookContext['last'];
 
+  const castIndex = (action: Action) => action === 'aa' ? 1 : (chain[action] && t <= chain[action]!.expires + 1e-9 ? chain[action]!.n + 1 : 1);
   const ctx = (action: Action, variant: number): HookContext => ({
-    t, distance: gap(), action, variant, last, state,
+    t, distance: gap(), action, variant, cast: castIndex(action), last, state,
     option: id => fight.optionValues[id] ?? 0,
     setOption: (id, v) => fight.setOptions({ [id]: v }),
     counter: n => fight.counter(n), setCounter: (n, v) => fight.setCounter(n, v),
@@ -345,6 +355,7 @@ export function play(s: Scenario): Played {
       if (v.within && gap() > value(v.within, spell, slot)) continue;
       if (v.beyond && gap() <= value(v.beyond, spell, slot)) continue;
       if (v.when && !value(v.when, spell, slot)) continue;
+      if (v.src.cast !== undefined && v.src.cast !== castIndex(action)) continue;
       return i;
     }
     return -1;
@@ -360,7 +371,15 @@ export function play(s: Scenario): Played {
     ? centre() <= timing.range.v + rA + rB + 1e-6
     : centre() <= timing.range.v + rB + 1e-6 || !!timing.dash;
   const learned = (action: Action) => action === 'aa' || s.build.ranks[action] >= 1;
-  const offCooldown = (action: Action) => action === 'aa' ? t >= nextAttack - 1e-9 : t >= ready[action] - 1e-9;
+  const offCooldown = (action: Action) => {
+    if (action === 'aa') return t >= nextAttack - 1e-9;
+    const ch = plans[action].charges;
+    if (ch) {
+      recharging[action] = recharging[action].filter(x => x > t + 1e-9);
+      return recharging[action].length < ch.count && t >= ready[action] - 1e-9;
+    }
+    return t >= ready[action] - 1e-9;
+  };
   const allowed = (action: Action, variant: number) => {
     if (action === 'aa') return true;
     const p = plans[action];
@@ -384,9 +403,28 @@ export function play(s: Scenario): Played {
       return;
     }
     const cd = fight.cooldown(action);
-    if (!cd) notes.add(`${s.champ.slots[action].name} has no cooldown in the game data; it was treated as ready again at once.`);
-    ready[action] = t + (cd?.seconds ?? 0);
-    if (cd) spans.push({ lane: action, kind: 'cooldown', from: t, to: ready[action] });
+    if (!cd && !plan.charges?.recharge) notes.add(`${s.champ.slots[action].name} has no cooldown in the game data; it was treated as ready again at once.`);
+    const rc = plan.recasts, ch = plan.charges;
+    if (rc) {
+      const live = chain[action] && t <= chain[action]!.expires + 1e-9;
+      const c = live ? chain[action]! : (chain[action] = { n: 0, expires: 0, first: t });
+      c.n++;
+      c.expires = t + rc.window;
+      if (c.n >= rc.count) {
+        delete chain[action];
+        const from = rc.cooldownFrom === 'first' ? c.first : t;
+        ready[action] = Math.max(t + rc.gap, from + (cd?.seconds ?? 0));
+        spans.push({ lane: action, kind: 'cooldown', from, to: ready[action] });
+      } else ready[action] = t + rc.gap;
+    } else if (ch) {
+      // charges come back one at a time
+      const back = ch.recharge ?? cd?.seconds ?? 0, lastBack = recharging[action].at(-1);
+      recharging[action].push(lastBack !== undefined && lastBack > t ? lastBack + back : t + back);
+      spans.push({ lane: action, kind: 'cooldown', from: t, to: recharging[action].at(-1)! });
+    } else {
+      ready[action] = t + (cd?.seconds ?? 0);
+      if (cd) spans.push({ lane: action, kind: 'cooldown', from: t, to: ready[action] });
+    }
     let busy: Busy;
     if (timing.dash && !weave) {
       const d = Math.max(1e-6, centre()), dir = timing.dash.direction;
@@ -515,6 +553,15 @@ export function play(s: Scenario): Played {
     } else if (reaching && main?.state !== 'dash') {
       notes.add(`${s.champ.slots[reaching.action as CastSlot]?.name ?? reaching.action} was woven into a dash that never brought the target within its reach, so it missed.`);
       reaching = undefined;
+    }
+    // a recast chain left unfinished ends when its window runs out; a cooldown counted from the last cast starts then
+    for (const slot of CAST_SLOTS) {
+      const c = chain[slot], rc = plans[slot].recasts;
+      if (!c || !rc || t <= c.expires + 1e-9) continue;
+      delete chain[slot];
+      const from = rc.cooldownFrom === 'first' ? c.first : c.expires;
+      ready[slot] = Math.max(ready[slot], from + (fight.cooldown(slot)?.seconds ?? 0));
+      spans.push({ lane: slot, kind: 'cooldown', from, to: ready[slot] });
     }
     // buffs that ran out, and options that follow distance
     for (const [opt, w] of windowUntil) if (t >= w.until - 1e-9) { windowUntil.delete(opt); fight.setOptions({ [opt]: 0 }); }

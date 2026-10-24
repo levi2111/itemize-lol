@@ -25,6 +25,8 @@ export interface VariantSrc {
   during?: Action[];
   /** holds when this formula is non-zero */
   when?: Formula;
+  /** holds for this cast of a recast chain: 1 for the first, 2 for the second… (see ActionSrc.recasts) */
+  cast?: number;
   spell?: string;
   lock?: Formula;
   range?: Formula;
@@ -51,7 +53,22 @@ export interface ActionSrc extends Omit<VariantSrc, 'within' | 'beyond' | 'durin
   requires?: Formula;
   /** while `channel` runs, these actions may still be cast, woven in */
   allows?: Action[];
+  /** an ability cast several times before its cooldown: Riven's Broken Wings, Ahri's Spirit Rush */
+  recasts?: RecastSrc;
+  /** an ability holding several charges, each coming back after `recharge` seconds */
+  charges?: { count: Formula; recharge?: Formula };
   notes?: string[];
+}
+
+export interface RecastSrc {
+  /** casts in the chain, the first included */
+  count: Formula;
+  /** seconds after each cast to make the next before the chain ends */
+  window: Formula;
+  /** seconds between casts of the chain */
+  gap?: Formula;
+  /** the cooldown starts with the first cast, or when the chain ends (the default) */
+  cooldownFrom?: 'first' | 'last';
 }
 
 /** An option the timeline sets for a while after an action: a buff with a duration. */
@@ -82,6 +99,8 @@ export interface HookContext {
   /** the action being started or landing, and the variant chosen for it (its index, or -1) */
   action: Action;
   variant: number;
+  /** which cast of a recast chain this is, from 1 */
+  cast: number;
   /** the previous action started, if any */
   last?: { action: Action; variant: number; t: number };
   option(id: string): number;
@@ -118,7 +137,7 @@ export interface BehaviourSrc {
     /** share of the attack period winding up, when the game file's is wrong for this champion */
     windup?: number;
     missileSpeed?: number;
-    variants?: { within?: Formula; beyond?: Formula; when?: Formula; windup?: number; missileSpeed?: number; options?: Record<string, number> }[];
+    variants?: { within?: Formula; beyond?: Formula; when?: Formula; windup?: number; missileSpeed?: number; options?: Record<string, number>; cast?: number }[];
   };
   actions?: Partial<Record<CastSlot, ActionSrc>>;
   windows?: WindowSrc[];
