@@ -18,6 +18,7 @@ export default champion('Naafiri', {
   options: {
     packmates: { label: 'Packmates alive', kind: 'int', default: 'NaafiriP.PackmateCap', min: 0 },
     hunt: { label: 'The Call of the Pack active', default: false },
+    qCast: { label: 'Darkin Daggers cast counted (0 both, 1 the first, 2 the recast)', kind: 'int', default: 0, min: 0, max: 2, timeline: true },
   },
   // frenzyUntil: the moment the Packmates' increased damage from the last ability runs out
   counters: { frenzyUntil: {} },
@@ -34,15 +35,15 @@ export default champion('Naafiri', {
   },
   q: {
     hits: [
-      { id: 'dagger', label: 'First dagger', type: 'physical', amount: 'TotalDamageFirstCast' },
+      { id: 'dagger', label: 'First dagger', type: 'physical', amount: 'TotalDamageFirstCast', when: 'qCast != 2' },
       // the recast works out its bonus from the health missing before it deals the rest of the bleed
       {
-        id: 'recast', label: 'Second dagger', type: 'physical',
+        id: 'recast', label: 'Second dagger', type: 'physical', when: 'qCast != 1',
         amount: 'TotalMinDamageSecondCast + (TotalMaxDamageSecondCast - TotalMinDamageSecondCast) * target.missingHpPct',
         note: 'Both daggers are counted; the second grows with the health the target has lost by then.',
       },
       // ticking down or cashed in by the second dagger, the bleed deals the same total
-      { id: 'bleed', label: 'Bleed', type: 'physical', amount: 'TotalBleedDamage', note: 'The whole bleed of Darkin Daggers is counted.' },
+      { id: 'bleed', label: 'Bleed', type: 'physical', amount: 'TotalBleedDamage', when: 'qCast != 2', note: 'The whole bleed of Darkin Daggers is counted.' },
     ],
   },
   w: {

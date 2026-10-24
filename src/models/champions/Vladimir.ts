@@ -15,6 +15,8 @@ export default champion('Vladimir', {
   options: {
     crimsonRush: { label: 'First Transfusion is empowered (Crimson Rush full)', default: false },
     plagued: { label: 'Hemoplague on the target for the whole combo', default: false },
+    // the lab's timeline keeps the plague up for its Duration itself (through "plagued"); it changes no damage
+    rTimed: { label: 'Hemoplague timed by the lab', default: false, timeline: true },
   },
   counters: { rush: {}, plague: {} },
   p: {
@@ -46,7 +48,7 @@ export default champion('Vladimir', {
   r: {
     hits: [
       // the plague is on the target before its own burst, which it amplifies too
-      { id: 'infect', type: 'magic', amount: 0, then: 'plague = 1' },
+      { id: 'infect', type: 'magic', amount: 0, when: '!rTimed', then: 'plague = 1' },
       { id: 'burst', type: 'magic', amount: 'Damage' },
     ],
     // true damage is left out: the plague does not increase it

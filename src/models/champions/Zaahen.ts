@@ -13,6 +13,8 @@ export default champion('Zaahen', {
     // ramped in a long fight, not at all in a short combo
     determination: { label: 'Determination stacks', kind: 'int', default: 'if(sustained, ZaahenPassive.MaxStacks, 0)', min: 0 },
     edge: { label: 'Aureate Rush hits with the edge of the slice', default: true },
+    // the lab's timeline plays the first cast and the recast apart; it changes no damage
+    qCast: { label: 'The Darkin Glaive cast counted (0 both, 1 the first, 2 the recast)', kind: 'int', default: 0, min: 0, max: 2, timeline: true },
   },
   p: {
     // percent of total attack damage per stack, doubled once the bar is full
@@ -25,8 +27,8 @@ export default champion('Zaahen', {
   q: {
     // both casts empower an attack; the attacks themselves are the engine's
     hits: [
-      { id: 'first', label: 'First attack bonus', type: 'physical', amount: 'InitialDamage' },
-      { id: 'recast', label: 'Recast attack bonus', type: 'physical', amount: 'SecondHitDamage', note: 'One cast counts the bonus damage of both empowered attacks; add two auto attacks to the combo for the attacks themselves.' },
+      { id: 'first', label: 'First attack bonus', type: 'physical', amount: 'InitialDamage', when: 'qCast != 2' },
+      { id: 'recast', label: 'Recast attack bonus', type: 'physical', amount: 'SecondHitDamage', when: 'qCast != 1', note: 'One cast counts the bonus damage of both empowered attacks; add two auto attacks to the combo for the attacks themselves.' },
     ],
   },
   w: {

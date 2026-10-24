@@ -21,6 +21,8 @@ export default champion('Xayah', {
   },
   options: {
     deadlyPlumage: { label: 'Deadly Plumage active', default: false },
+    // the lab's timeline keeps Deadly Plumage up for its duration itself (through "deadlyPlumage"); it changes no damage
+    plumageTimed: { label: 'Deadly Plumage timed by the lab', default: false, timeline: true },
   },
   // cuts: attacks left that drop a Feather; feathers: Feathers on the ground; plumage: Deadly Plumage was cast
   counters: { cuts: { max: 'XayahPassive.PStackMax' }, feathers: {}, plumage: { max: 1 } },
@@ -37,7 +39,7 @@ export default champion('Xayah', {
   },
   w: {
     hits: [{
-      id: 'activate', type: 'physical', amount: 0, then: 'plumage = 1',
+      id: 'activate', type: 'physical', amount: 0, when: '!plumageTimed', then: 'plumage = 1',
       note: 'Casting Deadly Plumage adds its second blade to every later attack in the combo. For damage per second, set "Deadly Plumage active".',
     }],
     rules: [

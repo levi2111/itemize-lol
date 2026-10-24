@@ -15,6 +15,9 @@ export default champion('Kindred', {
     marks: { label: 'Marks of the Kindred', kind: 'int', default: 0, min: 0 },
     dance: { label: 'Dance of Arrows attack speed active', default: false },
     bites: { label: 'Wolf\'s Frenzy bites that land', kind: 'int', default: 'floor(KindredW.ZoneDuration * wolfAs)', min: 0 },
+    // for a timeline: Kindred stands in Wolf's Frenzy (Dance of Arrows comes back sooner), and Dance of Arrows' full cooldown is running. Neither changes damage
+    inFrenzy: { label: 'Standing in Wolf\'s Frenzy', default: false, timeline: true },
+    danceCooling: { label: 'Dance of Arrows\' full cooldown running', default: false, timeline: true },
   },
   // dread: Mounting Dread stacks on the target; the cast applies the first
   counters: { dread: {} },

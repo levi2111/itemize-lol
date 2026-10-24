@@ -19,6 +19,8 @@ export default champion('Nidalee', {
     hunted: { label: 'Target is already Hunted', default: false },
     longSpear: { label: 'Javelin Toss lands at maximum range', default: true },
     primalSurge: { label: 'Primal Surge attack speed active', default: false },
+    // the lab's clock for Pounce's shortened cooldown after a Hunted target; it deals nothing
+    pounceReset: { label: 'Pounce on its shortened cooldown', default: false, timeline: true },
   },
   counters: { shifted: {}, hunt: {} },
   // Prowl itself is move speed and the Hunted mark; what the mark adds is part of Takedown

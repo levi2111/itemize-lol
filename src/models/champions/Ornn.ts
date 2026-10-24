@@ -14,6 +14,7 @@ export default champion('Ornn', {
     terrain: { label: 'Searing Charge rams into terrain', default: true },
     recast: { label: 'Call of the Forge God is sent back through the target', default: true },
     masterworks: { label: 'Items upgraded to Masterwork', kind: 'int', default: 0, min: 0, max: 5 },
+    rCast: { label: 'Call of the Forge God cast counted (0 both, 1 the elemental coming in, 2 sending it back)', kind: 'int', default: 0, min: 0, max: 2, timeline: true },
   },
   counters: { brittle: { max: 1 } },
   p: {
@@ -54,11 +55,11 @@ export default champion('Ornn', {
   },
   r: {
     hits: [
-      { id: 'pass', label: 'Elemental coming in', type: 'magic', amount: 'RDamageCalc', then: 'brittle = 1' },
+      { id: 'pass', label: 'Elemental coming in', type: 'magic', amount: 'RDamageCalc', when: 'rCast != 2', then: 'brittle = 1' },
       // the knock-up of the second pass spends the Brittle the first one applied, then the pass applies it again
-      { id: 'brittle', label: 'Brittle', type: 'magic', when: 'recast && brittle', amount: 'brittleDamage', then: 'brittle = 0' },
+      { id: 'brittle', label: 'Brittle', type: 'magic', when: 'recast && brittle && rCast != 1', amount: 'brittleDamage', then: 'brittle = 0' },
       {
-        id: 'back', label: 'Elemental sent back', type: 'magic', when: 'recast', amount: 'RDamageCalc', then: 'brittle = 1',
+        id: 'back', label: 'Elemental sent back', type: 'magic', when: 'recast && rCast != 1', amount: 'RDamageCalc', then: 'brittle = 1',
         note: 'Both passes of Call of the Forge God are counted, and the target is left Brittle; turn off "Call of the Forge God is sent back through the target" to count the first pass only.',
       },
     ],

@@ -12,6 +12,8 @@ export default champion('Sivir', {
   options: {
     ricochet: { label: 'Ricochet active', default: false },
     bounce: { label: 'Ricochet bounces back off another enemy nearby', default: false },
+    // the lab's timeline keeps On The Hunt's duration for its cooldown refunds; it changes no damage
+    hunting: { label: 'On The Hunt active', default: false, timeline: true },
   },
   // Fleet of Foot only grants move speed
   p: {},

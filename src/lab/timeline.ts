@@ -212,7 +212,19 @@ function describe(v: VariantSrc): string {
 interface Shot { action: Action; x: number; y: number; speed: number; started: number; variant: number; options?: Record<string, number> }
 interface Busy { action: Action; state: 'windup' | 'cast' | 'dash' | 'channel'; until: number; timing: ActionTiming; variant: number; options?: Record<string, number>; allows: Action[] }
 
+/** Plays a scenario. A behaviour that does not fit the data (a name it reads is gone) is set aside with a
+    note, and the game files' timing is used: the lab never fails because of one. */
 export function play(s: Scenario): Played {
+  const beh = behaviourOf(s.champ.id);
+  if (!beh) return playWith(s, undefined);
+  try { return playWith(s, beh); } catch (err) {
+    const r = playWith(s, undefined);
+    r.notes.unshift(`The timing written for ${s.champ.name} does not fit this data (${err instanceof Error ? err.message : String(err)}); the game files' timing is used instead.`);
+    return r;
+  }
+}
+
+function playWith(s: Scenario, beh: BehaviourSrc | undefined): Played {
   const seconds = s.mode.kind === 'seconds' ? s.mode.seconds : undefined;
   const horizon = seconds ?? s.horizon ?? 15;
   const enemy = s.target && 'champ' in s.target ? s.target : undefined;
@@ -225,7 +237,6 @@ export function play(s: Scenario): Played {
   const fight = new Fight(s.champ, s.items, s.build, target, { crits: s.crits, runes: s.runes, spread: true });
   const notes = new Set<string>();
   const events: Landed[] = [], spans: Span[] = [], frames: Frame[] = [], started: Played['started'] = [];
-  const beh = behaviourOf(s.champ.id);
   const rA = s.champ.timing?.radius ?? DEFAULT_RADIUS, rB = enemy?.champ.timing?.radius ?? DEFAULT_RADIUS;
   const attackRange = s.champ.stats.attackRange;
   const value = (e: Expr, spell?: string, slot: CastSlot | 'p' = 'p') => fight.value(e, spell, slot);
