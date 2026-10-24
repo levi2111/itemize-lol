@@ -472,6 +472,113 @@ label.ic{cursor:pointer}
 .tip-p{padding-top:.5rem;border-top:1px solid var(--rule);font-family:var(--font-mono);font-size:.66rem;line-height:1.45;color:var(--chalk-faint)}
 [data-ab]{cursor:help}
 .skill[data-ab] .pip{cursor:pointer}
+
+/* ---------- the combo in time, on the slip: how long it takes and what lands each second ---------- */
+.r-timed .n small{width:.4rem}
+.r-timed[title]{cursor:help}
+.r-skip{margin:-.05rem 0 .1rem;font-size:.62rem;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:help}
+
+/* ---------- runes: a strip under each build's slots, and the sheet it opens ---------- */
+.est{font-family:var(--font-mono);font-size:.56rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--warn);border:1px solid currentColor;border-radius:2px;padding:0 .25rem;white-space:nowrap}
+.build>.tag.lg{grid-row:1/3}
+.b-runes{grid-column:2/4;position:relative;display:flex;align-items:center;gap:.6rem;min-width:0;height:1.75rem;margin-top:-.15rem;padding:0 .55rem;border:1px solid var(--rule);border-radius:2px;background:rgba(4,18,17,.55);color:var(--chalk-dim);white-space:nowrap}
+.b-runes:hover,.b-runes[aria-expanded="true"]{border-color:var(--chalk);color:var(--chalk)}
+.b-runes .eyebrow{flex:none;font-size:.6rem}
+.rb-sum{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:.76rem}
+.rb-sum b{color:var(--chalk);font-weight:700}
+.b-runes.none .rb-sum{color:var(--chalk-faint)}
+.rb-x{display:flex;align-items:center;gap:.45rem;flex:none}
+.rb-x:empty{display:none}
+.rb-set{display:inline-flex;align-items:center;gap:.25rem;font-family:var(--font-mono);font-size:.62rem;color:var(--chalk)}
+.rb-set svg{width:.75rem;height:.75rem}
+.rb-go{flex:none;font-size:1rem;line-height:1;color:var(--chalk-faint)}
+body[data-compare="on"] .b-runes.uniq::after{content:"";position:absolute;left:.1rem;right:.1rem;bottom:-.4rem;height:.2rem;background:var(--c);transform:rotate(-.4deg);border-radius:.1rem .3rem .12rem .25rem}
+.kg{display:block;width:.6rem;height:.6rem}
+
+.rs-veil{z-index:55}
+.rsheet{width:min(76rem,94vw);max-height:min(48rem,90vh);display:grid;grid-template-rows:auto minmax(0,1fr);background:#081d1c;border:1px solid var(--chalk);border-radius:3px;box-shadow:0 2rem 4rem rgba(0,0,0,.6);font-size:.8rem}
+.rsheet .lbl{font-family:var(--font-mono);font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--chalk-dim)}
+.rs-head{display:flex;align-items:center;gap:1.1rem;padding:.9rem 1.1rem .75rem;border-bottom:1px solid var(--rule)}
+.rs-head h2{margin:0;font-family:var(--font-display);font-stretch:62%;font-weight:900;font-size:1.9rem;text-transform:uppercase;line-height:.9}
+.rs-for button{padding:.3rem .7rem}
+.rs-nm{max-width:10rem;overflow:hidden;text-overflow:ellipsis}
+.rs-acts{display:flex;align-items:center;gap:.4rem;margin-left:auto}
+.rs-acts .act{height:1.75rem;padding:0 .55rem;font-size:.66rem}
+.rs-body{min-height:0;overflow:auto;overscroll-behavior:contain;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 19rem;gap:0 2rem;align-items:start;padding:1rem 1.1rem 1.15rem;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.rs-col{display:grid;gap:.6rem;min-width:0}
+.rs-sec{display:flex;flex-wrap:wrap;align-items:baseline;gap:.35rem .8rem}
+.rs-col>.rs-sec~.rs-sec{margin-top:.5rem;padding-top:.9rem;border-top:1px dashed var(--rule)}
+.rs-trees{flex-basis:100%;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px;padding:2px;border:1px solid var(--rule);border-radius:3px;background:rgba(4,18,17,.6)}
+.rs-trees button{padding:.42rem .2rem;font-size:.76rem;font-weight:600;text-align:center;color:var(--chalk-dim);border-radius:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rs-trees button:hover:not(:disabled){color:var(--chalk)}
+.rs-trees button[aria-checked="true"]{background:var(--chalk);color:var(--ink)}
+.rs-trees button:disabled{opacity:.3;cursor:default}
+.rs-row{display:grid;grid-template-columns:4.4rem minmax(0,1fr);gap:.6rem;align-items:center}
+.rs-rl{font-family:var(--font-mono);font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--chalk-faint)}
+.rs-opts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.35rem}
+.rs-opts.n4{grid-template-columns:repeat(2,minmax(0,1fr))}
+.rn{position:relative;display:grid;align-content:center;justify-items:start;gap:.2rem;min-height:2.9rem;padding:.35rem 1rem .35rem .5rem;border:1px solid var(--rule);border-radius:2px;background:#061918;color:var(--chalk-dim);font-size:.78rem;font-weight:600;line-height:1.15;overflow-wrap:break-word}
+.rn:hover{border-color:var(--chalk-faint);color:var(--chalk)}
+.rn.on{border-color:var(--c);background:color-mix(in srgb,var(--c) 12%,#061918);color:var(--chalk);box-shadow:inset 0 0 0 1px var(--c)}
+.rn.cur{outline:1px dashed var(--chalk);outline-offset:2px}
+.rn-set{position:absolute;right:.3rem;top:.3rem;width:.75rem;height:.75rem;color:var(--c)}
+.rn-set svg{display:block;width:100%;height:100%}
+.rs-detail{position:sticky;top:0;display:grid;gap:.7rem;align-content:start;padding:.85rem .9rem .9rem;border:1px solid var(--rule);border-radius:2px;background:rgba(4,18,17,.6)}
+.rs-detail>.hint{margin:0}
+.rd-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.6rem;align-items:start}
+.rd-head b{display:block;font-family:var(--font-display);font-stretch:75%;font-size:1.1rem;font-weight:800;line-height:1.1}
+.rd-head .hint{display:block;margin-top:.2rem;font-family:var(--font-mono);font-size:.64rem}
+.rd-head .act{height:1.6rem;padding:0 .5rem;font-size:.64rem}
+.rd-desc{margin:0;white-space:pre-line;line-height:1.4;color:var(--chalk-dim)}
+.rd-warn{display:flex;align-items:center;gap:.5rem;margin:0;font-size:.74rem;color:var(--warn)}
+.rs-tip{margin:0}
+.ic.rc>label{flex:1;min-width:0}
+.ic .act{height:1.4rem}
+.stp input{width:3.6rem;padding:.1rem .15rem;border:0;border-bottom:1px dotted var(--chalk-faint);background:none;color:var(--chalk);font-family:var(--font-mono);font-size:.9rem;font-weight:700;text-align:center;appearance:textfield;-moz-appearance:textfield}
+.stp input::-webkit-inner-spin-button,.stp input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.stp input::placeholder{color:var(--chalk-faint);font-weight:400;font-size:.68rem}
+.stp input:focus{outline:0;border-bottom:1px solid var(--chalk)}
+/* on a phone the sheet rises from the bottom and fills the width, one column, with what a rune does under its row */
+@media (max-width:760px){
+  .rs-veil{place-items:end stretch}
+  .rsheet{width:100%;max-height:92vh;max-height:92dvh;border-bottom:0;border-radius:6px 6px 0 0;font-size:14px}
+  .rs-head{flex-wrap:wrap;gap:8px 10px;padding:12px 14px 10px}
+  .rs-head h2{font-size:30px}
+  .rs-for{order:3;flex-basis:100%;grid-auto-columns:1fr}
+  .rs-for button{padding:7px 10px;font-size:13px}
+  .rs-nm{max-width:none}
+  .rs-acts{gap:8px}
+  .rs-acts .act,.rs-acts .esc{height:36px;min-width:0;padding:0 13px;font-size:12px}
+  .rs-body{grid-template-columns:minmax(0,1fr);gap:16px;padding:12px 14px calc(20px + env(safe-area-inset-bottom,0px))}
+  .rs-col{gap:10px}
+  .rsheet .lbl{font-size:11px}
+  .rsheet .hint{font-size:12.5px}
+  .rs-trees{display:flex;flex-wrap:wrap}
+  .rs-trees button{flex:1 0 auto;padding:9px 10px;font-size:13.5px}
+  .rs-row{grid-template-columns:minmax(0,1fr);gap:5px}
+  .rs-rl{font-size:10.5px}
+  .rs-opts{gap:6px}
+  .rn{min-height:48px;padding:7px 16px 7px 10px;font-size:14px;border-radius:3px}
+  .rn-set{width:11px;height:11px;right:5px;top:5px}
+  .rsheet .est{font-size:10px}
+  .rs-detail{position:static;gap:10px;padding:12px;font-size:14px}
+  .rd-head b{font-size:20px}
+  .rd-head .hint{font-size:12px}
+  .rd-head .act{height:34px;padding:0 12px;font-size:12px}
+  .rd-warn{font-size:13px}
+  .rsheet .ic{min-height:44px;font-size:14px}
+  .rsheet .ic input[type="checkbox"]{width:22px;height:22px}
+  .rsheet .stp{gap:6px}
+  .rsheet .stp button{width:36px;height:36px;font-size:17px}
+  .rsheet .stp input{width:64px;font-size:16px}
+  .rsheet .stp input::placeholder{font-size:13px}
+  .rsheet .stp small{font-size:12px}
+  .rsheet .ic .act{height:36px;padding:0 12px;font-size:12px}
+  .rsheet .ie-h b{font-size:14px}
+  .rsheet .ie-t,.rsheet .ie-v{font-size:12.5px}
+  .rsheet .ie-n i{font-size:17px}
+  .rsheet .im-notes{font-size:12.5px}
+}
 </style>
 </head>
 <body data-compare="on" data-target="dummy">
@@ -564,12 +671,14 @@ label.ic{cursor:pointer}
           <div class="b-meta"><input class="b-name" id="name-a" value="On-hit" aria-label="Name of build A" spellcheck="false"><span class="b-gold"><b>0</b> gold</span></div>
           <div class="slots"></div>
           <div class="b-acts"><button class="act" id="clear-a" title="Empty all six slots">clear</button></div>
+          <button class="b-runes" data-runes aria-haspopup="dialog" aria-expanded="false" hidden><span class="eyebrow">Runes</span><span class="rb-sum"></span><span class="rb-x"></span><span class="rb-go" aria-hidden="true">›</span></button>
         </div>
         <div class="build b only-cmp" data-b="b">
           <span class="tag b lg">B</span>
           <div class="b-meta"><input class="b-name" id="name-b" value="AP burst" aria-label="Name of build B" spellcheck="false"><span class="b-gold"><b>0</b> gold</span></div>
           <div class="slots"></div>
-          <div class="b-acts"><button class="act" id="copy-a" title="Start build B from build A's items">= A</button><button class="act" id="rm-b" title="Remove build B">remove</button></div>
+          <div class="b-acts"><button class="act" id="copy-a" title="Start build B from build A's items and runes">= A</button><button class="act" id="rm-b" title="Remove build B">remove</button></div>
+          <button class="b-runes" data-runes aria-haspopup="dialog" aria-expanded="false" hidden><span class="eyebrow">Runes</span><span class="rb-sum"></span><span class="rb-x"></span><span class="rb-go" aria-hidden="true">›</span></button>
         </div>
         <button class="add-b only-solo" id="add-b"><span class="tag b sm">B</span>Add a second build to compare</button>
 
@@ -621,11 +730,16 @@ label.ic{cursor:pointer}
           </div>
           <hr class="rule">
           <div class="r-more" id="more">
-            <div class="r-row"><span class="lbl">Blocked by target</span>
+            <div class="r-row r-timed" id="r-time"><span class="lbl">Combo takes</span>
+              <span class="n a"><i>–</i><small></small></span><span class="n b only-cmp"><i>–</i><small></small></span><span class="only-solo"></span></div>
+            <div class="r-row r-timed" id="r-tdps"><span class="lbl">Combo damage per second</span>
               <span class="n a"><i>–</i></span><span class="n b only-cmp"><i>–</i></span><span class="only-solo"></span></div>
-            <div class="r-row"><span class="lbl">DPS, autos and procs</span>
+            <p class="r-skip" id="r-skip" hidden></p>
+            <div class="r-row" id="r-blocked"><span class="lbl">Blocked by target</span>
               <span class="n a"><i>–</i></span><span class="n b only-cmp"><i>–</i></span><span class="only-solo"></span></div>
-            <div class="r-row"><span class="lbl">Time to kill</span>
+            <div class="r-row" id="r-dps"><span class="lbl">DPS, autos and procs</span>
+              <span class="n a"><i>–</i></span><span class="n b only-cmp"><i>–</i></span><span class="only-solo"></span></div>
+            <div class="r-row" id="r-ttk"><span class="lbl">Time to kill</span>
               <span class="n a"><i>–</i></span><span class="n b only-cmp"><i>–</i></span><span class="only-solo"></span></div>
           </div>
           <hr class="rule only-cmp">
@@ -749,6 +863,20 @@ label.ic{cursor:pointer}
     </div>
     <div class="chips" id="champ-chips"></div>
     <div class="cm-grid" id="champ-grid"></div>
+  </div>
+</div>
+
+<div class="veil rs-veil" id="rune-modal" hidden>
+  <div class="rsheet" role="dialog" aria-modal="true" aria-labelledby="rs-title">
+    <div class="rs-head">
+      <h2 id="rs-title">Runes</h2>
+      <div class="seg rs-for only-cmp" id="rs-for" role="radiogroup" aria-label="Whose runes">
+        <button role="radio" data-rb="a" aria-checked="true"><span class="tag a xs">A</span><span class="rs-nm" id="rs-name-a"></span></button>
+        <button role="radio" data-rb="b" aria-checked="false"><span class="tag b xs">B</span><span class="rs-nm" id="rs-name-b"></span></button>
+      </div>
+      <div class="rs-acts"><button class="act" id="rs-copy" title="Give build B the runes and rune settings of build A" hidden>= A</button><button class="act" id="rs-clear" title="Take every rune off this build">clear</button><button class="esc" id="rs-x">Done</button></div>
+    </div>
+    <div class="rs-body" id="rs-body"></div>
   </div>
 </div>
 

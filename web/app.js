@@ -12,7 +12,11 @@ const nf = n => Math.round(n).toLocaleString('en-US');
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const SLOTS = ['q', 'w', 'e', 'r'];
 const ACTIONS = ['aa', ...SLOTS];
-const LINES = ['aa', 'q', 'w', 'e', 'r', 'p', 'items'];
+const LINES = ['aa', 'q', 'w', 'e', 'r', 'p', 'items', 'runes'];
+
+/* A rune page: the two trees, the keystone and a rune from each of the primary tree's other three rows,
+   two runes from different rows of the secondary tree, and a shard from each of the three shard rows. */
+function emptyPage() { return {primary: null, secondary: null, keystone: null, minors: [null, null, null], extra: [], shards: [null, null, null]}; }
 
 const S = {
   champ: {id:'Kaisa', key:145, name:"Kai'Sa", title:'Daughter of the Void', tags:[]},
@@ -38,6 +42,9 @@ const S = {
   options: {},                      // the champion's options the user has set, by id; the rest keep their defaults
   // each build's item settings the user has set: item id -> control id -> value; the rest keep their defaults
   itemOpts: {a: {}, b: {}},
+  // each build's rune page (see the runes section), and its rune settings the user has set, like itemOpts
+  runes: {a: emptyPage(), b: emptyPage()},
+  runeOpts: {a: {}, b: {}},
 };
 
 const ITEM_FILTERS = [
@@ -140,8 +147,9 @@ async function recalc() {
   const body = {
     champion: S.champ.id, level: S.level, ranks: S.ranks, options: S.options,
     builds: (S.compare ? ['a', 'b'] : ['a']).map(k => {
-      const io = itemOptsOf(k);
-      return {items: S.builds[k].filter(Boolean), ...(k === 'b' && S.split && {ranks: S.ranksB}), ...(Object.keys(io).length && {itemOptions: io})};
+      const io = itemOptsOf(k), ru = runeIdsOf(k), ro = runeOptsOf(k);
+      return {items: S.builds[k].filter(Boolean), ...(k === 'b' && S.split && {ranks: S.ranksB}), ...(Object.keys(io).length && {itemOptions: io}),
+        ...(ru.length && {runes: ru}), ...(Object.keys(ro).length && {runeOptions: ro})};
     }),
     target: targetBody(), combo: {counts: S.combo, crits: S.crits},
   };
@@ -392,6 +400,7 @@ function renderBuilds() {
       return `<div class="slot${other.has(id) ? '' : ' uniq'}${sel}" role="button" tabindex="0" data-b="${k}" data-i="${i}" title="${name}${shop ? `, ${SHOP[shop]} item` : ''}" aria-label="Build ${K}, slot ${i + 1}, ${name}">${itemIco(id)}${badge(it)}${cfgBtn(k, i, it)}<button class="rm" data-rm aria-label="Remove ${name}">×</button></div>`;
     }).join('');
     $('.b-gold b', row).textContent = nf(S.builds[k].reduce((s, id) => s + (S.items.get(id)?.gold || 0), 0));
+    paintRuneBtn(k);
   }
   const now = $('#shop-now');
   if (now) {
@@ -503,12 +512,12 @@ function placeItemMenu() {
 const TYPE_NAME = {physical: 'physical', magic: 'magic', true: 'true'};
 /* One effect: what one firing deals after the target's resistances (before them in raw output), and how
    often it fired in the combo. A proc the user counts has its stepper on the same line. */
-function effectRow(it, e, R, k) {
-  const raw = S.target === 'raw', shown = R?.items.find(x => x.id === it.id)?.effects.find(x => x.id === e.id);
+function effectRow(it, e, R, k, src = 'items') {
+  const raw = S.target === 'raw', shown = R?.[src]?.find(x => x.id === it.id)?.effects.find(x => x.id === e.id);
   const val = shown && (raw ? shown.one.raw : shown.one.dealt), ctl = it.controls?.find(c => c.rule === e.id);
   const amount = val === undefined ? '–' : nf(val);
   // what it added up to in the combo: a burn kept alive pays per second, so this is not always one firing times the count
-  const part = R?.combo.lines.find(l => l.key === 'items')?.parts.filter(p => p.id === `item:${it.id}/${e.id}`);
+  const part = R?.combo.lines.find(l => l.key === src)?.parts.filter(p => p.id === `${src === 'runes' ? 'rune' : 'item'}:${it.id}/${e.id}`);
   const total = part?.reduce((s, p) => s + (raw ? p.total.raw : p.total.dealt), 0) || 0;
   const sum = shown ? `${ctl ? '' : `${shown.fired}× · `}${total ? nf(total) : '0'} in the combo` : '';
   // a share of missing health, an execute: nothing against a target at full health
@@ -516,7 +525,7 @@ function effectRow(it, e, R, k) {
   return `<div class="ie"><div class="ie-h"><b>${esc(e.label)}</b><span class="ie-t ${e.type}">${TYPE_NAME[e.type] || e.type}</span></div>
     <div class="ie-v"><span class="ie-n"><i>${amount}</i>each${ctl?.kind === 'uses' ? ' use' : ''}, ${raw ? 'raw' : 'after resistances'}</span>
     <span class="ie-f">${sum}</span>${note}</div>
-    ${ctl ? controlRow(it, ctl, R, k, shown) : ''}</div>`;
+    ${!ctl ? '' : src === 'runes' ? runeControlRow(it, ctl, R, k, shown) : controlRow(it, ctl, R, k, shown)}</div>`;
 }
 /* A setting. Its value is what the user set, else what the last calculation used (a default can depend on the build). */
 function controlRow(it, c, R, k, effect) {
@@ -590,6 +599,293 @@ function wireItemMenu() {
   });
   addEventListener('resize', placeItemMenu);
   document.addEventListener('scroll', placeItemMenu, true);
+}
+
+/* ---------- runes ---------- */
+/* GET /runes gives the five trees with their rows, and the three rows of stat shards. Each build has its own
+   rune page, as it has its own items: a button under its slots opens a sheet (a dialog that fills a phone's
+   screen) where tapping a rune picks it into its row and shows what it does, its status, its notes and, once
+   picked, its settings. Settings are per build and go to the API as runeOptions, like itemOptions. */
+let RUNES = {styles: [], shards: [], runes: []};
+const runeById = new Map(), styleById = new Map();
+const SHARD_ROWS = ['Offense', 'Flex', 'Defense'];
+function useRunes(data) {
+  if (!data?.styles?.length || !Array.isArray(data.runes)) return;
+  RUNES = {styles: data.styles, shards: data.shards || [], runes: data.runes};
+  RUNES.runes.forEach(r => runeById.set(r.id, r));
+  RUNES.styles.forEach(s => styleById.set(s.id, s));
+}
+/* A page's trees: the ones it has, else Precision and Domination, else whichever trees there are. */
+function treesOf(p) {
+  const ids = RUNES.styles.map(s => s.id), pref = [8000, 8100, ...ids].filter(id => ids.includes(id));
+  if (!ids.includes(p.primary)) p.primary = pref[0] ?? null;
+  if (!ids.includes(p.secondary) || p.secondary === p.primary) p.secondary = pref.find(id => id !== p.primary) ?? null;
+  return p;
+}
+const runeIdsOf = k => { const p = S.runes[k]; return [p.keystone, ...p.minors, ...p.extra.map(x => x.id), ...p.shards].filter(id => id && runeById.has(id)); };
+/* A build's rune settings, kept only for runes it holds and settings those runes still have. */
+function runeOptsOf(k) {
+  const held = new Set(runeIdsOf(k)), out = {};
+  for (const [id, set] of Object.entries(S.runeOpts[k])) {
+    const controls = runeById.get(+id)?.controls || [];
+    if (!held.has(+id)) { delete S.runeOpts[k][id]; continue; }
+    for (const c of Object.keys(set)) if (!controls.some(x => x.id === c)) delete set[c];
+    if (Object.keys(set).length) out[id] = set; else delete S.runeOpts[k][id];
+  }
+  return out;
+}
+/* A place on the page: 'p0' is the primary tree's keystone row and 'p1' to 'p3' its other rows, 's1' to 's3'
+   the secondary tree's rows, 'h0' to 'h2' the shard rows. */
+function rowIds(p, row) {
+  const t = row[0], i = +row.slice(1);
+  if (t === 'p') return styleById.get(p.primary)?.rows[i]?.perks || [];
+  if (t === 's') return styleById.get(p.secondary)?.rows[i]?.perks || [];
+  return RUNES.shards[i] || [];
+}
+function pickedIn(p, row) {
+  const t = row[0], i = +row.slice(1);
+  if (t === 'p') return i === 0 ? p.keystone : p.minors[i - 1];
+  if (t === 's') return p.extra.find(x => x.row === i)?.id ?? null;
+  return p.shards[i];
+}
+/* Picks a rune into its row (null empties the row). The secondary tree holds two runes from different rows:
+   a third row drops the earlier of the two. */
+function setPick(p, row, id) {
+  const t = row[0], i = +row.slice(1);
+  if (t === 'p') { if (i === 0) p.keystone = id; else p.minors[i - 1] = id; }
+  else if (t === 's') { p.extra = p.extra.filter(x => x.row !== i); if (id) p.extra = [...p.extra, {row: i, id}].slice(-2); }
+  else p.shards[i] = id;
+}
+function rowName(p, row) {
+  const t = row[0], i = +row.slice(1);
+  if (t === 'h') return `Stat shard, ${(SHARD_ROWS[i] || `row ${i + 1}`).toLowerCase()}`;
+  const tree = styleById.get(t === 'p' ? p.primary : p.secondary)?.name || '';
+  return `${tree} ${t === 'p' ? 'primary' : 'secondary'}, ${i ? `row ${i}` : 'keystone'}`;
+}
+
+/* The button under a build's slots: its keystone and runes in one line, marked when the builds' runes differ. */
+function paintRuneBtn(k) {
+  const el = $(`.build[data-b="${k}"] .b-runes`);
+  if (!el) return;
+  el.hidden = !RUNES.styles.length;
+  const p = S.runes[k], ids = runeIdsOf(k), name = id => esc(runeById.get(id).name), has = id => id && runeById.has(id);
+  const minors = p.minors.filter(has).map(name), extra = [...p.extra].sort((x, y) => x.row - y.row).map(x => x.id).filter(has).map(name), shards = p.shards.filter(has).length;
+  const other = runeIdsOf(k === 'a' ? 'b' : 'a'), sorted = l => [...l].sort().join();
+  el.classList.toggle('uniq', sorted(ids) !== sorted(other));
+  el.classList.toggle('none', !ids.length);
+  const parts = [has(p.keystone) ? `<b>${name(p.keystone)}</b>` : '', minors.join(', '), extra.join(', '), shards ? `${shards} shard${shards > 1 ? 's' : ''}` : ''].filter(Boolean);
+  $('.rb-sum', el).innerHTML = parts.length ? parts.join(' · ') : 'None picked';
+  const set = Object.keys(S.runeOpts[k]).filter(id => ids.includes(+id)).length;
+  const off = ids.filter(id => STATUS_WORD[runeById.get(id).status]).length;
+  $('.rb-x', el).innerHTML = (off ? `<span class="est">${off} not counted</span>` : '') + (set ? `<span class="rb-set">${GEAR}${set} set</span>` : '');
+  el.setAttribute('aria-label', `Runes of build ${k.toUpperCase()}: ${ids.length ? ids.map(id => runeById.get(id).name).join(', ') : 'none'}`);
+  el.setAttribute('aria-expanded', runeFor === k);
+}
+
+let runeFor = null, runeCur = null;  // the build the sheet is open for, and the rune it shows: {row, id}
+const narrow = matchMedia('(max-width: 760px)');
+function openRunes(k) {
+  if (!RUNES.styles.length || !$('#rune-modal')) return;
+  closePicker(); closeItemMenu(); setMenu(null); hideTip();
+  runeFor = k; runeCur = null;
+  $('#rune-modal').hidden = false;
+  renderRuneSheet(); renderBuilds();
+  $('#rs-x').focus();
+}
+function closeRunes() {
+  if (!runeFor) return;
+  const k = runeFor;
+  runeFor = runeCur = null;
+  $('#rune-modal').hidden = true;
+  renderBuilds();
+  $(`.build[data-b="${k}"] .b-runes`)?.focus();
+}
+/* Redraws a part of the sheet, keeping the focus on the control it was on (each carries a data-f key). */
+function keepFocus(el, draw) {
+  const f = el.contains(document.activeElement) ? document.activeElement.dataset.f : null, top = el.scrollTop;
+  draw();
+  el.scrollTop = top;
+  if (f) $(`[data-f="${CSS.escape(f)}"]`, el)?.focus();
+}
+function renderRuneSheet() {
+  if (!runeFor) return;
+  const k = runeFor, p = treesOf(S.runes[k]), body = $('#rs-body'), sheet = $('#rune-modal .rsheet');
+  sheet.classList.toggle('a', k === 'a'); sheet.classList.toggle('b', k === 'b');
+  $$('#rs-for button').forEach(b => b.setAttribute('aria-checked', b.dataset.rb === k));
+  for (const b of ['a', 'b']) $(`#rs-name-${b}`).textContent = nameOf(b);
+  $('#rs-copy').hidden = k !== 'b' || !S.compare;
+  const trees = (which, chosen, skip) => `<div class="rs-trees" role="radiogroup" aria-label="${which === 'primary' ? 'Primary' : 'Secondary'} tree">${RUNES.styles.map(s =>
+    `<button role="radio" data-tree="${which}" data-id="${s.id}" data-f="t-${which}-${s.id}" aria-checked="${s.id === chosen}"${s.id === skip ? ' disabled title="The primary tree"' : ''}>${esc(s.name)}</button>`).join('')}</div>`;
+  const card = (row, id) => {
+    const r = runeById.get(id);
+    if (!r) return '';
+    const on = pickedIn(p, row) === id, cur = runeCur?.row === row && runeCur.id === id, word = STATUS_WORD[r.status];
+    const set = on && Object.keys(S.runeOpts[k][id] || {}).length;
+    return `<button class="rn${on ? ' on' : ''}${cur ? ' cur' : ''}" data-rrow="${row}" data-rid="${id}" data-f="r-${row}-${id}" aria-pressed="${on}"${cur ? ' aria-current="true"' : ''}>`
+      + `<span class="rn-nm">${esc(r.name)}</span>${word ? `<span class="est">${word}</span>` : ''}${set ? `<span class="rn-set" title="Settings changed">${GEAR}</span>` : ''}</button>`;
+  };
+  // on a phone what a rune does opens under its row; on a wide screen it has a column of its own
+  const inline = narrow.matches;
+  const row = (id, label) => {
+    const ids = rowIds(p, id);
+    return `<div class="rs-row" data-row="${id}"><span class="rs-rl">${label}</span><div class="rs-opts n${ids.length}">${ids.map(x => card(id, x)).join('')}</div></div>`
+      + (inline && runeCur?.row === id ? '<div class="rs-detail" id="rs-detail"></div>' : '');
+  };
+  const pri = styleById.get(p.primary), sec = styleById.get(p.secondary);
+  keepFocus(body, () => {
+    body.innerHTML = `<section class="rs-col">
+        ${inline && !runeCur ? '<p class="hint rs-tip">Tap a rune to pick it and read what it does.</p>' : ''}
+        <div class="rs-sec"><span class="lbl">Primary tree</span>${trees('primary', p.primary)}</div>
+        ${pri ? pri.rows.map((r, i) => row('p' + i, i ? `Row ${i}` : 'Keystone')).join('') : ''}
+      </section>
+      <section class="rs-col">
+        <div class="rs-sec"><span class="lbl">Secondary tree</span><span class="hint">${p.extra.length} of 2, from different rows</span>${trees('secondary', p.secondary, p.primary)}</div>
+        ${sec ? sec.rows.slice(1).map((r, i) => row('s' + (i + 1), `Row ${i + 1}`)).join('') : ''}
+        <div class="rs-sec"><span class="lbl">Stat shards</span><span class="hint">${p.shards.filter(Boolean).length} of 3</span></div>
+        ${RUNES.shards.map((r, i) => row('h' + i, SHARD_ROWS[i] || `Row ${i + 1}`)).join('')}
+      </section>
+      ${inline ? '' : '<div class="rs-detail" id="rs-detail"></div>'}`;
+    paintRuneDetail(true);
+  });
+}
+/* What the rune being read does: its description and status, and once it is picked, what each of its effects
+   dealt in the last calculation and its settings. */
+function paintRuneDetail(drawing) {
+  const el = $('#rs-detail');
+  if (!el || !runeFor) return;
+  // a number being typed is left alone; it is redrawn when it is done (its change event)
+  if (!drawing && el.contains(document.activeElement) && document.activeElement.type === 'number') return;
+  const k = runeFor, p = S.runes[k], r = runeCur && runeById.get(runeCur.id);
+  const draw = () => {
+    if (!r) { el.innerHTML = '<p class="hint">Tap a rune to pick it and read what it does. A picked rune with settings shows them here.</p>'; return; }
+    const on = pickedIn(p, runeCur.row) === r.id, R = S.res?.[k], word = STATUS_WORD[r.status];
+    const shown = R?.runes?.some(x => x.id === r.id);
+    const states = (r.controls || []).filter(c => !c.rule);
+    const lone = (r.controls || []).filter(c => c.rule && !(r.effects || []).some(e => e.id === c.rule));
+    const effects = (r.effects || []).map(e => effectRow(r, e, R, k, 'runes')).join('');
+    const status = r.status === 'unmodeled' ? '<p class="rd-warn"><span class="est">not counted</span>Not modelled yet: picking it changes no number.</p>'
+      : word ? `<p class="rd-warn"><span class="est">${word}</span>${r.status === 'auto' ? 'Estimated from its description.' : 'Its model is being reviewed.'}</p>` : '';
+    el.innerHTML = `<div class="rd-head"><div><b>${esc(r.name)}</b><span class="hint">${esc(rowName(p, runeCur.row))}${on && S.compare ? `, build ${k.toUpperCase()}` : ''}</span></div>
+        <button class="act" data-rtoggle data-f="d-toggle">${on ? 'Remove' : 'Pick'}</button></div>
+      ${status}<p class="rd-desc">${esc(r.desc || '')}</p>
+      ${on ? (effects ? `<div class="im-sec"><span class="lbl">Effects${shown ? '' : ', calculating…'}</span>${effects}</div>` : '')
+        + (lone.length ? `<div class="im-sec">${lone.map(c => runeControlRow(r, c, R, k)).join('')}</div>` : '')
+        + (states.length ? `<div class="im-sec"><span class="lbl">Going into the combo</span>${states.map(c => runeControlRow(r, c, R, k)).join('')}</div>` : '')
+        : r.controls?.length || r.effects?.length ? '<p class="hint">Picked, it shows what it deals in the combo and its settings.</p>' : ''}
+      ${r.notes?.length ? `<div class="im-notes">${r.notes.map(n => `<p>${esc(n)}</p>`).join('')}</div>` : ''}`;
+  };
+  drawing ? draw() : keepFocus(el, draw);
+}
+/* A rune's setting: a checkbox, or a number with steppers. A count of procs left empty is the combo's own. */
+function runeControlRow(r, c, R, k, effect) {
+  const mine = S.runeOpts[k][r.id]?.[c.id], used = R?.runes?.find(x => x.id === r.id)?.settings?.[c.id];
+  const id = `ro-${k}-${r.id}-${c.id}`, cid = esc(c.id);
+  if (c.kind === 'bool') return `<label class="ic" for="${id}"><span>${esc(c.label)}</span><input type="checkbox" id="${id}" data-rc="${cid}" data-f="c-${cid}"${(mine ?? used) ? ' checked' : ''}></label>`;
+  const auto = c.kind === 'procs' && mine === undefined, fired = effect?.fired ?? 0, n = mine ?? (auto ? fired : used ?? c.min ?? 0);
+  const label = c.kind === 'procs' ? 'In the combo' : c.kind === 'uses' ? 'Uses in the combo' : esc(c.label);
+  return `<div class="ic rc${auto ? ' auto' : ''}"><label for="${id}">${label}</label><span class="stp">
+      <button data-rc="${cid}" data-step="-1" data-f="c-${cid}-dn" aria-label="One fewer: ${esc(c.label)}"${n <= (c.min ?? 0) ? ' disabled' : ''}>−</button>
+      <input type="number" id="${id}" data-rc="${cid}" data-f="c-${cid}" inputmode="numeric" min="${c.min ?? 0}"${c.max !== undefined ? ` max="${c.max}"` : ''} value="${auto ? '' : n}"${auto ? ` placeholder="auto: ${fired}"` : ''}>
+      <button data-rc="${cid}" data-step="1" data-f="c-${cid}-up" aria-label="One more: ${esc(c.label)}"${c.max !== undefined && n >= c.max ? ' disabled' : ''}>+</button>${c.kind === 'int' && c.max !== undefined ? `<small>of ${c.max}</small>` : ''}</span>
+    ${mine === undefined ? '' : resetBtn(c)}</div>`;
+}
+function setRuneOpt(c, v) {
+  const k = runeFor, id = runeCur.id, set = S.runeOpts[k][id] ??= {};
+  if (v === undefined) delete set[c.id];
+  else set[c.id] = c.kind === 'bool' ? (v ? 1 : 0) : Math.max(c.min ?? 0, Math.min(c.max ?? 100000, Math.round(v)));
+  if (!Object.keys(set).length) delete S.runeOpts[k][id];
+}
+/* After a pick, a tree or a setting changes: the sheet, the build's button, and a new calculation. */
+function runesChanged() { renderRuneSheet(); renderBuilds(); schedule(); }
+function setTree(which, id) {
+  const p = S.runes[runeFor];
+  if (which === 'primary') {
+    if (id === p.primary) return;
+    // choosing the secondary tree as the primary swaps the two
+    if (id === p.secondary) { p.secondary = p.primary; p.extra = []; }
+    p.primary = id; p.keystone = null; p.minors = [null, null, null];
+  } else {
+    if (id === p.secondary || id === p.primary) return;
+    p.secondary = id; p.extra = [];
+  }
+  if (runeCur && !pickedIn(p, runeCur.row) && !rowIds(p, runeCur.row).includes(runeCur.id)) runeCur = null;
+  runesChanged();
+}
+/* Tapping a rune picks it into its row and shows it; tapping a picked one only shows it, so its settings can be changed. */
+function tapRune(row, id) {
+  const p = S.runes[runeFor];
+  runeCur = {row, id};
+  if (pickedIn(p, row) === id) return renderRuneSheet();
+  setPick(p, row, id);
+  runesChanged();
+}
+function wireRunes() {
+  const modal = $('#rune-modal');
+  if (!modal) return;
+  modal.addEventListener('mousedown', e => { if (e.target === modal) closeRunes(); });
+  $('#rs-x').addEventListener('click', closeRunes);
+  $('#rs-for').addEventListener('click', e => {
+    const b = e.target.closest('button[data-rb]');
+    if (b && b.dataset.rb !== runeFor) { runeFor = b.dataset.rb; runeCur = null; renderRuneSheet(); renderBuilds(); }
+  });
+  $('#rs-copy').addEventListener('click', () => { S.runes.b = structuredClone(S.runes.a); S.runeOpts.b = structuredClone(S.runeOpts.a); runeCur = null; runesChanged(); });
+  $('#rs-clear').addEventListener('click', () => {
+    const p = S.runes[runeFor];
+    S.runes[runeFor] = {...emptyPage(), primary: p.primary, secondary: p.secondary};
+    S.runeOpts[runeFor] = {}; runeCur = null; runesChanged();
+  });
+  const body = $('#rs-body');
+  const control = id => runeById.get(runeCur?.id)?.controls?.find(c => c.id === id);
+  body.addEventListener('click', e => {
+    const t = e.target.closest('button[data-tree]');
+    if (t) { setTree(t.dataset.tree, +t.dataset.id); return; }
+    const card = e.target.closest('.rn');
+    if (card) { tapRune(card.dataset.rrow, +card.dataset.rid); return; }
+    if (!runeCur) return;
+    if (e.target.closest('[data-rtoggle]')) {
+      const p = S.runes[runeFor];
+      setPick(p, runeCur.row, pickedIn(p, runeCur.row) === runeCur.id ? null : runeCur.id);
+      runesChanged(); return;
+    }
+    const r = e.target.closest('[data-rreset]');
+    if (r) { const c = control(r.dataset.rreset); if (c) { setRuneOpt(c, undefined); runesChanged(); } return; }
+    const st = e.target.closest('button[data-step]');
+    const c = st && control(st.dataset.rc);
+    if (!c) return;
+    // a stepper starts from what is shown: the user's value, the default the calculation used, or the combo's own count
+    const mine = S.runeOpts[runeFor][runeCur.id]?.[c.id], info = S.res?.[runeFor]?.runes?.find(x => x.id === runeCur.id);
+    const from = mine ?? (c.kind === 'procs' ? info?.effects.find(x => x.id === c.rule)?.fired : info?.settings?.[c.id]) ?? c.min ?? 0;
+    setRuneOpt(c, from + +st.dataset.step);
+    runesChanged();
+  });
+  // a number counts as it is typed, and only the marks around it change: redrawing the sheet then could
+  // swallow the click that ended the typing
+  body.addEventListener('input', e => {
+    const input = e.target.closest('input[type="number"][data-rc]'), c = input && control(input.dataset.rc);
+    if (!c) return;
+    const v = input.value.trim();
+    setRuneOpt(c, v === '' || !Number.isFinite(+v) ? undefined : +v);
+    markRuneOpt(input, c);
+    renderBuilds(); schedule(true);
+  });
+  body.addEventListener('change', e => {
+    const input = e.target.closest('input[data-rc]'), c = input && control(input.dataset.rc);
+    if (!c) return;
+    if (input.type === 'checkbox') { setRuneOpt(c, input.checked); runesChanged(); return; }
+    // the number as it counts, after its limits
+    const mine = S.runeOpts[runeFor][runeCur.id]?.[c.id];
+    if (mine !== undefined) input.value = mine;
+  });
+  narrow.addEventListener('change', renderRuneSheet);
+}
+const resetBtn = c => `<button class="act" data-rreset="${esc(c.id)}" data-f="c-${esc(c.id)}-reset" title="${c.kind === 'procs' ? 'Let the combo decide' : 'Back to the default'}">${c.kind === 'procs' ? 'Auto' : 'Reset'}</button>`;
+function markRuneOpt(input, c) {
+  const set = S.runeOpts[runeFor][runeCur.id], mine = set?.[c.id], row = input.closest('.ic'), reset = $('[data-rreset]', row);
+  row.classList.toggle('auto', c.kind === 'procs' && mine === undefined);
+  if (mine === undefined) reset?.remove(); else if (!reset) row.insertAdjacentHTML('beforeend', resetBtn(c));
+  const card = $(`.rn[data-rrow="${runeCur.row}"][data-rid="${runeCur.id}"]`), gear = card && $('.rn-set', card);
+  if (set && card && !gear) card.insertAdjacentHTML('beforeend', `<span class="rn-set" title="Settings changed">${GEAR}</span>`);
+  else if (!set) gear?.remove();
 }
 
 /* ---------- an ability's card ---------- */
@@ -771,9 +1067,12 @@ function setCompare(on) {
 
 /* ---------- breakdown ---------- */
 const TYPE = {physical: ['p', 'physical'], magic: ['m', 'magic'], true: ['', 'true'], mixed: ['', 'mixed']};
+/* the runes line's key: a small diamond, as neither font has one */
+const RUNE_KEY = '<svg class="kg" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 .6 9.4 5 5 9.4.6 5z" fill="currentColor"/></svg>';
 function lineLabel(k) {
   if (k === 'aa') return ['AA', 'Auto attack'];
   if (k === 'items') return ['+', 'Item effects'];
+  if (k === 'runes') return [RUNE_KEY, 'Runes'];
   return [k.toUpperCase(), S.view?.slots[k]?.name || (k === 'p' ? 'Passive' : k.toUpperCase() + ' ability')];
 }
 /* The rows are built once per kit so that typing in a quantity keeps its focus; numbers are filled in place. */
@@ -942,7 +1241,7 @@ function verdicts(A, B) {
       const o = y.combo.lines.find(m => m.key === l.key);
       if (o && o.total.dealt > 0 && l.total.dealt / o.total.dealt >= 1.3 && (!best || l.total.dealt - o.total.dealt > best.d)) best = {l, d: l.total.dealt - o.total.dealt, r: l.total.dealt / o.total.dealt};
     }
-    const who = best && ({aa: 'autos hit', p: 'passive hits', items: 'items hit'}[best.l.key] || best.l.key.toUpperCase() + ' hits');
+    const who = best && ({aa: 'autos hit', p: 'passive hits', items: 'items hit', runes: 'runes hit'}[best.l.key] || best.l.key.toUpperCase() + ' hits');
     say[w].push(`<b>Burst.</b> ${p === null ? 'More' : '+' + p + '%'} combo${best ? `, ${who} ${best.r.toFixed(1)}× harder` : ''}`);
   }
   const da = A.dps.dealt, db = B.dps.dealt;
@@ -961,6 +1260,8 @@ function assumptions() {
     r.caveats.forEach(n => notes.add(n));
     for (const s of ['p', ...SLOTS]) if (s === 'p' || S.combo[s]) r.abilities[s].notes.forEach(n => notes.add(`${lineLabel(s)[1]}: ${n}`));
     for (const it of r.items) it.notes.forEach(n => notes.add(`${S.items.get(it.id)?.name || 'Item'}: ${n}`));
+    for (const ru of r.runes || []) ru.notes.forEach(n => notes.add(`${runeById.get(ru.id)?.name || 'Rune'}: ${n}`));
+    r.timeline?.notes.forEach(n => notes.add(`Combo timing: ${n}`));
   }
   return [...notes];
 }
@@ -978,6 +1279,32 @@ function paintSide() {
 }
 const killTime = r => !r || S.target === 'raw' || r.timeToKill === null ? '–' : r.timeToKill.toFixed(1) + ' s';
 
+/* ---------- the combo in time ---------- */
+/* Each result plays the combo out against the target standing in range (attack windups and the attack timer,
+   cast times, cooldowns, projectiles): how long it takes until its last hit lands or the target dies, and the
+   damage per second over that time. An action it could not play (not learned, or waiting on what it needs)
+   is named, and the timeline's own notes say why. */
+const actionWord = k => k === 'aa' ? 'autos' : k.toUpperCase();
+const andList = l => l.length < 2 ? l.join('') : l.slice(0, -1).join(', ') + ' and ' + l.at(-1);
+function timing(r) {
+  const t = r?.timeline;
+  if (!t || !(t.seconds > 0)) return null;
+  const skipped = [...new Set(t.skipped)].map(actionWord), secs = t.seconds.toFixed(1) + ' s';
+  return {
+    secs, dps: nf(t.dps.dealt), kill: t.killedAt !== null, skipped: skipped.length ? `${andList(skipped)} not played` : '',
+    why: [`The combo played out in time against the target standing in range: attack windups, cast times, cooldowns and projectiles. `
+      + `${nf(t.dealt.dealt)} lands in ${secs}${t.killedAt !== null ? ', when the target dies' : ''}, ${nf(t.dps.dealt)} a second.`, ...t.notes].join('\n'),
+  };
+}
+/* The tabs page: a line under each total. */
+function paintTiming(k, r) {
+  const el = $(`#h-time-${k}`);
+  if (!el) return;
+  const t = timing(r);
+  el.innerHTML = !t ? '' : `${t.kill ? 'Kills at' : 'Takes'} <b>${t.secs}</b> · <b>${t.dps}</b>/s${t.skipped ? ` <span class="est">${esc(t.skipped)}</span>` : ''}`;
+  el.title = t ? t.why : '';
+}
+
 /* ---------- hero ---------- */
 function paintHero() {
   const A = S.res.a, B = S.compare ? S.res.b : null, raw = S.target === 'raw';
@@ -986,6 +1313,7 @@ function paintHero() {
   $('.tot.b .tot-n i').textContent = B ? nf(tb) : '–';
   $('.tot.a').classList.toggle('win', !B || ta >= tb);
   $('.tot.b').classList.toggle('win', !!B && tb > ta);
+  paintTiming('a', A); paintTiming('b', B);
   paintGlance(A, B);
   const [dps, ttk] = $$('.metric');
   const put = (box, k, text, win) => { const el = $(`.mv.${k}`, box); $('i', el).textContent = text; el.classList.toggle('win', win); };
@@ -1056,7 +1384,20 @@ function paintReceipt() {
     el.innerHTML = m.bars;
     el.title = `${nameOf(k)}: ${m.text}`;
   }
-  const [blocked, dps, ttk] = $$('#more .r-row');
+  const blocked = $('#r-blocked'), dps = $('#r-dps'), ttk = $('#r-ttk');
+  // the combo in time: how long it takes, and what lands each second
+  const time = $('#r-time'), tdps = $('#r-tdps'), ti = {a: timing(A), b: timing(B)};
+  for (const k of ['a', 'b']) {
+    const t = ti[k], o = ti[k === 'a' ? 'b' : 'a'], r = k === 'a' ? A : B;
+    put($(`.n.${k}`, time), t ? t.secs : '–', false);
+    $(`.n.${k} small`, time).textContent = t?.skipped ? '*' : '';
+    put($(`.n.${k}`, tdps), t ? t.dps : '–', !!B && !!t && !!o && Math.round(r.timeline.dps.dealt) > Math.round((k === 'a' ? B : A).timeline.dps.dealt));
+  }
+  time.title = tdps.title = [ti.a && (B ? 'A: ' : '') + ti.a.why, B && ti.b && 'B: ' + ti.b.why].filter(Boolean).join('\n\n');
+  const skip = $('#r-skip'), missed = ['a', 'b'].filter(k => ti[k]?.skipped && (k === 'a' || B));
+  skip.hidden = !missed.length;
+  skip.textContent = missed.length ? '* ' + missed.map(k => (B ? k.toUpperCase() + ': ' : '') + ti[k].skipped).join('; ') : '';
+  skip.title = missed.map(k => ti[k].why).join('\n\n');
   put($('.n.a', blocked), raw ? '–' : '−' + nf(A.combo.blocked), false);
   put($('.n.b', blocked), raw || !B ? '–' : '−' + nf(B.combo.blocked), false);
   const da = A.dps.dealt, db = B ? B.dps.dealt : 0;
@@ -1198,6 +1539,7 @@ function paintQuality() {
     if (!r) continue;
     for (const s of ['p', ...SLOTS]) if ((s === 'p' || S.combo[s]) && STATUS_WORD[r.abilities[s].status]) weak.add(`${lineLabel(s)[1]}: ${STATUS_WORD[r.abilities[s].status]}`);
     for (const it of r.items) if (STATUS_WORD[it.status]) weak.add(`${S.items.get(it.id)?.name || 'Item'}: ${STATUS_WORD[it.status]}`);
+    for (const ru of r.runes || []) if (STATUS_WORD[ru.status]) weak.add(`${runeById.get(ru.id)?.name || 'Rune'}: ${STATUS_WORD[ru.status]}`);
   }
   const q = $('#quality');
   q.hidden = !weak.size;
@@ -1209,7 +1551,7 @@ function paintQuality() {
 function paintResults() {
   if (RECEIPT) { paintReceipt(); renderLedger(); reprint(); }
   else { paintHero(); paintLines(); paintSide(); renderStats(); }
-  paintOpts(); paintTarget(); paintQuality(); paintItemMenu(); paintTip();
+  paintOpts(); paintTarget(); paintQuality(); paintItemMenu(); paintRuneDetail(); paintTip();
 }
 
 /* ---------- champion options ---------- */
@@ -1282,6 +1624,15 @@ function encodeState() {
     ...(ADDABLE.some(m => S.shops[m]) && {sh: ADDABLE.filter(m => S.shops[m])})};
   const io = {a: itemOptsOf('a'), b: itemOptsOf('b')};
   if (Object.keys(io.a).length || Object.keys(io.b).length) s.io = io;
+  // a rune page: its two trees, then the keystone, the three minor runes, the two secondary ones and the three shards, 0 for none
+  const ru = {}, ro = {};
+  for (const k of ['a', 'b']) {
+    const p = S.runes[k], set = runeOptsOf(k);
+    if (runeIdsOf(k).length) ru[k] = [p.primary, p.secondary, p.keystone, ...p.minors, p.extra[0]?.id, p.extra[1]?.id, ...p.shards].map(x => x || 0);
+    if (Object.keys(set).length) ro[k] = set;
+  }
+  if (Object.keys(ru).length) s.ru = ru;
+  if (Object.keys(ro).length) s.ro = ro;
   return btoa(unescape(encodeURIComponent(JSON.stringify(s)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 /* A build arrives in the link, or from the other layout's page when the visitor has just swapped. */
@@ -1328,6 +1679,35 @@ function applyState(s) {
       for (const c of it.controls || []) if (Number.isFinite(+set[c.id])) (S.itemOpts[k][id] ??= {})[c.id] = Math.round(+set[c.id]);
     }
   }
+  // runes are checked against the trees and rows they sit in, and their settings against their controls
+  for (const k of ['a', 'b']) {
+    if (Array.isArray(s.ru?.[k])) S.runes[k] = readPage(s.ru[k]);
+    const given = s.ro?.[k];
+    if (!given || typeof given !== 'object') continue;
+    for (const [id, set] of Object.entries(given).slice(0, 9)) {
+      const r = runeById.get(+id);
+      if (!r || !set || typeof set !== 'object') continue;
+      for (const c of r.controls || []) {
+        const v = set[c.id];
+        if (typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v))) (S.runeOpts[k][id] ??= {})[c.id] = Math.round(+v);
+      }
+    }
+  }
+}
+function readPage(v) {
+  const p = emptyPage(), n = i => Number.isInteger(v[i]) && runeById.has(v[i]) ? v[i] : null;
+  const pri = styleById.get(v[0]), sec = styleById.get(v[1]);
+  if (!pri) return p;
+  p.primary = pri.id;
+  if (sec && sec.id !== pri.id) p.secondary = sec.id;
+  if (pri.rows[0]?.perks.includes(n(2))) p.keystone = n(2);
+  for (let i = 0; i < 3; i++) if (pri.rows[i + 1]?.perks.includes(n(3 + i))) p.minors[i] = n(3 + i);
+  if (p.secondary) for (const id of [n(6), n(7)]) {
+    const row = sec.rows.findIndex((r, j) => j > 0 && r.perks.includes(id));
+    if (id && row > 0 && !p.extra.some(x => x.row === row)) p.extra.push({row, id});
+  }
+  for (let i = 0; i < 3; i++) if (RUNES.shards[i]?.includes(n(8 + i))) p.shards[i] = n(8 + i);
+  return treesOf(p);
 }
 
 /* ---------- wiring ---------- */
@@ -1342,7 +1722,11 @@ function wire() {
   $('#cmp-seg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setCompare(b.dataset.cmp === 'on'); });
   $('#add-b').addEventListener('click', () => setCompare(true));
   $('#rm-b').addEventListener('click', () => setCompare(false));
-  $('#copy-a').addEventListener('click', () => { S.builds.b = [...S.builds.a]; S.itemOpts.b = structuredClone(S.itemOpts.a); closeItemMenu(); renderBuilds(); schedule(); });
+  $('#copy-a').addEventListener('click', () => {
+    S.builds.b = [...S.builds.a]; S.itemOpts.b = structuredClone(S.itemOpts.a);
+    S.runes.b = structuredClone(S.runes.a); S.runeOpts.b = structuredClone(S.runeOpts.a);
+    closeItemMenu(); renderBuilds(); schedule();
+  });
   $('#clear-a').addEventListener('click', () => { S.builds.a = Array(6).fill(null); S.itemOpts.a = {}; closeItemMenu(); renderBuilds(); schedule(); });
   $('#name-a').addEventListener('input', paintNames);
   $('#name-b').addEventListener('input', paintNames);
@@ -1379,6 +1763,8 @@ function wire() {
 
   const builds = $('#builds');
   builds.addEventListener('click', e => {
+    const runes = e.target.closest('[data-runes]');
+    if (runes) { openRunes(runes.closest('.build').dataset.b); return; }
     // the shops button opens the picker on A's first empty slot
     if (e.target.closest('#shop-now')) { openPicker('a', Math.max(0, S.builds.a.findIndex(v => !v))); return; }
     const slot = e.target.closest('.slot'); if (!slot) return;
@@ -1388,7 +1774,7 @@ function wire() {
     if (e.target.closest('[data-rm]')) { S.builds[b][i] = null; renderBuilds(); schedule(); return; }
     openPicker(b, i);
   });
-  wireItemMenu();
+  wireItemMenu(); wireRunes();
   builds.addEventListener('keydown', e => {
     const slot = e.target.closest('.slot');
     if (slot && e.target === slot && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openPicker(slot.dataset.b, +slot.dataset.i); }
@@ -1459,12 +1845,13 @@ function wire() {
   });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-      if (itemMenu) { const k = itemMenu; closeItemMenu(); $(`.slot[data-b="${k.b}"][data-i="${k.i}"] [data-cfg]`)?.focus(); }
+      if (runeFor) closeRunes();
+      else if (itemMenu) { const k = itemMenu; closeItemMenu(); $(`.slot[data-b="${k.b}"][data-i="${k.i}"] [data-cfg]`)?.focus(); }
       else if (menu) { const b = menu; setMenu(null); b.focus(); }
       else if (!$('#champ-modal').hidden) closeChamps(); else closePicker();
       return;
     }
-    if (e.ctrlKey || e.metaKey || e.altKey || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || !$('#champ-modal').hidden) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || !$('#champ-modal').hidden || runeFor) return;
     const tab = !RECEIPT && {1:'build', 2:'target', 3:'break', 4:'stats'}[e.key];
     if (tab) { setTab(tab); return; }
     if (e.key.toLowerCase() === 'c') { e.preventDefault(); openChamps('atk'); }
@@ -1482,9 +1869,12 @@ async function boot() {
   buildRuler(); wire();
   // the built site carries the art index in the page; the dev server leaves it to be fetched
   const inline = $('#art-index');
-  const [meta, champs, items, art] = await Promise.all([api('/meta'), api('/champions'), api('/items'),
-    inline ? JSON.parse(inline.textContent) : fetch('/art/index.json').then(r => r.json())]);
+  const [meta, champs, items, art, runes] = await Promise.all([api('/meta'), api('/champions'), api('/items'),
+    inline ? JSON.parse(inline.textContent) : fetch('/art/index.json').then(r => r.json()),
+    // without the runes the site still works, with no rune pages
+    api('/runes').catch(() => null)]);
   useArt(art);
+  useRunes(runes);
   $('#patch').textContent = meta.displayPatch;
   $('#legal').textContent = meta.legal;
   S.champs = champs.map(c => ({id: c.id, key: c.key, name: c.name, title: c.title, tags: c.tags || [], ranged: !!c.ranged, critDamage: c.stats?.critDamage}))

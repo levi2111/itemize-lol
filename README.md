@@ -171,6 +171,6 @@ Timing comes from the game files (attack windups and their modifier, projectile 
 ## Not built yet
 
 - Summoner spells, and the target's own items (the UI marks that last one "soon").
-- Runes and the combo timeline in the site's pages: the API has both, the Fight Lab shows them.
+- A combo of a number of seconds (`combo.seconds`) in the site's pages; the API and the Fight Lab have it. Runes and the combo timeline are on both pages: each build has a Runes button under its items that opens its rune page (trees, runes, shards, and each rune's description, status, notes and settings), the breakdown has a Runes line, and each combo total says how long the combo takes and its damage per second, naming any action it could not play.
 - Attack speed that ramps within a fight. Ramping effects count as fully ramped for sustained damage and not at all in a short combo; each affected item says so in its notes.
 - Saved builds. The share link encodes the whole build in the URL, so it needs no storage.
