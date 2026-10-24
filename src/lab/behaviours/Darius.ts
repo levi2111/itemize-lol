@@ -12,7 +12,8 @@ export default behaviour('Darius', {
   ],
   actions: {
     q: { lock: 0.75, range: 425 },
-    w: { lock: 0 },
+    // a self-cast buff on the next attack: cast it once in attack range (175, edge to edge, plus his 65 radius)
+    w: { lock: 0, range: 175 + 65 },
     e: { dash: { speed: 2200, distance: 550, direction: 'toward' } },
     r: { dash: { speed: 1300, distance: 475, direction: 'toward' } },
   },

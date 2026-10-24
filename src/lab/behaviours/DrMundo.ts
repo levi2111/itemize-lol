@@ -6,7 +6,8 @@ import { behaviour } from '../behaviour.ts';
 export default behaviour('DrMundo', {
   reviewed: '16.20.1',
   actions: {
-    e: { lock: 0 },
+    // a self-cast buff on the next attack: cast it once in attack range (125, edge to edge, plus his 80 radius)
+    e: { lock: 0, range: 125 + 80 },
   },
   windows: [{ option: 'maximumDosage', after: 'r', for: 'Duration' }],
   notes: [
