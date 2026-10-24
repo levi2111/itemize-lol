@@ -16,6 +16,10 @@ const lower = (s: string) => s.toLowerCase();
 /* Ability resource fields on the champion record, not yet named by the hash list. */
 const RESOURCE_BASE = '{726ee5cd}', RESOURCE_PER_LEVEL = '{6216bf7b}';
 
+/** The cooldown of a spell whose file leaves the field out: the game file omits a field at its default, and
+    Data Dragon's cooldowns for those spells are 10 at every rank. */
+const DEFAULT_COOLDOWN = 10;
+
 /** Champions the attack-range heuristic gets wrong at level 1. */
 const RANGED_OVERRIDE: Record<string, boolean> = { Gnar: true };
 
@@ -50,6 +54,7 @@ function compileSpell(id: string, obj: Raw, table: StringTable, log: CompileLog)
   if (name) out.name = name;
   // cooldowns are indexed by rank; costs start at rank 1
   if (Array.isArray(s.cooldownTime)) out.cooldown = s.cooldownTime.map(clean);
+  else out.cooldown = Array<number>(7).fill(DEFAULT_COOLDOWN);
   if (Array.isArray(s.mana)) out.cost = [s.mana[0] ?? 0, ...s.mana].map(clean);
   const castTime = s.mCastTime ?? s.spellCastTime;
   if (typeof castTime === 'number') out.castTime = clean(castTime);
@@ -148,6 +153,11 @@ export function compileChampion(dd: Raw, bin: Raw, table: StringTable, log: Comp
     const spell = sid ? spells[sid] : undefined;
     if (spell && typeof d?.maxrank === 'number') spell.maxRank = d.maxrank;
     slots[slot] = { spell: sid ?? '', name: d?.name ?? spell?.name ?? slot.toUpperCase(), icon: d?.image?.full ?? '', maxRank: d?.maxrank ?? spell?.maxRank ?? (slot === 'r' ? 3 : 5) };
+    // cooldowns are compared with Data Dragon's, which also confirms the default a file leaves out
+    const official: unknown = d?.cooldown;
+    if (spell?.cooldown && Array.isArray(official) && official.some((v, r) => typeof v === 'number' && Math.abs(v - (spell.cooldown![r + 1] ?? NaN)) > 0.011)) {
+      warnings.push(`${slot.toUpperCase()}: Data Dragon cooldown=${official.join('/')} but game data has ${spell.cooldown.slice(1, official.length + 1).join('/')}`);
+    }
   });
   const pid = slotIds.p;
   if (!pid) warnings.push('no game spell found for the passive');

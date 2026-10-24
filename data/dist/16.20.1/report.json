@@ -55,7 +55,8 @@
   "19": 1
  },
  "sourceMismatches": {
-  "attackdamageperlevel": 172
+  "attackdamageperlevel": 172,
+  "cooldown": 16
  },
  "warnings": [],
  "coverage": {
