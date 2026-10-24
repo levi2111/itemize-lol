@@ -279,8 +279,8 @@ export interface SpellTiming {
   /** seconds its projectile takes, when it flies for a fixed time instead */
   missileTime?: number;
   width?: number;
-  /** seconds it channels */
-  channel?: number;
+  /** seconds it channels, by rank (one value when it does not change) */
+  channel?: number[];
   /** ability haste does not shorten its cooldown */
   fixedCooldown?: boolean;
   canMoveWhileChanneling?: boolean;

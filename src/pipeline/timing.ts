@@ -36,9 +36,10 @@ export function compileSpellTiming(s: Raw): SpellTiming {
   const cast = s.mCastTime ?? s.spellCastTime;
   if (typeof cast === 'number') out.castTime = clean(cast);
   if (typeof s.spellTotalTime === 'number') out.totalTime = clean(s.spellTotalTime);
+  // the range a player sees, when the file gives one, is the spell's reach; castRange is often a script's own limit
   const range = rankArray(s.castRange), display = rankArray(s.castRangeDisplayOverride);
-  if (range && range.some(r => r > 0 && r < UNLIMITED)) out.range = range;
-  else if (display) out.range = display;
+  if (display && display.some(r => r > 0)) out.range = display;
+  else if (range && range.some(r => r > 0 && r < UNLIMITED)) out.range = range;
   const radius = rankArray(s.castRadius);
   if (radius && radius.some(r => r > 0)) out.radius = radius;
   const move: Raw | undefined = s.mMissileSpec?.movementComponent;
@@ -47,7 +48,8 @@ export function compileSpellTiming(s: Raw): SpellTiming {
   if (typeof move?.mTravelTime === 'number') out.missileTime = clean(move.mTravelTime);
   const width = s.mLineWidth ?? s.mMissileSpec?.mMissileWidth;
   if (typeof width === 'number' && width > 0) out.width = clean(width);
-  if (typeof s.mChannelDuration === 'number') out.channel = clean(s.mChannelDuration);
+  const channel = typeof s.mChannelDuration === 'number' ? [clean(s.mChannelDuration)] : rankArray(s.mChannelDuration);
+  if (channel && channel.some(c => c > 0)) out.channel = channel;
   if (s.mCooldownNotAffectedByCDR) out.fixedCooldown = true;
   if (s.mCanMoveWhileChanneling) out.canMoveWhileChanneling = true;
   if (s.mUseAutoattackCastTimeData) out.usesAttackTiming = true;

@@ -15,8 +15,8 @@ Anything none of them gives is a placeholder, marked `assumed`.
 For every champion, with no behaviour at all:
 
 - **Basic attack**: windup share (`timing.attack.windup`), the windup modifier, projectile speed (0 for melee), gameplay radius. Windup seconds follow the game's formula: `windup / baseAS + (windup / AS − windup / baseAS) × modifier`.
-- **Every spell object** (`timing.spells[<SpellId>]`): `castTime`, `totalTime`, `range` and `radius` by rank, `missileSpeed`, `missileTime` (fixed-time projectiles), `width`, `channel`, `fixedCooldown` (haste does not apply), `targeting`, `tags` (the game's own: `Trait_AttackReset`, `Trait_ChannelSpell`, `PositiveEffect_EmpowerAttack`, `Trait_PlayerSelectedDashDirection`…).
-- **Defaults the timeline derives**: an ability uses its slot's spell object. Its lock is that spell's cast time; its range is its range at rank (for self-centred spells, the radius); its projectile is its own missile or a spell object named `<Spell>Missile`; it resets the attack timer if it has `Trait_AttackReset`; a `DashSpeed` with a `DashTotalDistance`/`DashDistance`/`DashRange` data value makes it a dash.
+- **Every spell object** (`timing.spells[<SpellId>]`): `castTime`, `totalTime`, `range` (the range a player sees when the file gives one) and `radius` by rank, `missileSpeed`, `missileTime` (fixed-time projectiles), `width`, `channel` by rank, `fixedCooldown` (haste does not apply), `targeting`, `tags` (the game's own: `Trait_AttackReset`, `Trait_ChannelSpell`, `PositiveEffect_EmpowerAttack`, `Trait_PlayerSelectedDashDirection`…).
+- **Defaults the timeline derives**: an ability uses its slot's spell object. The file's channel time applies only to actions a behaviour does not describe: those times are often the longest an ability can run (a roll, a charge), so an action with a behaviour entry channels only as long as the entry says. Its lock is that spell's cast time; its range is its range at rank (for self-centred spells, the radius); its projectile is its own missile or a spell object named `<Spell>Missile`; it resets the attack timer if it has `Trait_AttackReset`; a `DashSpeed` with a `DashTotalDistance`/`DashDistance`/`DashRange` data value makes it a dash.
 
 So a behaviour only says what the files get wrong or cannot say. A champion whose abilities are plain casts needs no behaviour file at all.
 
@@ -70,15 +70,19 @@ The models' formula language. A name resolves, in order, to: the champion's opti
 | `range` | Reach, from the champion's centre to the target's edge. |
 | `speed` | Projectile speed; 0 lands at once. |
 | `delay` | Seconds from release to landing for damage that waits without flying (a delayed explosion). |
-| `dash` | `{ speed, distance, direction }`: `toward` stops at the target, `through` goes the full distance, `away` moves off. `null` removes a dash the data implied. Damage lands at the end of the dash. |
+| `dash` | `{ speed, distance, direction, afterLock? }`: `toward` stops at the target, `through` goes the full distance, `away` moves off; `afterLock` starts it when the cast's lock ends. `null` removes a dash the data implied. Damage lands at the end of the dash. A dash needs its target within the action's range. |
 | `channel` | Seconds after the lock with no attacks or other casts. |
 | `allows` | Actions that may still be woven in during the channel. |
 | `resetsAttack` | Overrides the game's tag. |
 | `requires` | The action can only start while this is non-zero. |
 | `recasts` | `{ count, window, gap?, cooldownFrom? }`: the ability is cast `count` times in a chain (Riven's Q, Ahri's R), each within `window` seconds of the last and at least `gap` apart. The cooldown starts when the chain ends (or lapses), or with the first cast when `cooldownFrom: 'first'`. Variants can pick a cast with `cast: 2`. |
-| `charges` | `{ count, recharge? }`: the ability holds `count` charges, each coming back `recharge` seconds (default: its cooldown) after the previous one. |
+| `charges` | `{ count, recharge?, gap? }`: the ability holds `count` charges, each coming back `recharge` seconds after the previous one (default: the game's ammo recharge, else its cooldown), at least `gap` seconds between casts (default: the game's cooldown when the recharge is a clock of its own). |
 | `variants` | See below. |
 | `options` | Options set while this cast's damage lands, then put back. |
+| `cooldown` | This cast's cooldown in seconds, in place of the game's (a form with cooldowns of its own). |
+| `pull` | Units the target is moved toward the champion when the cast lands; negative pushes it away. |
+| `asAttack` | The cast uses the attack timer: it waits for an attack to be ready and starts the next attack period (Twisted Fate's cards). |
+| `hitDelays` | `{ ruleId: seconds }`: those rules of the model land that long after the cast does (Ahri's orb coming back). |
 
 ### Variants
 
@@ -100,11 +104,11 @@ Options the timeline sets are hidden from the page. They must exist in the champ
 
 ### Hooks
 
-For what the fields above cannot express: `canStart(ctx)`, `onStart(ctx)`, `onLand(ctx)`. `ctx` gives the time, distance, the action and chosen variant, the previous action, options and counters (read and set), each ability's ready time (refunds), the attack timer, a `state` scratchpad kept all fight, and `note(text)`. Samira's Style meter is a hook. Keep hooks small and say in the file's comment what they model.
+For what the fields above cannot express: `canStart(ctx)`, `onStart(ctx)`, `onLand(ctx)`. `ctx` gives the time, distance, the action and chosen variant, which cast of a recast chain it is, the previous action, options and counters (read and set), each ability's ready time (refunds), the attack timer and `attackPeriod()`, `value(formula)` to read any formula now (a data value of the action's spell, a stat, an option), a `state` scratchpad kept all fight, and `note(text)`. Samira's Style meter is a hook. Keep hooks small and say in the file's comment what they model.
 
 ### Attack
 
-`attack: { windup?, missileSpeed?, variants? }` overrides the attack's windup share or projectile, and its variants (`within`, `beyond`, `when`, with `windup`, `missileSpeed`, `options`) cover forms like Samira's sword slashes or a stance that changes the attack.
+`attack: { windup?, missileSpeed?, variants? }` overrides the attack's windup share or projectile, and its variants (`within`, `beyond`, `when`, with `windup`, `missileSpeed`, `range`, `options`) cover forms like Samira's sword slashes or a stance that changes the attack.
 
 ## Checking
 
@@ -117,4 +121,4 @@ Then play the champion's real combos with a short script (see `test/lab.test.ts`
 
 ## Seconds mode
 
-`mode: { kind: 'seconds', seconds, abilities }` uses the listed abilities by priority as they come off cooldown (when in range and allowed), weaves the ones that can be woven, and attacks in between. A behaviour's `requires`, `canStart` and variants steer it exactly as in a script.
+`mode: { kind: 'seconds', seconds, abilities }` uses the listed abilities by priority as they come off cooldown and allowed, walking in for one that reaches less far than the target, weaves the ones that can be woven, and attacks in between. A behaviour's `requires`, `canStart` and variants steer it exactly as in a script.

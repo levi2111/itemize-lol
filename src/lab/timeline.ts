@@ -42,8 +42,16 @@ export interface ActionTiming {
   delay: Timed;
   /** seconds locked after the cast, channelling */
   channel: Timed;
-  dash?: { speed: Timed; distance: Timed; direction: 'toward' | 'through' | 'away' };
+  dash?: { speed: Timed; distance: Timed; direction: 'toward' | 'through' | 'away'; afterLock?: boolean };
   resetsAttack: boolean;
+  /** seconds of cooldown in place of the game's */
+  cooldown?: Timed;
+  /** units the target is moved toward the champion on landing; negative pushes */
+  pull?: Timed;
+  /** uses the attack timer like a basic attack */
+  asAttack?: boolean;
+  /** model rules that land this many seconds after the cast does */
+  hitDelays?: Record<string, number>;
 }
 export type EditKey = 'lock' | 'range' | 'speed' | 'delay' | 'channel' | 'dashSpeed' | 'dashDistance';
 export type Edits = Partial<Record<Action, Partial<Record<EditKey, number>>>>;
@@ -57,11 +65,13 @@ interface CompiledVariant {
 }
 interface Plan {
   base: ActionTiming;
+  /** options set while the action's own damage lands */
+  options?: Record<string, number>;
   variants: CompiledVariant[];
   requires?: Expr;
   allows: Action[];
   recasts?: { count: number; window: number; gap: number; cooldownFrom: 'first' | 'last' };
-  charges?: { count: number; recharge?: number };
+  charges?: { count: number; recharge?: number; gap: number };
 }
 
 export type Behaviour = 'stand' | 'away' | 'toward' | 'strafe';
@@ -166,7 +176,7 @@ function fromData(champ: ChampionData, spell: string, rank: number, attackRange:
     range: reach,
     speed: missile?.missileSpeed ? data(missile.missileSpeed) : data(0),
     delay: missile?.missileTime ? data(missile.missileTime) : data(0),
-    channel: t?.channel ? data(t.channel) : data(0),
+    channel: at(t?.channel, rank) ? data(at(t?.channel, rank)!) : data(0),
     resetsAttack: !!t?.tags?.includes('Trait_AttackReset'),
   };
   const dashSpeed = dv(['DashSpeed']), dashDistance = dv(['DashTotalDistance', 'DashDistance', 'DashRange', 'DashLength']);
@@ -195,8 +205,12 @@ function overlay(champ: ChampionData, base: ActionTiming, src: VariantSrc | Acti
   const set = (k: 'lock' | 'range' | 'speed' | 'delay' | 'channel', f: string | number | undefined) => { const v = num(f); if (v !== undefined) t[k] = model(v); };
   set('lock', src.lock); set('range', src.range); set('speed', src.speed); set('delay', src.delay); set('channel', src.channel);
   if (src.dash === null) delete t.dash;
-  else if (src.dash) t.dash = { speed: model(num(src.dash.speed)!), distance: model(num(src.dash.distance)!), direction: src.dash.direction ?? 'toward' };
+  else if (src.dash) t.dash = { speed: model(num(src.dash.speed)!), distance: model(num(src.dash.distance)!), direction: src.dash.direction ?? 'toward', ...(src.dash.afterLock && { afterLock: true }) };
   if (src.resetsAttack !== undefined) t.resetsAttack = src.resetsAttack;
+  if (src.cooldown !== undefined) t.cooldown = model(num(src.cooldown)!);
+  if (src.pull !== undefined) t.pull = model(num(src.pull)!);
+  if (src.asAttack !== undefined) t.asAttack = src.asAttack;
+  if (src.hitDelays) t.hitDelays = { ...t.hitDelays, ...Object.fromEntries(Object.entries(src.hitDelays).map(([k, f]) => [k, num(f)!])) };
   return t;
 }
 
@@ -258,6 +272,7 @@ function playWith(s: Scenario, beh: BehaviourSrc | undefined): Played {
       const timing = { ...aaBase };
       if (v.windup !== undefined) timing.lock = model(v.windup);
       if (v.missileSpeed !== undefined) timing.speed = model(v.missileSpeed);
+      if (v.range !== undefined) timing.range = model(v.range);
       return { src: v, within: c(v.within), beyond: c(v.beyond), when: c(v.when), timing, options: v.options, label: describe(v) };
     }),
   };
@@ -265,18 +280,26 @@ function playWith(s: Scenario, beh: BehaviourSrc | undefined): Played {
     const rank = s.build.ranks[slot], src = beh?.actions?.[slot];
     const val = (e: Expr, spell?: string) => value(e, spell, slot);
     let base = fromData(s.champ, s.champ.slots[slot].spell, rank, attackRange);
-    if (src) base = overlay(s.champ, base, src, rank, attackRange, val);
+    // an action a behaviour describes channels only as long as the behaviour says: the file's channel
+    // times are often the longest an ability can run (a roll, a charge) rather than a lock
+    const ownChannel = (t: ActionTiming, given: unknown) => given === undefined && t.channel.v ? { ...t, channel: model(0) } : t;
+    if (src) base = ownChannel(overlay(s.champ, base, src, rank, attackRange, val), src.channel);
     const variants = (src?.variants ?? []).map(v => {
-      const timing = overlay(s.champ, base, v, rank, attackRange, val);
+      const timing = ownChannel(overlay(s.champ, base, v, rank, attackRange, val), v.channel ?? src?.channel);
       const c = (f: string | number | undefined) => f === undefined ? undefined : compileFormula(f, s.champ, timing.spell);
       return { src: v, within: c(v.within), beyond: c(v.beyond), when: c(v.when), timing, options: v.options, label: describe(v) };
     });
     const num = (f: string | number) => val(compileFormula(f, s.champ, base.spell), base.spell);
     plans[slot] = {
-      base, variants, allows: src?.allows ?? [],
+      base, variants, allows: src?.allows ?? [], ...(src?.options && { options: src.options }),
       ...(src?.requires !== undefined && { requires: compileFormula(src.requires, s.champ, base.spell) }),
       ...(src?.recasts && { recasts: { count: Math.max(1, Math.round(num(src.recasts.count))), window: num(src.recasts.window), gap: src.recasts.gap !== undefined ? num(src.recasts.gap) : 0, cooldownFrom: src.recasts.cooldownFrom ?? 'last' } }),
-      ...(src?.charges && { charges: { count: Math.max(1, Math.round(num(src.charges.count))), ...(src.charges.recharge !== undefined && { recharge: num(src.charges.recharge) }) } }),
+      ...(src?.charges && { charges: {
+        count: Math.max(1, Math.round(num(src.charges.count))),
+        // a charge comes back after the behaviour's recharge, or the game's ammo recharge, or the cooldown
+        ...(src.charges.recharge !== undefined ? { recharge: num(src.charges.recharge) } : at(s.champ.timing?.spells[base.spell ?? '']?.ammoRecharge, rank) ? { recharge: at(s.champ.timing!.spells[base.spell!]!.ammoRecharge, rank)! } : {}),
+        gap: src.charges.gap !== undefined ? num(src.charges.gap) : 0,
+      } }),
     };
   }
   // page edits replace the action's own values (not its variants')
@@ -294,6 +317,8 @@ function playWith(s: Scenario, beh: BehaviourSrc | undefined): Played {
   const distanceOpts = (beh?.distance ?? []).map(d => ({ option: d.option, within: compileFormula(d.within, s.champ, d.spell) , spell: d.spell }));
   const managed = [...new Set([...windows.map(w => w.option), ...distanceOpts.map(d => d.option)])];
   const windowUntil = new Map<string, { until: number; value: number }>();
+  // a buff kept by a window is off when the fight starts, whatever the model's default
+  if (windows.length) fight.setOptions(Object.fromEntries(windows.map(w => [w.option, 0])));
 
   // ---------- the floor ----------
   const a = { x: 0, y: 0, state: 'idle' as ChampState };
@@ -307,7 +332,7 @@ function playWith(s: Scenario, beh: BehaviourSrc | undefined): Played {
   /** charges: the times at which each spent charge comes back */
   const recharging: Record<CastSlot, number[]> = { q: [], w: [], e: [], r: [] };
   let nextAttack = 0, cursor = 0, main: Busy | undefined, woven: Busy | undefined;
-  let dash: { dx: number; dy: number; speed: number; left: number } | undefined;
+  let dash: { dx: number; dy: number; speed: number; left: number; from: number } | undefined;
   const shots: Shot[] = [];
   const delayed: { at: number; action: Action; variant: number; options?: Record<string, number>; started: number }[] = [];
   /** a cast woven into a dash whose damage waits until the dash brings the target within its reach */
@@ -324,6 +349,11 @@ function playWith(s: Scenario, beh: BehaviourSrc | undefined): Played {
     readyAt: slot => ready[slot], setReadyAt: (slot, v) => { ready[slot] = v; },
     attackReadyAt: () => nextAttack, setAttackReadyAt: v => { nextAttack = v; },
     note: text => notes.add(text),
+    value: (f, spell) => {
+      const sp = spell ?? (action === 'aa' ? undefined : plans[action].base.spell);
+      return value(compileFormula(f, s.champ, sp), sp, action === 'aa' ? 'p' : action);
+    },
+    attackPeriod: () => fight.attackPeriod,
   });
 
   const lineOf = new Map<string, { line: string; label: string }>();
@@ -331,7 +361,7 @@ function playWith(s: Scenario, beh: BehaviourSrc | undefined): Played {
     : line === 'items' ? 'item' : line === 'runes' ? 'rune' : 'passive';
   /** Runs something through Fight at time `when` and keeps every hit it dealt as an event: now, or, for
       damage spread over time, when each instance reaches the target. */
-  const record = (when: number, fn: () => void) => {
+  const record = (when: number, fn: () => void, delays?: Record<string, number>) => {
     const prevDealt = fight.hits.map(h => h.dealt), prevRaw = fight.hits.map(h => h.raw), mark = fight.landings.length;
     fight.time = when;
     fight.distance = gap();
@@ -348,7 +378,10 @@ function playWith(s: Scenario, beh: BehaviourSrc | undefined): Played {
       const lt = late.get(k);
       if (lt) { const r = Math.min(raw, lt.raw), d = Math.min(dealt, lt.dealt); raw -= r; dealt -= d; lt.raw -= r; lt.dealt -= d; }
       if (!(raw > 1e-6)) return;
-      events.push({ t: when, action: actionOf(h.line), owner: h.owner, rule: h.rule, line: h.line, label: h.label, type: h.type, raw, dealt });
+      const e: Landed = { t: when, action: actionOf(h.line), owner: h.owner, rule: h.rule, line: h.line, label: h.label, type: h.type, raw, dealt };
+      // a rule the behaviour lands later (the orb's way back) waits with the damage already worked out
+      const later = delays?.[h.rule];
+      if (later) pending.push({ ...e, t: when + later }); else events.push(e);
     });
     for (const l of fight.landings.slice(mark)) {
       const info = lineOf.get(`${l.owner}/${l.rule}`) ?? { line: 'items', label: l.rule };
@@ -358,10 +391,16 @@ function playWith(s: Scenario, beh: BehaviourSrc | undefined): Played {
 
   const land = (action: Action, variant: number, options: Record<string, number> | undefined) => {
     beh?.hooks?.onLand?.(ctx(action, variant));
+    const timing = timingOf(action, variant);
     const before = options ? Object.fromEntries(Object.keys(options).map(k => [k, fight.optionValues[k] ?? 0])) : undefined;
     if (options) fight.setOptions(options);
-    record(t, () => fight.act(action));
+    record(t, () => fight.act(action), timing.hitDelays);
     if (before) fight.setOptions(before);
+    if (timing.pull?.v) {
+      // pulled toward the champion, no closer than touching; pushed straight away
+      const d = Math.max(1e-6, centre()), m = Math.min(timing.pull.v, d - rA - rB);
+      b.x -= (b.x - a.x) / d * m; b.y -= (b.y - a.y) / d * m;
+    }
   };
 
   const timingOf = (action: Action, variant: number) => variant >= 0 ? plans[action].variants[variant]!.timing : plans[action].base;
@@ -389,10 +428,11 @@ function playWith(s: Scenario, beh: BehaviourSrc | undefined): Played {
   };
   const inRange = (action: Action, timing: ActionTiming) => action === 'aa'
     ? centre() <= timing.range.v + rA + rB + 1e-6
-    : centre() <= timing.range.v + rB + 1e-6 || !!timing.dash;
+    : centre() <= timing.range.v + rB + 1e-6;
   const learned = (action: Action) => action === 'aa' || s.build.ranks[action] >= 1;
-  const offCooldown = (action: Action) => {
+  const offCooldown = (action: Action, variant = -1) => {
     if (action === 'aa') return t >= nextAttack - 1e-9;
+    if (timingOf(action, variant).asAttack && t < nextAttack - 1e-9) return false;
     const ch = plans[action].charges;
     if (ch) {
       recharging[action] = recharging[action].filter(x => x > t + 1e-9);
@@ -409,7 +449,9 @@ function playWith(s: Scenario, beh: BehaviourSrc | undefined): Played {
 
   const start = (action: Action, variant: number, filler: boolean, weave: boolean, index: number) => {
     const timing = timingOf(action, variant), plan = plans[action];
-    const options = variant >= 0 ? plan.variants[variant]!.options : undefined;
+    // the action's own options, with its variant's over them
+    const vo = variant >= 0 ? plan.variants[variant]!.options : undefined;
+    const options = plan.options || vo ? { ...plan.options, ...vo } : undefined;
     started.push({ index, action, t, filler, variant, woven: weave });
     beh?.hooks?.onStart?.(ctx(action, variant));
     last = { action, variant, t };
@@ -422,7 +464,10 @@ function playWith(s: Scenario, beh: BehaviourSrc | undefined): Played {
       spans.push({ lane: 'aa', kind: 'windup', from: t, to: main.until });
       return;
     }
-    const cd = fight.cooldown(action);
+    // a cast that uses the attack timer starts the next attack period, as an attack does
+    if (timing.asAttack) nextAttack = t + fight.attackPeriod;
+    const game = fight.cooldown(action);
+    const cd = timing.cooldown ? { seconds: timing.cooldown.v } : game;
     if (!cd && !plan.charges?.recharge) notes.add(`${s.champ.slots[action].name} has no cooldown in the game data; it was treated as ready again at once.`);
     const rc = plan.recasts, ch = plan.charges;
     if (rc) {
@@ -440,6 +485,10 @@ function playWith(s: Scenario, beh: BehaviourSrc | undefined): Played {
       // charges come back one at a time
       const back = ch.recharge ?? cd?.seconds ?? 0, lastBack = recharging[action].at(-1);
       recharging[action].push(lastBack !== undefined && lastBack > t ? lastBack + back : t + back);
+      // between casts: the behaviour's gap, or the game's cooldown when charges recharge on their own clock (Corki's
+      // missiles: 2 s apart, 20 s to recharge); a hook may have set a later time already
+      const between = ch.gap || (ch.recharge !== undefined && cd && cd.seconds < ch.recharge ? cd.seconds : 0);
+      ready[action] = Math.max(ready[action], t + between);
       spans.push({ lane: action, kind: 'cooldown', from: t, to: recharging[action].at(-1)! });
     } else {
       ready[action] = t + (cd?.seconds ?? 0);
@@ -450,8 +499,10 @@ function playWith(s: Scenario, beh: BehaviourSrc | undefined): Played {
       const d = Math.max(1e-6, centre()), dir = timing.dash.direction;
       const stop = dir === 'toward' ? Math.max(0, d - rA - rB) : timing.dash.distance.v;
       const travel = Math.min(timing.dash.distance.v, stop), sign = dir === 'away' ? -1 : 1;
-      dash = { dx: sign * (b.x - a.x) / d, dy: sign * (b.y - a.y) / d, speed: timing.dash.speed.v, left: travel };
-      busy = { action, state: 'dash', until: t + Math.max(timing.lock.v, travel / timing.dash.speed.v), timing, variant, options, allows: plan.allows };
+      // a dash after the lock waits for it; otherwise the lock and the dash run together
+      const begins = timing.dash.afterLock ? t + timing.lock.v : t;
+      dash = { dx: sign * (b.x - a.x) / d, dy: sign * (b.y - a.y) / d, speed: timing.dash.speed.v, left: travel, from: begins };
+      busy = { action, state: 'dash', until: Math.max(t + timing.lock.v, begins + travel / timing.dash.speed.v), timing, variant, options, allows: plan.allows };
     } else busy = { action, state: 'cast', until: t + timing.lock.v, timing, variant, options, allows: plan.allows };
     spans.push({ lane: action, kind: busy.state === 'dash' ? 'dash' : 'cast', from: t, to: busy.until });
     if (weave) woven = busy; else main = busy;
@@ -460,7 +511,8 @@ function playWith(s: Scenario, beh: BehaviourSrc | undefined): Played {
   const openWindow = (w: typeof windows[number]) => {
     const slot = w.after === 'aa' ? 'p' : w.after;
     const len = value(compileFormula(w.for, s.champ, w.spell), w.spell, slot);
-    windowUntil.set(w.option, { until: t + len, value: w.value });
+    // a buff renewed while it lasts runs to the later of its two ends
+    windowUntil.set(w.option, { until: Math.max(t + len, windowUntil.get(w.option)?.until ?? 0), value: w.value });
     fight.setOptions({ [w.option]: w.value });
   };
 
@@ -482,17 +534,24 @@ function playWith(s: Scenario, beh: BehaviourSrc | undefined): Played {
   };
 
   /** What the champion wants to do next, when free. */
+  /** where 'move' heads: the reach of the action wanted next, centre to centre */
+  let moveReach = 0;
+  const reachOf = (action: Action, timing: ActionTiming) => action === 'aa' ? timing.range.v + rA + rB : timing.range.v + rB;
   const choose = (): { action: Action; variant: number; filler: boolean; index: number } | 'move' | 'wait' | undefined => {
     if (s.mode.kind === 'seconds') {
+      // the first ability by priority that is ready and allowed; one out of reach is walked to
+      let outOfReach: number | undefined;
       for (const slot of s.mode.abilities) {
-        if (!learned(slot) || !offCooldown(slot)) continue;
         const v = pickVariant(slot, undefined);
+        if (!learned(slot) || !offCooldown(slot, v)) continue;
         if (v >= 0 && plans[slot].variants[v]!.src.during) continue;
-        if (!allowed(slot, v) || !inRange(slot, timingOf(slot, v))) continue;
+        if (!allowed(slot, v)) continue;
+        const timing = timingOf(slot, v);
+        if (!inRange(slot, timing)) { outOfReach ??= reachOf(slot, timing); continue; }
         return { action: slot, variant: v, filler: false, index: -1 };
       }
-      const v = pickVariant('aa', undefined);
-      if (!inRange('aa', timingOf('aa', v))) return 'move';
+      const v = pickVariant('aa', undefined), aa = timingOf('aa', v);
+      if (outOfReach !== undefined || !inRange('aa', aa)) { moveReach = Math.min(outOfReach ?? Infinity, reachOf('aa', aa)); return 'move'; }
       return offCooldown('aa') ? { action: 'aa', variant: v, filler: false, index: -1 } : 'wait';
     }
     const mode = s.mode;
@@ -503,18 +562,18 @@ function playWith(s: Scenario, beh: BehaviourSrc | undefined): Played {
     const want = mode.script[cursor];
     if (want === undefined) {
       if (!mode.keepAttacking) return undefined;
-      const v = pickVariant('aa', undefined);
-      if (!inRange('aa', timingOf('aa', v))) return 'move';
+      const v = pickVariant('aa', undefined), aa = timingOf('aa', v);
+      if (!inRange('aa', aa)) { moveReach = reachOf('aa', aa); return 'move'; }
       return offCooldown('aa') ? { action: 'aa', variant: v, filler: true, index: -1 } : 'wait';
     }
     const v = pickVariant(want, undefined);
     const timing = timingOf(want, v);
-    const blocked = !offCooldown(want) || !allowed(want, v);
+    const blocked = !offCooldown(want, v) || !allowed(want, v);
     if (blocked && want !== 'aa' && mode.fillWithAutos) {
       const av = pickVariant('aa', undefined);
       if (inRange('aa', timingOf('aa', av)) && offCooldown('aa')) return { action: 'aa', variant: av, filler: true, index: -1 };
     }
-    if (!inRange(want, timing)) return 'move';
+    if (!inRange(want, timing)) { moveReach = reachOf(want, timing); return 'move'; }
     if (blocked) return 'wait';
     return { action: want, variant: v, filler: false, index: cursor };
   };
@@ -562,7 +621,7 @@ function playWith(s: Scenario, beh: BehaviourSrc | undefined): Played {
       delayed.splice(i, 1);
       land(p.action, p.variant, p.options);
     }
-    if (dash) {
+    if (dash && t > dash.from + 1e-9) {
       const m = Math.min(dash.left, dash.speed * TICK);
       a.x += dash.dx * m; a.y += dash.dy * m; dash.left -= m;
     }
@@ -597,10 +656,7 @@ function playWith(s: Scenario, beh: BehaviourSrc | undefined): Played {
       if (!main) {
         const want = choose();
         if (want === 'move') {
-          const v = s.mode.kind === 'script' && s.mode.script[cursor] !== undefined ? s.mode.script[cursor]! : 'aa';
-          const timing = timingOf(v, pickVariant(v, undefined)), d = centre();
-          const reach = v === 'aa' ? timing.range.v + rA + rB : timing.range.v + rB;
-          const step = Math.min(fight.stats.moveSpeed.total * TICK, Math.max(0, d - reach));
+          const d = centre(), step = Math.min(fight.stats.moveSpeed.total * TICK, Math.max(0, d - moveReach + 1));
           a.x += (b.x - a.x) / d * step; a.y += (b.y - a.y) / d * step;
           a.state = 'move';
         } else if (want === 'wait') a.state = 'wait';

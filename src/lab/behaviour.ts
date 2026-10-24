@@ -38,6 +38,14 @@ export interface VariantSrc {
   channel?: Formula;
   /** options set while this cast's damage lands, then put back, e.g. `{ sword: 1 }` */
   options?: Record<string, number>;
+  /** this cast's cooldown in seconds, in place of the game's (a form with its own cooldowns) */
+  cooldown?: Formula;
+  /** units the target is moved toward the champion when the cast lands (a pull); negative pushes it away */
+  pull?: Formula;
+  /** the cast uses the attack timer: it waits for an attack to be ready and starts the next period (Twisted Fate's cards) */
+  asAttack?: boolean;
+  /** seconds after the cast lands at which some of its model's rules land instead, by rule id (Ahri's orb coming back) */
+  hitDelays?: Record<string, Formula>;
 }
 
 export interface DashSrc {
@@ -45,6 +53,8 @@ export interface DashSrc {
   distance: Formula;
   /** `toward` (the default) stops at the target's edge; `through` may pass it; `away` moves off */
   direction?: 'toward' | 'through' | 'away';
+  /** the dash starts when the cast's lock ends, instead of with the cast */
+  afterLock?: boolean;
 }
 
 export interface ActionSrc extends Omit<VariantSrc, 'within' | 'beyond' | 'during' | 'when'> {
@@ -56,7 +66,7 @@ export interface ActionSrc extends Omit<VariantSrc, 'within' | 'beyond' | 'durin
   /** an ability cast several times before its cooldown: Riven's Broken Wings, Ahri's Spirit Rush */
   recasts?: RecastSrc;
   /** an ability holding several charges, each coming back after `recharge` seconds */
-  charges?: { count: Formula; recharge?: Formula };
+  charges?: { count: Formula; recharge?: Formula; gap?: Formula };
   notes?: string[];
 }
 
@@ -115,6 +125,10 @@ export interface HookContext {
   setAttackReadyAt(t: number): void;
   /** a scratchpad for the behaviour's own bookkeeping, kept for the whole fight */
   state: Record<string, number>;
+  /** a formula as a behaviour writes it, read now: a value of the action's spell (or `spell`), a stat, an option… */
+  value(f: Formula, spell?: string): number;
+  /** seconds one basic attack takes at the champion's attack speed right now */
+  attackPeriod(): number;
   /** adds a line to the fight's notes */
   note(text: string): void;
 }
@@ -137,7 +151,7 @@ export interface BehaviourSrc {
     /** share of the attack period winding up, when the game file's is wrong for this champion */
     windup?: number;
     missileSpeed?: number;
-    variants?: { within?: Formula; beyond?: Formula; when?: Formula; windup?: number; missileSpeed?: number; options?: Record<string, number>; cast?: number }[];
+    variants?: { within?: Formula; beyond?: Formula; when?: Formula; windup?: number; missileSpeed?: number; range?: number; options?: Record<string, number>; cast?: number }[];
   };
   actions?: Partial<Record<CastSlot, ActionSrc>>;
   windows?: WindowSrc[];
