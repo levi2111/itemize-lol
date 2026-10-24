@@ -76,6 +76,8 @@ export interface AbilitySrc {
 
 export interface OptionSrc {
   label: string;
+  /** set only by the lab's timeline (a behaviour's window, distance or variant): never offered to users */
+  timeline?: boolean;
   kind?: 'bool' | 'int';
   default: Formula | boolean;
   min?: number;

@@ -206,6 +206,8 @@ export interface CounterDef {
 export interface OptionDef {
   id: string;
   label: string;
+  /** set only by the lab's timeline; pages do not offer it */
+  timeline?: boolean;
   kind: 'bool' | 'int';
   /** evaluated against the build when the caller does not set it */
   default: Expr;

@@ -31,7 +31,7 @@ const championView = (c: ChampionData) => ({
     const m = c.models[s];
     return [s, { name: c.slots[s].name, icon: c.slots[s].icon, maxRank: c.slots[s].maxRank, status: m.status, damaging: m.rules.length > 0 || m.status === 'unmodeled', notes: m.notes }];
   })),
-  options: c.options.map(o => ({ id: o.id, label: o.label, kind: o.kind, ...(o.min !== undefined && { min: o.min }), ...(o.max !== undefined && { max: o.max }) })),
+  options: c.options.filter(o => !o.timeline).map(o => ({ id: o.id, label: o.label, kind: o.kind, ...(o.min !== undefined && { min: o.min }), ...(o.max !== undefined && { max: o.max }) })),
 });
 const itemView = (i: ItemData) => ({
   id: i.id, name: i.name, gold: i.gold, tags: i.tags, plaintext: i.plaintext, shops: i.shops, component: i.component, stats: i.stats,

@@ -19,6 +19,8 @@ export default champion('Camille', {
     outerHalf: { label: 'Tactical Sweep hits with its outer half', default: true },
     hookshot: { label: 'Hookshot attack speed active', default: false },
     ultimatum: { label: 'Fight starts inside The Hextech Ultimatum', default: false },
+    // a timeline plays the two attacks as two casts; 0, the default, counts both in one
+    qCast: { label: 'Precision Protocol attack counted (0 both, 1 the first, 2 the recast)', kind: 'int', default: 0, min: 0, max: 2, timeline: true },
   },
   // the time the zone of a cast Hextech Ultimatum closes
   counters: { zoneEnd: {} },
@@ -26,11 +28,11 @@ export default champion('Camille', {
   p: {},
   q: {
     hits: [
-      { id: 'first', label: 'First attack', type: 'physical', amount: 'ad + BonusDamage', appliesOnHit: true },
+      { id: 'first', label: 'First attack', type: 'physical', amount: 'ad + BonusDamage', appliesOnHit: true, when: 'qCast != 2' },
       // the converted share lands just before the rest of the attack
-      { id: 'converted', label: 'Recast attack, true damage', type: 'true', amount: '(ad + EmpoweredBonusDamage) * converted' },
+      { id: 'converted', label: 'Recast attack, true damage', type: 'true', amount: '(ad + EmpoweredBonusDamage) * converted', when: 'qCast != 1' },
       // deals nothing once the whole attack is converted, and still applies on-hit effects
-      { id: 'recast', label: 'Recast attack', type: 'physical', amount: '(ad + EmpoweredBonusDamage) * (1 - converted)', appliesOnHit: true },
+      { id: 'recast', label: 'Recast attack', type: 'physical', amount: '(ad + EmpoweredBonusDamage) * (1 - converted)', appliesOnHit: true, when: 'qCast != 1' },
     ],
     notes: ['One cast counts both attacks of Precision Protocol whole, on-hit effects included, the second as the empowered recast with part of it dealt as true damage. Do not add auto attacks for them.'],
   },

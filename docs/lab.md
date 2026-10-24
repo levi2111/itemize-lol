@@ -96,7 +96,7 @@ A variant can set `spell`, `lock`, `range`, `speed`, `delay`, `dash`, `channel`,
 - `windows: [{ option, after, for, value?, from? }]`: an option of the champion's model is set (to `value`, default 1) for `for` seconds after `after`'s release (or `from: 'start'`). This is how a buff with a duration turns a model's toggle on and off: Wild Rush's attack speed, a stance, an empowered state.
 - `distance: [{ option, within }]`: an option kept on while the target is within that distance, like Samira's melee range.
 
-Options the timeline sets are hidden from the page. They must exist in the champion's model (`options` in its model file). If a mechanic needs a state the model does not have, say so in your report instead of editing the model.
+Options the timeline sets are hidden from the page. They must exist in the champion's model (`options` in its model file); an option only a behaviour sets (a variant's `options`, say) gets `timeline: true` there, so the site never offers it. If a mechanic needs a state the model does not have, say so in your report instead of editing the model.
 
 ### Hooks
 

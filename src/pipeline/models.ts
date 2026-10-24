@@ -205,7 +205,7 @@ export function resolveChampion(champ: CompiledChampion, src: ChampionSrc | unde
   }
   for (const [id, o] of Object.entries(src.options ?? {})) {
     try {
-      out.options.push({ id, label: o.label, kind: o.kind ?? (typeof o.default === 'boolean' ? 'bool' : 'int'), default: shared.expr(o.default), ...(o.min !== undefined && { min: o.min }), ...(o.max !== undefined && { max: o.max }) });
+      out.options.push({ id, label: o.label, kind: o.kind ?? (typeof o.default === 'boolean' ? 'bool' : 'int'), default: shared.expr(o.default), ...(o.min !== undefined && { min: o.min }), ...(o.max !== undefined && { max: o.max }), ...(o.timeline && { timeline: true }) });
     } catch (e) { sharedOk = false; fail(`options.${id}`, e); }
   }
   for (const [id, c] of Object.entries(src.counters ?? {})) {

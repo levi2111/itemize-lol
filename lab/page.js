@@ -218,7 +218,7 @@ function syncForm() {
 }
 function renderOpts() {
   const champ = champs.get(S.champ), managed = new Set(result?.managed ?? []);
-  const shown = champ.options.filter(o => !managed.has(o.id));
+  const shown = champ.options.filter(o => !managed.has(o.id) && !o.timeline);
   $('opts').innerHTML = shown.map(o => o.kind === 'bool'
     ? `<label><input type="checkbox" id="opt-${o.id}" data-o="${o.id}" ${S.options[o.id] ? 'checked' : ''}> ${esc(o.label)}</label>`
     : `<label>${esc(o.label)} <input type="number" id="opt-${o.id}" data-o="${o.id}" min="${o.min ?? 0}" max="${o.max ?? 99}" value="${S.options[o.id] ?? ''}" placeholder="auto"></label>`).join('')
