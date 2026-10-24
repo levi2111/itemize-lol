@@ -15,10 +15,13 @@ import { parseExpr, type Resolve, type ResolveQuoted } from '../models/parse.ts'
 import { autoAbilityModel, autoItemModel } from './automodel.ts';
 import type { CompiledChampion } from './champion.ts';
 import type { CompiledItem } from './items.ts';
+import type { CompiledRune } from './runes.ts';
 
 export interface Lock {
   champions: Record<string, Partial<Record<Slot, string>>>;
   items: Record<string, string>;
+  /** kept apart from items: some rune ids are also item ids */
+  runes?: Record<string, string>;
 }
 export interface ModelIssue { where: string; message: string }
 
@@ -334,4 +337,16 @@ export function resolveItem(item: CompiledItem, src: ItemSrc | undefined, lock: 
     model.notes.push('A hand-written model exists but does not match this patch; showing the estimate instead.');
     return { model, issues: [{ where: `item ${item.id} ${item.name}`, message: e instanceof Error ? e.message : String(e) }] };
   }
+}
+
+/** A rune binds like an item, against its own named values and calculations. Without a model it is
+    `unmodeled`: runes have no tooltip damage mentions to estimate from. */
+export function resolveRune(rune: CompiledRune, src: ItemSrc | undefined, lock: Lock): { model: ItemModel; fingerprint?: string; issues: ModelIssue[] } {
+  if (!src) return { model: { status: 'unmodeled', rules: [], statMods: [], counters: {}, notes: ['Not modelled yet: it changes nothing in the calculation.'] }, issues: [] };
+  const asItem = { id: rune.id, name: rune.name, gold: 0, tags: [], plaintext: '', shops: [], component: false, tier: 0, stats: {}, dataValues: rune.dataValues, calcs: rune.calcs, tooltip: rune.desc, damageRefs: [] } as CompiledItem;
+  const res = resolveItem(asItem, src, { champions: {}, items: lock.runes ?? {} });
+  if (res.issues.length) res.model = { status: 'unmodeled', rules: [], statMods: [], counters: {}, notes: ['A hand-written model exists but does not match this patch; it changes nothing in the calculation.'] };
+  res.model.notes = res.model.notes.map(n => n.startsWith('This item changed since') ? 'This rune changed since its model was last reviewed; numbers may be off.' : n);
+  res.issues = res.issues.map(i => ({ ...i, where: `rune ${rune.id} ${rune.name}` }));
+  return res;
 }

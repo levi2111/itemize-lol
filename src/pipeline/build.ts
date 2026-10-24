@@ -4,15 +4,17 @@ import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { ChampionModelFile, ItemModelFile } from '../models/dsl.ts';
-import type { ChampionData, DatasetManifest, ItemData, ModelStatus, Slot } from '../shared/types.ts';
+import type { ChampionModelFile, ItemModelFile, RuneModelFile } from '../models/dsl.ts';
+import type { ChampionData, DatasetManifest, ItemData, ModelStatus, RuneData, RuneSet, Slot } from '../shared/types.ts';
 import { SLOTS } from '../shared/types.ts';
 import { checkAnchors } from './anchors.ts';
 import { newLog } from './calc.ts';
 import { compileChampion } from './champion.ts';
 import type { RawManifest } from './fetch.ts';
 import { compileItems } from './items.ts';
-import { resolveChampion, resolveItem, type Lock, type ModelIssue } from './models.ts';
+import { resolveChampion, resolveItem, resolveRune, type Lock, type ModelIssue } from './models.ts';
+import { compileRunes } from './runes.ts';
+import { compileTiming } from './timing.ts';
 import { DATA_DIR, distDir, rawDir, ROOT } from './paths.ts';
 
 const MODELS_DIR = join(ROOT, 'src', 'models');
@@ -82,6 +84,7 @@ export async function buildDataset(opts: BuildOptions = {}): Promise<BuildReport
   const lock: Lock = existsSync(LOCK_PATH) ? await readJson(LOCK_PATH) : { champions: {}, items: {} };
 
   const championModels = new Map((await loadModels<ChampionModelFile>('champions')).map(m => [m.id, m.src]));
+  const runeModels = new Map((await loadModels<RuneModelFile>('runes')).map(m => [m.id, m]));
   const itemModelList = await loadModels<ItemModelFile>('items');
   const itemModels = new Map(itemModelList.map(m => [m.id, m]));
 
@@ -91,7 +94,7 @@ export async function buildDataset(opts: BuildOptions = {}): Promise<BuildReport
     unknownParts: {}, unknownStats: {}, sourceMismatches: {}, warnings: [],
     coverage: { abilities: emptyCoverage(), items: emptyCoverage() },
   };
-  const newLock: Lock = { champions: {}, items: {} };
+  const newLock: Lock = { champions: {}, items: {}, runes: {} };
   if (itemModels.size < itemModelList.length) {
     const twice = itemModelList.filter((m, i) => itemModelList.findIndex(x => x.id === m.id) !== i);
     for (const m of twice) report.modelIssues.push({ where: `item ${m.id} ${m.name}`, message: 'modeled in two places; only the last one read is used' });
@@ -121,7 +124,7 @@ export async function buildDataset(opts: BuildOptions = {}): Promise<BuildReport
         if (!lock.champions[id]?.[slot]) report.unlocked.push(`${id}.${slot}`);
       }
     }
-    champions.push({ ...compiled, vars: resolved.vars, options: resolved.options, counters: resolved.counters, models: resolved.models });
+    champions.push({ ...compiled, vars: resolved.vars, options: resolved.options, counters: resolved.counters, models: resolved.models, timing: compileTiming(id, bin, compiled.ranged) });
   }
   for (const id of championModels.keys()) if (!ddChampions[id]) report.modelIssues.push({ where: id, message: 'model file names a champion that does not exist' });
 
@@ -155,6 +158,25 @@ export async function buildDataset(opts: BuildOptions = {}): Promise<BuildReport
   const itemIds = new Set(items.map(i => i.id));
   for (const m of itemModels.values()) if (!itemIds.has(m.id)) report.modelIssues.push({ where: `item ${m.id} ${m.name}`, message: 'model file names an item that is not in the shop this patch' });
 
+  // ---- runes ----
+  // mirrors made before runes were read have no rune files; the dataset then has no runes
+  let runeSet: RuneSet | undefined;
+  if (existsSync(join(raw, 'cdragon', 'perks.bin.json'))) {
+    const compiled = compileRunes(await readJson(join(raw, 'cdragon', 'perks.bin.json')), await readJson(join(raw, 'cdragon', 'perks.json')), await readJson(join(raw, 'cdragon', 'perkstyles.json')), clog);
+    const runes: RuneData[] = compiled.runes.map(r => {
+      const { model, fingerprint, issues } = resolveRune(r, runeModels.get(r.id)?.src, lock);
+      report.modelIssues.push(...issues);
+      if (model.status === 'stale') report.stale.push(`rune ${r.id} ${r.name}`);
+      if (fingerprint) {
+        newLock.runes![String(r.id)] = fingerprint;
+        if (!lock.runes?.[String(r.id)]) report.unlocked.push(`rune ${r.id} ${r.name}`);
+      }
+      return { ...r, model };
+    });
+    for (const m of runeModels.values()) if (!runes.some(r => r.id === m.id)) report.modelIssues.push({ where: `rune ${m.id} ${m.name}`, message: 'model file names a rune that does not exist this patch' });
+    runeSet = { ...compiled.set, runes };
+  } else log('no rune files in the mirror (run data:fetch again to add them): the dataset has no runes');
+
   // ---- format canaries ----
   const byId = new Map(champions.map(c => [c.id, c]));
   const itemById = new Map(items.map(i => [i.id, i]));
@@ -177,12 +199,13 @@ export async function buildDataset(opts: BuildOptions = {}): Promise<BuildReport
     id: c.id, key: c.key, name: c.name, title: c.title, tags: c.tags, ranged: c.ranged, stats: c.stats, status: statusOf(c),
   }))));
   await writeFile(join(out, 'items.json'), JSON.stringify(items));
+  if (runeSet) await writeFile(join(out, 'runes.json'), JSON.stringify(runeSet));
   const coverage = emptyCoverage();
   for (const k of Object.keys(coverage) as ModelStatus[]) coverage[k] = report.coverage.abilities[k];
   const dist: DatasetManifest = {
     patch, displayPatch: displayPatch(patch), builtAt: new Date().toISOString(),
     sources: { ddragon: manifest.ddragon, cdragon: manifest.cdragon },
-    champions: champions.length, items: items.length, coverage,
+    champions: champions.length, items: items.length, ...(runeSet && { runes: runeSet.runes.length }), coverage,
   };
   await writeFile(join(out, 'manifest.json'), JSON.stringify(dist, null, 1));
   await writeFile(join(out, 'report.json'), JSON.stringify(report, null, 1));
@@ -197,6 +220,11 @@ export async function buildDataset(opts: BuildOptions = {}): Promise<BuildReport
   log(`patch ${dist.displayPatch} (${patch}): ${champions.length} champions, ${items.length} items -> ${out}`);
   log(`abilities: ${cov(report.coverage.abilities)}`);
   log(`items:     ${cov(report.coverage.items)}`);
+  if (runeSet) {
+    const rc: Record<string, number> = {};
+    for (const r of runeSet.runes) rc[r.model.status] = (rc[r.model.status] ?? 0) + 1;
+    log(`runes:     ${Object.entries(rc).map(([k, n]) => `${n} ${k}`).join(', ')}`);
+  }
   log(`anchors:   ${report.anchors.passed} passed${report.anchors.missing.length ? `, ${report.anchors.missing.length} could not be checked` : ''}`);
   for (const m of report.anchors.missing) log(`  anchor not found: ${m}`);
   const mm = Object.entries(report.sourceMismatches);

@@ -6,7 +6,7 @@ import { HTTPException } from 'hono/http-exception';
 import { secureHeaders } from 'hono/secure-headers';
 import { calculate, championAsTarget } from '../engine/calc.ts';
 import { CalcError, type CalcResult, type TargetInput } from '../engine/types.ts';
-import type { ChampionData, ItemData, Slot } from '../shared/types.ts';
+import type { ChampionData, ItemData, RuneData, Slot } from '../shared/types.ts';
 import { SLOTS } from '../shared/types.ts';
 import type { ServedData } from './dataset.ts';
 
@@ -41,6 +41,14 @@ const itemView = (i: ItemData) => ({
     id: c.id, label: c.label, kind: c.kind, ...(c.min !== undefined && { min: c.min }), ...(c.max !== undefined && { max: c.max }), ...(c.rule && { rule: c.rule }),
   })),
   effects: i.model.rules.filter(r => r.label && !(r.amount.k === 'num' && r.amount.v === 0)).map(r => ({ id: r.id, label: r.label, type: r.type })),
+});
+
+const runeView = (r: RuneData) => ({
+  id: r.id, name: r.name, style: r.style, kind: r.kind, icon: r.icon, desc: r.desc, status: r.model.status, notes: r.model.notes,
+  controls: (r.model.controls ?? []).map(c => ({
+    id: c.id, label: c.label, kind: c.kind, ...(c.min !== undefined && { min: c.min }), ...(c.max !== undefined && { max: c.max }), ...(c.rule && { rule: c.rule }),
+  })),
+  effects: r.model.rules.filter(x => x.label && !(x.amount.k === 'num' && x.amount.v === 0)).map(x => ({ id: x.id, label: x.label, type: x.type })),
 });
 
 function fixedWindow(perMinute: number) {
@@ -85,10 +93,12 @@ export function createApp(data: ServedData, opts: AppOptions = {}) {
   const meta = { ...data.manifest, legal: LEGAL };
   const champions = data.index;
   const items = data.items.map(itemView);
+  const runes = data.runes ? { styles: data.runes.styles, shards: data.runes.shards, runes: data.runes.runes.map(runeView) } : { styles: [], shards: [], runes: [] };
 
   api.get('/meta', c => cached(c, meta));
   api.get('/champions', c => cached(c, champions));
   api.get('/items', c => cached(c, items));
+  api.get('/runes', c => cached(c, runes));
   api.get('/champions/:id', c => {
     const champ = data.champion(c.req.param('id'));
     return champ ? cached(c, championView(champ)) : c.json({ error: { message: 'no such champion' } }, 404);
@@ -129,7 +139,10 @@ export function createApp(data: ServedData, opts: AppOptions = {}) {
         if (!b || typeof b !== 'object') throw new CalcError(`builds[${i}]`, 'each build must be an object');
         // a build's own ranks, when it has them, replace the shared ones
         return calculate(data, {
-          build: { champion: body.champion, level: body.level, ranks: b.ranks ?? body.ranks ?? {}, options: body.options, items: b.items ?? [], itemOptions: b.itemOptions },
+          build: {
+            champion: body.champion, level: body.level, ranks: b.ranks ?? body.ranks ?? {}, options: body.options, items: b.items ?? [], itemOptions: b.itemOptions,
+            runes: b.runes ?? body.runes, runeOptions: b.runeOptions ?? body.runeOptions,
+          },
           target, combo: body.combo ?? {},
         });
       });

@@ -1,6 +1,6 @@
 /* What callers send the engine and what they get back. This is also the wire
    format of POST /api/v1/calc. */
-import type { CastSlot, ChampionData, DamageType, ItemData, ModelStatus, Slot } from '../shared/types.ts';
+import type { CastSlot, ChampionData, DamageType, ItemData, ModelStatus, RuleDamage, RuneData, Slot } from '../shared/types.ts';
 
 export type Action = 'aa' | CastSlot;
 
@@ -14,6 +14,10 @@ export interface BuildInput {
   options?: Record<string, number | boolean>;
   /** settings of the build's items, by item id and then the control's id (see ItemModel.controls); omitted ones use their default */
   itemOptions?: Record<string, Record<string, number | boolean>>;
+  /** rune ids: a keystone, the minor runes and the stat shards (shards may repeat) */
+  runes?: number[];
+  /** settings of the build's runes, by rune id and then the control's id, like itemOptions */
+  runeOptions?: Record<string, Record<string, number | boolean>>;
 }
 
 /** The enemy as plain numbers. `null` means raw output: no resistances, no health. */
@@ -52,9 +56,9 @@ export interface Amount {
 export type ByType = Record<DamageType, Amount>;
 
 export interface SourceLine {
-  key: 'aa' | Slot | 'items';
+  key: 'aa' | Slot | 'items' | 'runes';
   label: string;
-  /** times it was used in the combo; null for passives and item effects, which are triggered */
+  /** times it was used in the combo; null for passives, item effects and runes, which are triggered */
   qty: number | null;
   /** the single type it deals, or mixed, or none */
   type: DamageType | 'mixed' | 'none';
@@ -122,7 +126,8 @@ export interface ItemEffect {
   /** the rule's id; a `uses` or `procs` setting of the item has the same id */
   id: string;
   label: string;
-  type: DamageType;
+  /** `adaptive` deals physical or magic damage, by the build */
+  type: RuleDamage;
   /** one firing on its own against the target at full health, before what it sets off */
   one: Amount;
   /** firings in the combo */
@@ -162,6 +167,8 @@ export interface CalcResult {
   /** the value each of the champion's options had: what the caller set, or the default for this build */
   options: Record<string, number>;
   items: ItemInfo[];
+  /** the build's runes, the same way as its items */
+  runes: ItemInfo[];
   /** things the caller should tell the user: assumptions, and anything the engine could not evaluate */
   caveats: string[];
 }
@@ -171,6 +178,8 @@ export interface DataSource {
   patch: string;
   champion(id: string): ChampionData | undefined;
   item(id: number): ItemData | undefined;
+  /** missing for a dataset without runes */
+  rune?(id: number): RuneData | undefined;
 }
 
 export class CalcError extends Error {

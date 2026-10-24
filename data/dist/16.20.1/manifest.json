@@ -1,7 +1,7 @@
 {
  "patch": "16.20.1",
  "displayPatch": "26.20",
- "builtAt": "2026-10-14T13:24:47.991Z",
+ "builtAt": "2026-10-24T16:55:56.951Z",
  "sources": {
   "ddragon": "16.20.1",
   "cdragon": {
@@ -11,6 +11,7 @@
  },
  "champions": 173,
  "items": 386,
+ "runes": 69,
  "coverage": {
   "verified": 0,
   "curated": 864,

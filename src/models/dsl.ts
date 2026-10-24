@@ -5,7 +5,7 @@
    the game files and says how they combine: how many times a hit lands, what it
    scales with on the target, what it adds to a basic attack. Balance patches then
    flow through untouched, and only mechanical reworks need a person. */
-import type { DamageSource, DamageType, Slot, StatModTarget, Trigger } from '../shared/types.ts';
+import type { DamageSource, DamageType, RuleDamage, Slot, StatModTarget, Trigger } from '../shared/types.ts';
 
 /** A formula in the model language, or a plain number. */
 export type Formula = string | number;
@@ -16,7 +16,8 @@ export interface RuleSrc {
   label?: string;
   /** defaults to `cast` under `hits`, required under `rules` */
   on?: Trigger;
-  type: DamageType;
+  /** `adaptive`: physical or magic, by whichever of bonus attack damage and ability power is higher */
+  type: RuleDamage;
   amount: Formula;
   count?: Formula;
   /** seconds this damage takes to be dealt, for anything that is not instant: shown as damage per second next to the total */
@@ -49,7 +50,7 @@ export interface AmpSrc {
   value: Formula;
   when?: Formula;
   types?: DamageType[];
-  /** only damage from these: `attack` (basic attacks), `ability` (Q W E R), `passive`, `item` */
+  /** only damage from these: `attack` (basic attacks), `ability` (Q W E R), `passive`, `item`, `rune` */
   from?: DamageSource[];
 }
 
@@ -120,5 +121,8 @@ export interface ItemSrc {
 
 export const champion = (id: string, src: ChampionSrc) => ({ id, src });
 export const item = (id: number, name: string, src: ItemSrc) => ({ id, name, src });
+/** A rune's model has the shape of an item's. Its formulas read the rune's own named values and calculations. */
+export const rune = (id: number, name: string, src: ItemSrc) => ({ id, name, src });
 export type ChampionModelFile = ReturnType<typeof champion>;
 export type ItemModelFile = ReturnType<typeof item>;
+export type RuneModelFile = ReturnType<typeof rune>;

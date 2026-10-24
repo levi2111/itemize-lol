@@ -1,7 +1,7 @@
 /* npm run bundle. Packs the compiled dataset into one file for the Cloudflare Worker, which
    has no file system to read it from. Wrangler runs this before every dev session and deploy.
      ITEMIZE_PATCH        bundle this compiled patch instead of the latest */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DATA_DIR, ROOT, distDir } from '../src/pipeline/paths.ts';
 import type { ChampionIndexEntry } from '../src/server/dataset.ts';
@@ -14,6 +14,7 @@ const bundle = {
   manifest: read('manifest.json'),
   index,
   items: read('items.json'),
+  runes: existsSync(join(distDir(patch), 'runes.json')) ? read('runes.json') : undefined,
   champions: Object.fromEntries(index.map(c => [c.id, read(join('champions', `${c.id}.json`))])),
 };
 // outside src/, which wrangler dev watches: writing there would start the build again

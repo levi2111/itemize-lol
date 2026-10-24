@@ -102,6 +102,9 @@ export async function fetchPatch(opts: FetchOptions = {}): Promise<RawManifest> 
   const build = JSON.parse((await grab('cdragon', 'cdragon/content-metadata.json', `${CDRAGON}/${cd}/content-metadata.json`)).toString('utf8')).version as string;
   await grab('cdragon', 'cdragon/items.bin.json', `${CDRAGON}/${cd}/game/items.cdtb.bin.json`);
   await grab('cdragon', 'cdragon/stringtable.json', `${CDRAGON}/${cd}/game/en_us/data/menu/en_us/lol.stringtable.json`);
+  await grab('cdragon', 'cdragon/perks.bin.json', `${CDRAGON}/${cd}/game/perks.cdtb.bin.json`);
+  await grab('cdragon', 'cdragon/perks.json', `${CDRAGON}/${cd}/plugins/rcp-be-lol-game-data/global/default/v1/perks.json`);
+  await grab('cdragon', 'cdragon/perkstyles.json', `${CDRAGON}/${cd}/plugins/rcp-be-lol-game-data/global/default/v1/perkstyles.json`);
 
   const ids = Object.keys(champIndex.data).sort();
   let done = 0;

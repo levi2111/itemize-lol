@@ -4,7 +4,7 @@
    the fight goes on. */
 import { evaluate, growth, type EvalEnv, type Scope } from '../shared/expr.ts';
 import type {
-  Amp, CastSlot, ChampionData, CounterDef, DamageSource, DamageType, Expr, ItemControl, ItemData, ResistMod, Rule, Slot, SpellData, StatId, StatKind, StatMod, StatModTarget, Trigger,
+  Amp, CastSlot, ChampionData, CounterDef, DamageSource, DamageType, Expr, ItemControl, ItemData, ResistMod, Rule, RuneData, Slot, SpellData, StatId, StatKind, StatMod, StatModTarget, Trigger,
 } from '../shared/types.ts';
 import { CAST_SLOTS, SLOTS } from '../shared/types.ts';
 import type { Action, BuildInput, CritMode, StatBlock, StatLine, TargetInput } from './types.ts';
@@ -26,7 +26,7 @@ export const damageMultiplier = (resist: number) => resist >= 0 ? 100 / (100 + r
 interface Owner {
   key: string;
   /** breakdown line its damage is reported under */
-  line: 'aa' | Slot | 'items';
+  line: 'aa' | Slot | 'items' | 'runes';
   label: string;
   slot?: Slot;
   /** what an amp limited to some sources sees this owner's damage as */
@@ -41,9 +41,12 @@ interface Owner {
   ns: string;
   /** the champion's own rules also see its options and helper formulas */
   champion: boolean;
-  /** an item's settings the caller can change */
+  /** an item's or rune's settings the caller can change */
   controls: ItemControl[];
+  /** what the caller set them to */
+  given?: Record<string, number | boolean>;
   itemId?: number;
+  runeId?: number;
 }
 
 /** How a rule is being fired: by its trigger, as an active being used, or as a proc the caller counted by hand. */
@@ -77,6 +80,12 @@ export interface FightOptions {
   sustained?: boolean;
   /** how critical strikes count; see ComboInput.crits */
   crits?: CritMode;
+  /** the build's runes */
+  runes?: RuneData[];
+  /** Set by a caller that keeps a clock (the lab's timeline): damage spread over time (a rule's `over`) is
+      handed to it instance by instance, each with its delay in seconds, to be dealt when the clock gets there.
+      Without it the damage is dealt at once and the duration is only reported. */
+  defer?: (delay: number, deal: () => void) => void;
 }
 
 export class Fight {
@@ -118,9 +127,14 @@ export class Fight {
   /** stats are worked out; from here on a formula reading crit chance means the chance that a hit crits */
   private settled = false;
 
+  private build: BuildInput;
+  private readonly defer: FightOptions['defer'];
+
   constructor(champ: ChampionData, items: ItemData[], build: BuildInput, target: TargetInput | null, opts: FightOptions = {}) {
     this.champ = champ;
     this.items = items;
+    this.build = build;
+    this.defer = opts.defer;
     this.level = build.level;
     this.ranks = build.ranks;
     this.sustained = !!opts.sustained;
@@ -153,7 +167,16 @@ export class Fight {
         key: `item:${it.id}`, line: 'items', label: it.name, source: 'item', rules: m.rules,
         statMods: m.statMods, amps: m.amps ?? [], resists: m.resists ?? [], counterMax: m.counters,
         scope: { id: `item ${it.id}`, dv: n => it.dataValues[n], eff: () => undefined, calc: n => it.calcs[n] },
-        ns: `item:${it.id}:`, champion: false, controls: m.controls ?? [], itemId: it.id,
+        ns: `item:${it.id}:`, champion: false, controls: m.controls ?? [], given: build.itemOptions?.[String(it.id)], itemId: it.id,
+      });
+    }
+    for (const rn of opts.runes ?? []) {
+      const m = rn.model;
+      this.owners.push({
+        key: `rune:${rn.id}`, line: 'runes', label: rn.name, source: 'rune', rules: m.rules,
+        statMods: m.statMods, amps: m.amps ?? [], resists: m.resists ?? [], counterMax: m.counters,
+        scope: { id: `rune ${rn.id}`, dv: n => rn.dataValues[n], eff: () => undefined, calc: n => rn.calcs[n] },
+        ns: `rune:${rn.id}:`, champion: false, controls: m.controls ?? [], given: build.runeOptions?.[String(rn.id)], runeId: rn.id,
       });
     }
 
@@ -257,6 +280,7 @@ export class Fight {
       case 'sustained': return this.sustained ? 1 : 0;
       case 'hasTarget': return this.target ? 1 : 0;
       case 'adFromLevels': return this.stats.ad.base - this.champ.stats.ad;
+      case 'adaptivePhysical': return this.adaptivePhysical ? 1 : 0;
     }
     if (name.startsWith('target.')) return this.targetVar(name.slice(7));
     if (name.startsWith('hit.')) return this.hitType === name.slice(4) ? 1 : 0;
@@ -360,7 +384,7 @@ export class Fight {
     // items' settings, the same way. A proc nobody counted has no value: the combo decides how often it fires
     for (const owner of this.owners) {
       for (const c of owner.controls) {
-        const given = build.itemOptions?.[String(owner.itemId)]?.[c.id];
+        const given = owner.given?.[c.id];
         if (c.kind === 'procs' && given === undefined) continue;
         let v = given === undefined ? (c.default ? this.eval(c.default, owner) : 0) : Number(given);
         if (c.kind === 'bool') v = v ? 1 : 0;
@@ -400,6 +424,21 @@ export class Fight {
     for (const owner of this.owners) if (!owner.champion) start(owner, owner.ns, owner.counterMax);
   }
 
+  /** Changes options mid-fight, as a buff starting or ending does, and works the stats out again. Health,
+      counters and what was dealt so far stay as they are. */
+  setOptions(values: Record<string, number | boolean>): void {
+    if (Object.entries(values).every(([k, v]) => this.options.get(k) === Number(v))) return;
+    this.build = { ...this.build, options: { ...this.build.options, ...values } };
+    this.settled = false;
+    try { this.computeStats(this.build); } finally { this.settled = true; }
+  }
+
+  /** Adaptive damage and stats are physical while bonus attack damage is above ability power; on a tie the champion's own default decides. */
+  get adaptivePhysical(): boolean {
+    const ad = this.stats.ad.bonus, ap = this.stats.ap.total;
+    return ad === ap ? this.champ.adaptive !== 'magic' : ad > ap;
+  }
+
   // ---------- dealing damage ----------
 
   get targetHp(): number | null { return this.target ? this.target.hp : null; }
@@ -409,7 +448,13 @@ export class Fight {
 
   /** One item's settings as this fight settled them; a proc left to the combo is null. */
   itemSettings(itemId: number): Record<string, number | null> {
-    const owner = this.owners.find(o => o.itemId === itemId);
+    return this.settingsOf(this.owners.find(o => o.itemId === itemId));
+  }
+  /** One rune's settings, the same way. */
+  runeSettings(runeId: number): Record<string, number | null> {
+    return this.settingsOf(this.owners.find(o => o.runeId === runeId));
+  }
+  private settingsOf(owner: Owner | undefined): Record<string, number | null> {
     return Object.fromEntries((owner?.controls ?? []).map(c => [c.id, this.settings.get(owner!.ns + c.id) ?? null]));
   }
 
@@ -489,11 +534,25 @@ export class Fight {
     };
     let landed = false;
     const crit = !!rule.crit;
-    if (whole) for (let i = 0; i < count; i++) landed = this.deal(owner, rule.id, label, rule.type, one(), crit) || landed;
-    else if (count > 0) landed = this.deal(owner, rule.id, label, rule.type, one() * count, crit);
-    // the damage is still dealt at once and the fight's clock does not wait for it: the duration is only reported
+    const type: DamageType = rule.type === 'adaptive' ? (this.adaptivePhysical ? 'physical' : 'magic') : rule.type;
+    const seconds = rule.over ? this.eval(rule.over, owner) : 0;
+    if (this.defer && seconds > 0 && !this.quiet && count > 0) {
+      // a caller with a clock gets the instances one by one; a count that is not whole is dealt in quarter-second ticks
+      const n = whole ? count : Math.max(1, Math.round(seconds / 0.25));
+      const share = whole ? 1 : count / n;
+      const casting = this.casting;
+      for (let i = 0; i < n; i++) {
+        this.defer(seconds * i / n, () => {
+          const was = this.casting;
+          this.casting = casting;
+          try { this.deal(owner, rule.id, label, type, one() * share, crit); } finally { this.casting = was; }
+        });
+      }
+      landed = true;
+    } else if (whole) for (let i = 0; i < count; i++) landed = this.deal(owner, rule.id, label, type, one(), crit) || landed;
+    else if (count > 0) landed = this.deal(owner, rule.id, label, type, one() * count, crit);
+    // without a caller's clock the damage is still dealt at once: the duration is only reported
     if (landed && rule.over) {
-      const seconds = this.eval(rule.over, owner);
       if (seconds > 0) {
         const byAction = this.spread.get(key) ?? new Map<number, number>();
         byAction.set(this.action, Math.max(byAction.get(this.action) ?? 0, seconds));
@@ -536,8 +595,8 @@ export class Fight {
 
   /** What one firing of an item's rule deals as the fight stands, its own damage only: on a fresh fight, one proc
       against the target at full health. Its condition and cooldown are skipped. */
-  preview(itemId: number, ruleId: string): { raw: number; dealt: number } {
-    const owner = this.owners.find(o => o.itemId === itemId), rule = owner?.rules.find(r => r.id === ruleId);
+  preview(itemId: number, ruleId: string, of: 'item' | 'rune' = 'item'): { raw: number; dealt: number } {
+    const owner = this.owners.find(o => of === 'rune' ? o.runeId === itemId : o.itemId === itemId), rule = owner?.rules.find(r => r.id === ruleId);
     const out = { raw: 0, dealt: 0 };
     if (!owner || !rule) return out;
     const from = this.hits.length;
@@ -566,7 +625,8 @@ export class Fight {
     const cd = this.champ.spells[this.champ.slots[slot].spell]?.cooldown, rank = this.rankOf(slot);
     const base = cd?.[Math.min(rank, cd.length - 1)];
     if (rank < 1 || base === undefined) return null;
-    const haste = this.stats.abilityHaste + (slot === 'r' ? this.stats.ultHaste : this.stats.basicHaste);
+    const spell = this.champ.slots[slot].spell;
+    const haste = this.champ.timing?.spells[spell]?.fixedCooldown ? 0 : this.stats.abilityHaste + (slot === 'r' ? this.stats.ultHaste : this.stats.basicHaste);
     return { base, haste, seconds: base * 100 / (100 + haste) };
   }
 
@@ -589,8 +649,13 @@ export class Fight {
     try {
       // "after using an ability" effects are armed by the cast itself, so the same cast's on-hit can spend them
       this.trigger('ability');
-      for (const rule of owner.rules) if (rule.on === 'cast') this.fire(owner, rule);
-      if (this.hits.reduce((s, h) => s + h.raw, 0) > before) this.trigger('spell');
+      let deferred = false;
+      for (const rule of owner.rules) {
+        if (rule.on !== 'cast') continue;
+        // damage handed to a caller's clock has not landed yet, but the cast still dealt damage
+        if (this.fire(owner, rule) && this.defer && rule.over) deferred = true;
+      }
+      if (deferred || this.hits.reduce((s, h) => s + h.raw, 0) > before) this.trigger('spell');
       this.trigger('after');
     } finally { this.casting = undefined; }
     this.time += this.champ.spells[this.champ.models[action].spell]?.castTime ?? DEFAULT_CAST_TIME;

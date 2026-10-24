@@ -45,6 +45,8 @@ export const BUILTIN_VARS = [
   'sustained',
   /** false in raw output; guard target.* with it to keep an effect quiet when there is nobody to hit */
   'hasTarget',
+  /** 1 when adaptive damage and stats are physical right now: bonus attack damage above ability power, or the champion's default on a tie */
+  'adaptivePhysical',
 ] as const;
 
 export const RANK_VARS = ['q', 'w', 'e', 'r'] as const;

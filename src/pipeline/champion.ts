@@ -8,7 +8,7 @@ import { expandTooltip, findDamageRefs, type NameResolver, type StringTable } fr
 
 type Raw = Record<string, any>;
 
-export type CompiledChampion = Omit<ChampionData, 'models' | 'vars' | 'options' | 'counters'>;
+export type CompiledChampion = Omit<ChampionData, 'models' | 'vars' | 'options' | 'counters' | 'timing'>;
 
 const mf = (v: Raw | undefined): number | undefined => typeof v?.baseValue === 'number' ? clean(v.baseValue) : undefined;
 const lower = (s: string) => s.toLowerCase();
@@ -170,5 +170,7 @@ export function compileChampion(dd: Raw, bin: Raw, table: StringTable, log: Comp
     id, key: Number(dd.key), name: dd.name, title: dd.title, tags: dd.tags ?? [], resource: dd.partype ?? '',
     ranged: RANGED_OVERRIDE[id] ?? range >= 325,
     stats, slots, spells, warnings,
+    // the game weighs adaptive force toward ability power for these champions when the two are tied
+    adaptive: (rec.mAdaptiveForceToAbilityPowerWeight ?? 0) >= 0.5 ? 'magic' : 'physical',
   };
 }

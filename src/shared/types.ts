@@ -2,6 +2,8 @@
    Everything here is plain JSON so the engine can run on a server or in a browser. */
 
 export type DamageType = 'physical' | 'magic' | 'true';
+/** What a rule deals: a damage type, or `adaptive`, which is physical or magic by whichever of bonus attack damage and ability power is higher. */
+export type RuleDamage = DamageType | 'adaptive';
 export type Slot = 'p' | 'q' | 'w' | 'e' | 'r';
 export const SLOTS: readonly Slot[] = ['p', 'q', 'w', 'e', 'r'];
 export const CAST_SLOTS = ['q', 'w', 'e', 'r'] as const;
@@ -138,7 +140,7 @@ export interface Rule {
   id: string;
   label?: string;
   on: Trigger;
-  type: DamageType;
+  type: RuleDamage;
   /** damage of one instance before resistances */
   amount: Expr;
   /** how many instances one firing deals to a single target */
@@ -168,9 +170,9 @@ export interface Amp {
   /** what the damage has to come from; all when omitted */
   from?: DamageSource[];
 }
-/** Who dealt a piece of damage: a basic attack, an ability (Q W E R), the champion's passive, or an item. */
-export type DamageSource = 'attack' | 'ability' | 'passive' | 'item';
-export const DAMAGE_SOURCES: readonly DamageSource[] = ['attack', 'ability', 'passive', 'item'];
+/** Who dealt a piece of damage: a basic attack, an ability (Q W E R), the champion's passive, an item or a rune. */
+export type DamageSource = 'attack' | 'ability' | 'passive' | 'item' | 'rune';
+export const DAMAGE_SOURCES: readonly DamageSource[] = ['attack', 'ability', 'passive', 'item', 'rune'];
 
 /** Changes the target's resistance for as long as its condition holds, e.g. armor shred that builds with hits. */
 export interface ResistMod {
@@ -256,6 +258,52 @@ export interface ChampionData {
   models: Record<Slot, AbilityModel>;
   /** places where the sources disagreed while compiling */
   warnings: string[];
+  /** how long its attacks and spells take, from the game files; missing from datasets built before it was read */
+  timing?: ChampionTiming;
+  /** what adaptive damage and stats become when bonus attack damage and ability power are equal */
+  adaptive?: 'physical' | 'magic';
+}
+
+/** One spell's timing from its game file. Arrays are indexed by rank, like data values. */
+export interface SpellTiming {
+  /** seconds from the start of the cast to its effect */
+  castTime?: number;
+  /** seconds of the whole animation; what follows the cast time can usually be cancelled */
+  totalTime?: number;
+  range?: number[];
+  radius?: number[];
+  /** units per second of its projectile */
+  missileSpeed?: number;
+  /** seconds its projectile takes, when it flies for a fixed time instead */
+  missileTime?: number;
+  width?: number;
+  /** seconds it channels */
+  channel?: number;
+  /** ability haste does not shorten its cooldown */
+  fixedCooldown?: boolean;
+  canMoveWhileChanneling?: boolean;
+  /** an empowered attack: it uses the basic attack's windup */
+  usesAttackTiming?: boolean;
+  targeting?: string;
+  /** seconds to regain one charge */
+  ammoRecharge?: number[];
+  /** the game's own tags, e.g. Trait_AttackReset */
+  tags?: string[];
+}
+
+export interface ChampionTiming {
+  /** gameplay radius: ranges are measured edge to edge */
+  radius: number;
+  attack: {
+    /** share of the attack period before the damage leaves, at base attack speed */
+    windup: number;
+    /** how much of the windup shrinks as attack speed grows; 1 = all of it */
+    windupModifier: number;
+    /** units per second of the attack's projectile; 0 for melee */
+    missileSpeed: number;
+  };
+  /** by spell id, like `spells` */
+  spells: Record<string, SpellTiming>;
 }
 
 /** Summoner's Rift, ARAM, Arena. */
@@ -311,6 +359,41 @@ export interface ItemControl {
   rule?: string;
 }
 
+export type RuneKind = 'keystone' | 'minor' | 'shard';
+
+/** One rune. Its model has the shape of an item's: rules, stat changes, amps and settings the user can change. */
+export interface RuneData {
+  id: number;
+  name: string;
+  /** the game's name for it, e.g. PressTheAttack */
+  key: string;
+  /** the tree it is picked from; 0 for stat shards */
+  style: number;
+  kind: RuneKind;
+  /** file name of its icon in the client */
+  icon: string;
+  /** the client's description, as plain text */
+  desc: string;
+  dataValues: Record<string, number>;
+  calcs: Record<string, CalcData>;
+  model: ItemModel;
+}
+
+export interface RuneStyle {
+  id: number;
+  name: string;
+  /** the keystone row, then the three rows of minor runes */
+  rows: { kind: RuneKind; perks: number[] }[];
+}
+
+/** Everything the rune page offers: the five trees, the stat shard rows they share, and every rune. */
+export interface RuneSet {
+  styles: RuneStyle[];
+  /** three rows of stat shards, one pick from each */
+  shards: number[][];
+  runes: RuneData[];
+}
+
 export interface DatasetManifest {
   /** Data Dragon version, e.g. 16.20.1 */
   patch: string;
@@ -320,5 +403,7 @@ export interface DatasetManifest {
   sources: { ddragon: string; cdragon: { path: string; build: string } };
   champions: number;
   items: number;
+  /** runes in runes.json; missing from datasets built before runes were read */
+  runes?: number;
   coverage: Record<ModelStatus, number>;
 }

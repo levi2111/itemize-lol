@@ -1,12 +1,14 @@
 /* The engine's front door: validate a request, play the combo, measure sustained
    damage, and report where every point of damage came from. Pure and synchronous. */
-import type { CastSlot, ChampionData, DamageType, ItemData, Slot } from '../shared/types.ts';
+import type { CastSlot, ChampionData, DamageType, ItemData, RuneData, Slot } from '../shared/types.ts';
 import { CAST_SLOTS, SLOTS } from '../shared/types.ts';
 import { defaultSequence, Fight, type Hit } from './sim.ts';
 import { CalcError, CRIT_MODES, type AbilityInfo, type Action, type Amount, type BuildInput, type ByType, type CalcRequest, type CalcResult, type CritMode, type DataSource, type ItemInfo, type SourceLine, type TargetInput } from './types.ts';
 
 export const LIMITS = {
   items: 6,
+  /** a keystone, five minor runes and three shards */
+  runes: 9,
   /** per action in `counts` */
   count: 30,
   sequence: 80,
@@ -18,7 +20,7 @@ export const LIMITS = {
 
 const TYPES: DamageType[] = ['physical', 'magic', 'true'];
 const ACTIONS: Action[] = ['aa', ...CAST_SLOTS];
-const LINE_ORDER: SourceLine['key'][] = ['aa', 'q', 'w', 'e', 'r', 'p', 'items'];
+const LINE_ORDER: SourceLine['key'][] = ['aa', 'q', 'w', 'e', 'r', 'p', 'items', 'runes'];
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const r4 = (n: number) => Math.round(n * 10000) / 10000;
 const zero = (): Amount => ({ raw: 0, dealt: 0 });
@@ -38,10 +40,29 @@ function real(v: unknown, field: string, min: number, max: number): number {
 interface Checked {
   champ: ChampionData;
   items: ItemData[];
+  runes: RuneData[];
   build: BuildInput;
   target: TargetInput | null;
   sequence: Action[];
   crits: CritMode;
+}
+
+/** Settings by id for things in the build (items, runes): each one must be in the build and name a control it has. */
+function settingsFor(raw: unknown, field: string, owners: { id: number; name: string; model: ItemData['model'] }[], what: string): Record<string, Record<string, number | boolean>> {
+  const out: Record<string, Record<string, number | boolean>> = {};
+  if (raw === undefined) return out;
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) throw new CalcError(field, `${field} must be an object keyed by ${what} id`);
+  for (const [id, set] of Object.entries(raw)) {
+    const it = owners.find(i => String(i.id) === id);
+    if (!it) throw new CalcError(field, `${what} ${id} is not in the build`);
+    if (!set || typeof set !== 'object') throw new CalcError(field, `the settings of ${what} ${id} must be an object`);
+    for (const [k, v] of Object.entries(set)) {
+      if (!it.model.controls?.some(c => c.id === k)) throw new CalcError(field, `${it.name} has no setting "${k}"`);
+      if ((typeof v !== 'number' || !Number.isFinite(v)) && typeof v !== 'boolean') throw new CalcError(field, `setting "${k}" of ${it.name} must be a number or true/false`);
+    }
+    out[id] = { ...set as Record<string, number | boolean> };
+  }
+  return out;
 }
 
 function check(data: DataSource, req: CalcRequest): Checked {
@@ -68,20 +89,18 @@ function check(data: DataSource, req: CalcRequest): Checked {
     if (typeof v !== 'number' && typeof v !== 'boolean') throw new CalcError('build.options', `option "${k}" must be a number or true/false`);
     options[k] = v;
   }
-  const itemOptions: Record<string, Record<string, number | boolean>> = {};
-  if (b.itemOptions !== undefined && (typeof b.itemOptions !== 'object' || b.itemOptions === null || Array.isArray(b.itemOptions))) {
-    throw new CalcError('build.itemOptions', 'build.itemOptions must be an object keyed by item id');
-  }
-  for (const [id, set] of Object.entries(b.itemOptions ?? {})) {
-    const it = items.find(i => String(i.id) === id);
-    if (!it) throw new CalcError('build.itemOptions', `item ${id} is not in the build`);
-    if (!set || typeof set !== 'object') throw new CalcError('build.itemOptions', `the settings of item ${id} must be an object`);
-    for (const [k, v] of Object.entries(set)) {
-      if (!it.model.controls?.some(c => c.id === k)) throw new CalcError('build.itemOptions', `${it.name} has no setting "${k}"`);
-      if ((typeof v !== 'number' || !Number.isFinite(v)) && typeof v !== 'boolean') throw new CalcError('build.itemOptions', `setting "${k}" of ${it.name} must be a number or true/false`);
-    }
-    itemOptions[id] = { ...set };
-  }
+  const itemOptions = settingsFor(b.itemOptions, 'build.itemOptions', items, 'item');
+
+  if (b.runes !== undefined && !Array.isArray(b.runes)) throw new CalcError('build.runes', 'build.runes must be a list');
+  const runeIds = (b.runes ?? []).filter((x): x is number => x !== null && x !== undefined);
+  if (runeIds.length > LIMITS.runes) throw new CalcError('build.runes', `a build holds at most ${LIMITS.runes} runes`);
+  const runes = runeIds.map(id => {
+    const r = typeof id === 'number' ? data.rune?.(id) : undefined;
+    if (!r) throw new CalcError('build.runes', `unknown rune ${String(id)}`);
+    return r;
+  });
+  if (runes.filter(r => r.kind === 'keystone').length > 1) throw new CalcError('build.runes', 'a build holds one keystone');
+  const runeOptions = settingsFor(b.runeOptions, 'build.runeOptions', runes, 'rune');
 
   let target: TargetInput | null = null;
   if (req.target !== null && req.target !== undefined) {
@@ -106,16 +125,16 @@ function check(data: DataSource, req: CalcRequest): Checked {
   }
   const crits = c.crits ?? 'average';
   if (!CRIT_MODES.includes(crits)) throw new CalcError('combo.crits', `combo.crits must be one of ${CRIT_MODES.join(', ')}`);
-  return { champ, items, build: { champion: champ.id, level, ranks, items: ids, options, itemOptions }, target, sequence, crits };
+  return { champ, items, runes, build: { champion: champ.id, level, ranks, items: ids, options, itemOptions, runes: runeIds, runeOptions }, target, sequence, crits };
 }
 
 function lines(champ: ChampionData, hits: Hit[], spread: Fight['spread'], sequence: Action[]): SourceLine[] {
-  const label = (k: SourceLine['key']) => k === 'aa' ? 'Auto attack' : k === 'items' ? 'Item effects' : champ.slots[k].name;
+  const label = (k: SourceLine['key']) => k === 'aa' ? 'Auto attack' : k === 'items' ? 'Item effects' : k === 'runes' ? 'Runes' : champ.slots[k].name;
   const out = new Map<SourceLine['key'], SourceLine>();
   for (const key of LINE_ORDER) {
     out.set(key, {
       key, label: label(key), type: 'none', total: zero(), byType: byType(), parts: [],
-      qty: key === 'p' || key === 'items' ? null : sequence.filter(a => a === key).length,
+      qty: key === 'p' || key === 'items' || key === 'runes' ? null : sequence.filter(a => a === key).length,
     });
   }
   for (const h of hits) {
@@ -155,7 +174,7 @@ function round(a: Amount): Amount { a.raw = r2(a.raw); a.dealt = r2(a.dealt); re
 
 /** Sustained basic attacks from a fresh start: damage per second and, against a target, how long a kill takes. */
 function sustain(c: Checked): { dps: Amount; timeToKill: number | null; caveats: Set<string> } {
-  const f = new Fight(c.champ, c.items, c.build, c.target, { sustained: true });
+  const f = new Fight(c.champ, c.items, c.build, c.target, { runes: c.runes, sustained: true });
   const sum = (from: number) => f.hits.slice(from).reduce((s, h) => ({ raw: s.raw + h.raw, dealt: s.dealt + h.dealt }), zero());
   if (!c.target) {
     const attacks = Math.max(1, Math.round(LIMITS.window * f.stats.attackSpeed.total));
@@ -188,12 +207,12 @@ function sustain(c: Checked): { dps: Amount; timeToKill: number | null; caveats:
 /** One cast of each ranked ability on a fresh fight, and its cooldown: what the page shows when an ability is pointed at. */
 function abilityInfo(c: Checked, crits: CritMode): CalcResult['abilities'] {
   const out = {} as CalcResult['abilities'];
-  const any = new Fight(c.champ, c.items, c.build, c.target, { crits });
+  const any = new Fight(c.champ, c.items, c.build, c.target, { runes: c.runes, crits });
   for (const slot of SLOTS as readonly Slot[]) {
     const m = c.champ.models[slot], info: AbilityInfo = { status: m.status, notes: m.notes, cast: null, cooldown: null };
     out[slot] = info;
     if (slot === 'p' || c.build.ranks[slot] < 1) continue;
-    const f = new Fight(c.champ, c.items, c.build, c.target, { crits });
+    const f = new Fight(c.champ, c.items, c.build, c.target, { runes: c.runes, crits });
     f.act(slot);
     const cast = { ...zero(), byType: byType() };
     for (const h of f.hits) { cast.raw += h.raw; cast.dealt += h.dealt; cast.byType[h.type].raw += h.raw; cast.byType[h.type].dealt += h.dealt; }
@@ -206,14 +225,14 @@ function abilityInfo(c: Checked, crits: CritMode): CalcResult['abilities'] {
   return out;
 }
 
-/** Each item's settings as the combo used them, and its named effects: one firing on a fresh fight, and how often it fired. */
-function itemInfo(c: Checked, fight: Fight, crits: CritMode): ItemInfo[] {
-  return c.items.map(it => ({
-    id: it.id, status: it.model.status, notes: it.model.notes, settings: fight.itemSettings(it.id),
+/** Each item's (or rune's) settings as the combo used them, and its named effects: one firing on a fresh fight, and how often it fired. */
+function itemInfo(c: Checked, fight: Fight, crits: CritMode, of: 'item' | 'rune' = 'item'): ItemInfo[] {
+  return (of === 'item' ? c.items : c.runes).map(it => ({
+    id: it.id, status: it.model.status, notes: it.model.notes, settings: of === 'item' ? fight.itemSettings(it.id) : fight.runeSettings(it.id),
     effects: it.model.rules.filter(r => r.label && !(r.amount.k === 'num' && r.amount.v === 0)).map(r => ({
       id: r.id, label: r.label!, type: r.type,
-      one: round(new Fight(c.champ, c.items, c.build, c.target, { crits }).preview(it.id, r.id)),
-      fired: fight.fired.get(`item:${it.id}/${r.id}`) ?? 0,
+      one: round(new Fight(c.champ, c.items, c.build, c.target, { runes: c.runes, crits }).preview(it.id, r.id, of)),
+      fired: fight.fired.get(`${of}:${it.id}/${r.id}`) ?? 0,
     })),
   }));
 }
@@ -221,7 +240,7 @@ function itemInfo(c: Checked, fight: Fight, crits: CritMode): ItemInfo[] {
 export function calculate(data: DataSource, req: CalcRequest): CalcResult {
   const c = check(data, req);
   const play = (crits: CritMode) => {
-    const f = new Fight(c.champ, c.items, c.build, c.target, { crits });
+    const f = new Fight(c.champ, c.items, c.build, c.target, { runes: c.runes, crits });
     f.begin();
     for (const a of c.sequence) f.act(a);
     f.end();
@@ -280,6 +299,7 @@ export function calculate(data: DataSource, req: CalcRequest): CalcResult {
     abilities: abilityInfo(c, c.crits),
     options: fight.optionValues,
     items: itemInfo(c, fight, c.crits),
+    runes: itemInfo(c, fight, c.crits, 'rune'),
     caveats: [...caveats],
   };
 }

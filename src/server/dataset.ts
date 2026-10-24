@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DataSource } from '../engine/types.ts';
 import { DATA_DIR, distDir } from '../pipeline/paths.ts';
-import type { BaseStats, ChampionData, DatasetManifest, ItemData, ModelStatus, Slot } from '../shared/types.ts';
+import type { BaseStats, ChampionData, DatasetManifest, ItemData, ModelStatus, RuneData, RuneSet, Slot } from '../shared/types.ts';
 
 export interface ChampionIndexEntry {
   id: string; key: number; name: string; title: string; tags: string[]; ranged: boolean;
@@ -18,6 +18,8 @@ export interface ServedData extends DataSource {
   readonly manifest: DatasetManifest;
   readonly index: ChampionIndexEntry[];
   readonly items: ItemData[];
+  /** missing for a dataset built before runes were read */
+  readonly runes?: RuneSet;
 }
 
 export class Dataset implements ServedData {
@@ -25,7 +27,9 @@ export class Dataset implements ServedData {
   readonly manifest: DatasetManifest;
   readonly index: ChampionIndexEntry[];
   readonly items: ItemData[];
+  readonly runes?: RuneSet;
   private readonly dir: string;
+  private readonly runeById = new Map<number, RuneData>();
   private readonly itemById: Map<number, ItemData>;
   private readonly ids: Map<string, string>;
   private readonly champions = new Map<string, ChampionData>();
@@ -40,6 +44,10 @@ export class Dataset implements ServedData {
     this.index = read('champions.json');
     this.items = read('items.json');
     this.itemById = new Map(this.items.map(i => [i.id, i]));
+    if (existsSync(join(this.dir, 'runes.json'))) {
+      this.runes = read('runes.json') as RuneSet;
+      for (const r of this.runes.runes) this.runeById.set(r.id, r);
+    }
     // ids are matched without regard to case; the lookup also keeps request strings away from the file system
     this.ids = new Map(this.index.map(c => [c.id.toLowerCase(), c.id]));
   }
@@ -57,5 +65,9 @@ export class Dataset implements ServedData {
 
   item(id: number): ItemData | undefined {
     return this.itemById.get(id);
+  }
+
+  rune(id: number): RuneData | undefined {
+    return this.runeById.get(id);
   }
 }
