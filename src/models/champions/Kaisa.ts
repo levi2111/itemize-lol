@@ -45,8 +45,8 @@ export default champion('Kaisa', {
     ],
   },
   e: {
-    // e5 is in percent points
-    statMods: [{ stat: 'attackSpeed', value: 'e5 / 100', when: 'supercharge' }],
+    // e5 is a fraction: the tooltip prints it as Effect5Amount*100 percent
+    statMods: [{ stat: 'attackSpeed', value: 'e5', when: 'supercharge' }],
   },
   r: {},
 });
