@@ -6,7 +6,6 @@ const P = '16.20.1';
 // counts the descriptions spell out in words; the game data has no value for them
 const ELECTROCUTE_HITS = 3, BOUNTY_HUNTER_STACKS = 5;
 // a value "based on level" that the game data gives as its level 1 and level 18 ends, taken to grow evenly between them
-const byLevel = (min: string, max: string) => `(${min} + (${max} - ${min}) * (level - 1) / 17)`;
 // a hit opens a new window when it comes more than the window's length after the hit that opened the last one
 const countHit = ['hits = if(time - firstAt > WindowDuration, 0, hits) + 1', 'firstAt = if(hits == 1, time, firstAt)'];
 
@@ -38,19 +37,20 @@ export default [
     reviewed: P,
     // blades: empowered attacks left; the cooldown starts when the first one lands
     counters: { blades: {}, lastAt: {}, readyAt: {} },
+    // the attack speed lasts while empowered attacks are left; the attack that starts it does not get it
+    statMods: [{ stat: 'attackSpeed', value: 'if(blades > 0, if(ranged, ASBoostRanged, ASBoost), 0)' }],
     rules: [
       { id: 'expire', on: 'attack', when: 'blades > 0 && time - lastAt > Duration', type: 'true', amount: 0, then: 'blades = 0' },
       { id: 'start', on: 'attack', when: 'blades == 0 && time >= readyAt', type: 'true', amount: 0, then: ['blades = NumHits', 'readyAt = time + Cooldown'] },
-      // the game's BonusDamage interpolates between BonusDamageMin and BonusDamageMax in a way the compiler cannot read: it is spelled out here
       {
         id: 'blade', label: 'Hail of Blades', on: 'attack', when: 'blades > 0', type: 'true',
-        amount: `${byLevel('BonusDamageMin', 'BonusDamageMax')} + BonusADRatio * bonusAd + APRatio * ap`,
+        amount: 'BonusDamage',
         then: ['blades = blades - 1', 'lastAt = time'], procs: true,
       },
     ],
     notes: [
       'Hail of Blades empowers the first basic attacks of the fight, and again once its cooldown has run from the first of them; its damage grows evenly with level.',
-      'Its attack speed is not counted: stats hold for the whole fight, and in a combo it only makes the attacks come sooner. Sustained damage counts its true damage but not the faster attacks.',
+      'Its attack speed lasts while empowered attacks are left; the attack speed limit it may exceed in the game is kept.',
       'Attack resets do not add attacks to it, and an empowered attack the champion\'s model writes as an ability does not use it.',
     ],
   }),

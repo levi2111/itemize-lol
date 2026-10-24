@@ -47,6 +47,12 @@ interface Binder {
   expr(f: Formula | boolean): Expr;
 }
 
+/** Names the engine itself provides: a model's own option, counter or helper by one of these names would be read as the engine's. */
+const RESERVED = new Set<string>([...BUILTIN_VARS, 'distance']);
+function refuseReserved(locals: Iterable<string>): void {
+  for (const n of locals) if (RESERVED.has(n)) throw new Error(`"${n}" is a name the engine provides; call the option, counter or helper something else`);
+}
+
 function binder(own: NameScope | undefined, ownId: string, others: (spell: string) => { id: string; scope: NameScope } | undefined, locals: Set<string>): Binder {
   const resolve: Resolve = path => {
     const [a, b, ...rest] = path as [string, string | undefined, ...string[]];
@@ -190,6 +196,7 @@ export function resolveChampion(champ: CompiledChampion, src: ChampionSrc | unde
   };
   const shared = binder(undefined, champ.id, others, locals);
   const fail = (where: string, err: unknown) => issues.push({ where: `${champ.id}.${where}`, message: err instanceof Error ? err.message : String(err) });
+  try { refuseReserved(locals); } catch (e) { fail('names', e); }
 
   // Shared pieces first. If any of them fails, every slot of this champion falls back.
   let sharedOk = true;
@@ -312,6 +319,7 @@ export function resolveItem(item: CompiledItem, src: ItemSrc | undefined, lock: 
   try {
     const counters = new Set(Object.keys(src.counters ?? {}));
     const locals = new Set([...counters, ...Object.keys(src.options ?? {})]);
+    refuseReserved(locals);
     const b = binder({ calcs: item.calcs, dataValues: item.dataValues, effects: 0 }, `item ${item.id}`, () => undefined, locals);
     const model: ItemModel = {
       status: src.verified ? 'verified' : 'curated',

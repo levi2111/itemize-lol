@@ -9,14 +9,14 @@ import { champion } from '../dsl.ts';
 export default champion('Samira', {
   reviewed: '16.20.1',
   options: {
-    melee: { label: 'Fighting in melee range', default: false },
+    inMelee: { label: 'Fighting in melee range', default: false },
     wildRush: { label: 'Wild Rush attack speed active', default: false },
   },
   p: {
     rules: [
       // bonus damage on attacks and on Q, W and E when in melee range; doubles as the target loses health
-      { id: 'blade', label: 'Daredevil Impulse', on: 'attack', when: 'melee', type: 'magic', amount: 'BonusMeleeDamage * (1 + target.missingHpPct)' },
-      { id: 'bladeSpell', label: 'Daredevil Impulse', on: 'spell', when: 'melee && !cast.r', type: 'magic', amount: 'BonusMeleeDamage * (1 + target.missingHpPct)' },
+      { id: 'blade', label: 'Daredevil Impulse', on: 'attack', when: 'inMelee', type: 'magic', amount: 'BonusMeleeDamage * (1 + target.missingHpPct)' },
+      { id: 'bladeSpell', label: 'Daredevil Impulse', on: 'spell', when: 'inMelee && !cast.r', type: 'magic', amount: 'BonusMeleeDamage * (1 + target.missingHpPct)' },
     ],
     notes: ['The melee bonus is off unless "Fighting in melee range" is set.'],
   },

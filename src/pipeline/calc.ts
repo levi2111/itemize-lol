@@ -50,6 +50,8 @@ const H = {
   breakByDataValue: '{0333530c}',
   linearByDataValue: '{b22609db}',    // level-1 value plus a per-level step, both data values
   lerpByDataValue: '{ee18a47b}',      // interpolate between two data values over levels
+  lerpStart: '{0589a59c}',            // its start and end data values, where the file has them unnamed (runes)
+  lerpEnd: '{0b65bc23}',
   foreignDataValue: '{9e9e2e5c}',     // data value of another spell
   hashedDataValue: '{2b25a73a}',
   level1: '{91d404a5}',
@@ -101,7 +103,7 @@ function part(p: Raw | undefined | null, log: CompileLog): Expr {
     case 'ByCharLevelInterpolationCalculationPart':
       return { k: 'lerp', start: num(p.mStartValue ?? 0), end: num(p.mEndValue ?? 0), curve: p.mScaleByStatProgressionMultiplier ? 'growth' : 'linear' };
     case H.lerpByDataValue:
-      return { k: 'lerp', start: { k: 'dv', name: p.StartDataValue }, end: { k: 'dv', name: p.EndDataValue }, curve: 'linear' };
+      return { k: 'lerp', start: { k: 'dv', name: p.StartDataValue ?? p[H.lerpStart] }, end: { k: 'dv', name: p.EndDataValue ?? p[H.lerpEnd] }, curve: 'linear' };
     case 'ByCharLevelBreakpointsCalculationPart':
       return {
         k: 'breaks', level1: num(p.mLevel1Value ?? 0), perLevel: num(p.mInitialBonusPerLevel ?? 0),
@@ -151,7 +153,7 @@ export function compileCalc(c: Raw, log: CompileLog): CalcData {
       expr = times(sumOf(c.mFormulaParts, log), c.mMultiplier, log);
       break;
     case H.rangedCalc:
-      expr = { k: 'mul', parts: [sumOf(c.mFormulaParts, log), { k: 'ifRanged', ranged: part(c.mRangedMultiplier, log), melee: num(1) }] };
+      expr = times({ k: 'mul', parts: [sumOf(c.mFormulaParts, log), { k: 'ifRanged', ranged: part(c.mRangedMultiplier, log), melee: num(1) }] }, c.mMultiplier, log);
       break;
     case 'GameCalculationModified':
       expr = times({ k: 'calc', name: c.mModifiedGameCalculation }, c.mMultiplier, log);

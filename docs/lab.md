@@ -50,7 +50,7 @@ export default behaviour('Samira', {
     r: { channel: 2 },
   },
   windows: [{ option: 'wildRush', after: 'e', for: 'AttackSpeedDuration' }],
-  distance: [{ option: 'melee', within: 'SamiraPassive.SwordRange' }],
+  distance: [{ option: 'inMelee', within: 'SamiraPassive.SwordRange' }],
   hooks: { /* see src/lab/behaviours/Samira.ts */ },
 });
 ```

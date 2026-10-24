@@ -2,7 +2,7 @@
    Stats are worked out once up front; then each action deals its damage and fires
    whatever rules it triggers, in order, against a target whose health goes down as
    the fight goes on. */
-import { evaluate, growth, type EvalEnv, type Scope } from '../shared/expr.ts';
+import { evaluate, growth, walk, type EvalEnv, type Scope } from '../shared/expr.ts';
 import type {
   Amp, CastSlot, ChampionData, CounterDef, DamageSource, DamageType, Expr, ItemControl, ItemData, ResistMod, Rule, RuneData, Slot, SpellData, StatId, StatKind, StatMod, StatModTarget, Trigger,
 } from '../shared/types.ts';
@@ -199,6 +199,17 @@ export class Fight {
     this.computeStats(build);
     this.settled = true;
     this.startCounters();
+    // stat changes that read a counter follow it through the fight: stacks gained as it goes count
+    const reads = (owner: Owner, e: Expr | undefined) => !!e && [...walk(e)].some(x => x.k === 'var' && (x.name in owner.counterMax || (owner.champion && x.name in champ.counters)));
+    this.liveStats = this.owners.some(o => o.statMods.some(m => reads(o, m.value) || reads(o, m.when)));
+    if (this.liveStats) this.recompute();
+  }
+
+  /** Whether some stat change reads a counter, so stats are worked out again whenever counters change. */
+  private readonly liveStats: boolean = false;
+  private recompute(): void {
+    this.settled = false;
+    try { this.computeStats(this.build); } finally { this.settled = true; }
   }
 
   /** The share of hits that can crit that do: the crit chance, or none or all of them when the caller asks. */
@@ -297,7 +308,6 @@ export class Fight {
       case 'hasTarget': return this.target ? 1 : 0;
       case 'adFromLevels': return this.stats.ad.base - this.champ.stats.ad;
       case 'adaptivePhysical': return this.adaptivePhysical ? 1 : 0;
-      case 'distance': return this.distance;
     }
     if (name.startsWith('target.')) return this.targetVar(name.slice(7));
     if (name.startsWith('hit.')) return this.hitType === name.slice(4) ? 1 : 0;
@@ -322,6 +332,8 @@ export class Fight {
     }
     // an option being settled may read another one that is not settled yet
     if (this.champ.options.some(o => o.id === name)) return 0;
+    // the lab's distance, read last so a model's own name always wins
+    if (name === 'distance') return this.distance;
     return undefined;
   }
 
@@ -446,8 +458,7 @@ export class Fight {
   setOptions(values: Record<string, number | boolean>): void {
     if (Object.entries(values).every(([k, v]) => this.options.get(k) === Number(v))) return;
     this.build = { ...this.build, options: { ...this.build.options, ...values } };
-    this.settled = false;
-    try { this.computeStats(this.build); } finally { this.settled = true; }
+    this.recompute();
   }
 
   /** Evaluates a formula as the champion's own, as a timeline's conditions need: its options, counters and helper
@@ -462,6 +473,7 @@ export class Fight {
   setCounter(name: string, v: number): void {
     const max = this.champ.counters[name]?.max;
     this.counters.set(name, max ? Math.min(v, this.eval(max, undefined)) : v);
+    if (this.liveStats) this.recompute();
   }
 
   /** Adaptive damage and stats are physical while bonus attack damage is above ability power; on a tie the champion's own default decides. */
@@ -598,6 +610,7 @@ export class Fight {
       const max = owner.counterMax[t.counter]?.max;
       this.counters.set(k, max ? Math.min(next, this.eval(max, owner)) : next);
     }
+    if (this.liveStats && rule.then?.length) this.recompute();
     this.lastFired.set(key, this.time);
     this.fired.set(key, (this.fired.get(key) ?? 0) + 1);
     if (rule.appliesOnHit) this.trigger('onhit', rule.appliesOnHit);

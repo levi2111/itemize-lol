@@ -8,6 +8,8 @@ import { rune } from '../dsl.ts';
 const P = '16.20.1';
 // Adaptive Force is worth 0.6 Attack Damage per point (the Adaptive Force shard: 9 AP or 5.4 AD); a rune's own data has no value for it
 const AD_PER_ADAPTIVE = 0.6;
+// Conqueror's stacks per hit, from its description; the game data has no value for them
+const CONQ_PER_HIT = 2, CONQ_RANGED_ATTACK = 1;
 // a value "based on level" that the game data gives as its level 1 and level 18 ends, taken to grow evenly between them
 const byLevel = (min: string, max: string) => `(${min} + (${max} - ${min}) * (level - 1) / 17)`;
 
@@ -33,32 +35,33 @@ export default [
     reviewed: P,
     options: { stacks: { label: 'Lethal Tempo stacks when the combo starts', default: 0, max: 'MaxStacks' } },
     counters: { tempo: { max: 'MaxStacks', start: 'if(sustained, MaxStacks, stacks)' }, lastAt: {} },
-    statMods: [{ stat: 'attackSpeed', value: 'ASPerStack * if(sustained, MaxStacks, stacks)' }],
+    // the attack speed follows the stacks as they are gained; NoteDamage already grows with bonus attack speed
+    statMods: [{ stat: 'attackSpeed', value: 'ASPerStack * tempo' }],
     rules: [
       { id: 'stack', on: 'attack', type: 'adaptive', amount: 0, then: ['tempo = if(time - lastAt > Duration, 0, tempo) + 1', 'lastAt = time'] },
-      // the game's NoteDamage is multiplied by 1 + bonus attack speed, which the compiled calculation leaves out;
-      // the attack speed of the stacks not counted in the stats is added back
-      {
-        id: 'note', label: 'Lethal Tempo', on: 'attack', when: 'tempo >= MaxStacks', type: 'adaptive',
-        amount: 'NoteDamage * (1 + bonusAs + ASPerStack * (MaxStacks - if(sustained, MaxStacks, stacks)))',
-      },
+      { id: 'note', label: 'Lethal Tempo', on: 'attack', when: 'tempo >= MaxStacks', type: 'adaptive', amount: 'NoteDamage' },
     ],
     notes: [
-      'Each basic attack adds a stack; the attack that reaches full stacks deals the bonus damage too. The stacks fall off when an attack comes more than their duration after the last.',
-      'Attack speed is counted at the stacks the combo starts with (full stacks in sustained damage); stacks gained during the combo still count toward the bonus damage, and at full stacks its scaling with bonus attack speed counts all of them.',
+      'Each basic attack adds a stack and its attack speed; the attack that reaches full stacks deals the bonus damage too. The stacks fall off when an attack comes more than their duration after the last.',
       'Ranged numbers follow the game\'s own calculations (4.8% attack speed per stack, 6 - 20 damage), which differ from the 4% and 6 - 24 in the rune\'s description.',
     ],
   }),
   rune(8021, 'Fleet Footwork', { reviewed: P, notes: ['Fleet Footwork heals and gives move speed; it deals no damage.'] }),
   rune(8010, 'Conqueror', {
     reviewed: P,
-    options: { stacks: { label: 'Conqueror stacks for the whole combo', default: 0, max: 'MaxStacks' } },
+    options: { stacks: { label: 'Conqueror stacks when the combo starts', default: 0, max: 'MaxStacks' } },
+    counters: { conq: { max: 'MaxStacks', start: 'if(sustained, MaxStacks, stacks)' } },
     statMods: [
-      { stat: 'ad', value: `${AD_PER_ADAPTIVE} * ${byLevel('MinAdaptivePerStack', 'MaxAdaptivePerStack')} * if(sustained, MaxStacks, stacks)`, when: 'adaptivePhysical' },
-      { stat: 'ap', value: `${byLevel('MinAdaptivePerStack', 'MaxAdaptivePerStack')} * if(sustained, MaxStacks, stacks)`, when: 'not(adaptivePhysical)' },
+      { stat: 'ad', value: `${AD_PER_ADAPTIVE} * ${byLevel('MinAdaptivePerStack', 'MaxAdaptivePerStack')} * conq`, when: 'adaptivePhysical' },
+      { stat: 'ap', value: `${byLevel('MinAdaptivePerStack', 'MaxAdaptivePerStack')} * conq`, when: 'not(adaptivePhysical)' },
+    ],
+    rules: [
+      // two stacks per damaging attack or ability, one per attack for ranged champions; the description gives the counts
+      { id: 'attack', on: 'attack', type: 'adaptive', amount: 0, then: `conq += if(ranged, ${CONQ_RANGED_ATTACK}, ${CONQ_PER_HIT})` },
+      { id: 'spell', on: 'spell', type: 'adaptive', amount: 0, then: `conq += ${CONQ_PER_HIT}` },
     ],
     notes: [
-      'Conqueror\'s Adaptive Force is counted at the stacks its setting gives, for the whole combo, and at full stacks in sustained damage: stats hold for a whole fight, so stacks gained during the combo are not counted. Set it to the stacks you expect to fight at.',
+      'Conqueror gains its stacks through the combo, and its Adaptive Force follows them. Sustained damage counts full stacks. Stacks are taken not to fall off mid-fight.',
       'Adaptive Force per stack grows evenly with level; a point is worth 0.6 Attack Damage or 1 Ability Power. The healing at full stacks is not counted.',
     ],
   }),

@@ -272,7 +272,8 @@ export function calculate(data: DataSource, req: CalcRequest): CalcResult {
     if (c.sequence.includes(slot) && c.build.ranks[slot] < 1) caveats.add(`${c.champ.slots[slot].name} is in the combo but has no rank, so it does nothing.`);
   }
 
-  const st = fight.stats;
+  // the build's stats as the fight starts; stats that follow stacks may have grown during the combo
+  const st = new Fight(c.champ, c.items, c.build, c.target, { runes: c.runes, crits: c.crits }).stats;
   const sl = (l: { total: number; base: number; bonus: number }) => ({ total: r4(l.total), base: r4(l.base), bonus: r4(l.bonus) });
 
   return {

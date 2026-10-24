@@ -52,11 +52,12 @@ export default [
   rune(8229, 'Arcane Comet', {
     reviewed: P,
     options: {
-      distance: { label: 'Distance to the target when the comet is hurled', default: 'if(ranged, MaxRange, MaxRange / 2)', max: 'MaxRange' },
+      // not `distance`: that name is the engine's own, the distance the lab's floor keeps (0 in a plain combo)
+      range: { label: 'Distance to the target when the comet is hurled', default: 'if(ranged, MaxRange, MaxRange / 2)', max: 'MaxRange' },
     },
     rules: [{
       id: 'comet', label: 'Arcane Comet', on: 'spell', type: 'adaptive',
-      amount: 'DamageCalc * (1 + MaxDamageAmp * min(distance, MaxRange) / MaxRange)', cooldown: 'CooldownCalc', procs: true,
+      amount: 'DamageCalc * (1 + MaxDamageAmp * min(range, MaxRange) / MaxRange)', cooldown: 'CooldownCalc', procs: true,
     }],
     notes: [
       'The comet is counted as hitting. Its bonus for distance is taken to grow evenly from none at 0 range to the full bonus at 750 range; the distance is a setting, by default 750 for ranged champions and half that for melee.',

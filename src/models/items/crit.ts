@@ -71,8 +71,8 @@ export default [
   }),
   item(2523, 'Hexoptics C44', {
     reviewed: P,
-    options: { distance: { label: 'Distance to the target when attacking, in hundreds of units', default: 'if(ranged, MaxRange / 100, 1)', max: 'MaxRange / 100' } },
-    amps: [{ value: 'MaxDamageAmp * min(1, distance * 100 / MaxRange)', from: ['attack'] }],
+    options: { reach: { label: 'Distance to the target when attacking, in hundreds of units', default: 'if(ranged, MaxRange / 100, 1)', max: 'MaxRange / 100' } },
+    amps: [{ value: 'MaxDamageAmp * min(1, reach * 100 / MaxRange)', from: ['attack'] }],
     notes: ['Magnification is taken to grow evenly with distance. A ranged champion is taken to attack from far enough for all of it, a melee one from a hundred units.'],
   }),
   item(3087, 'Statikk Shiv', {
