@@ -31,6 +31,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size
 button,input,select{font:inherit;color:inherit;margin:0}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--a);outline-offset:2px}
+[hidden]{display:none!important}
 .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
 
 .top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
@@ -112,6 +113,41 @@ td input{width:5em;background:var(--well);border:1px solid var(--rule);border-ra
 .type-true{color:var(--true)}
 tr.now td{background:color-mix(in srgb,var(--a) 9%,transparent)}
 .notes{margin:0;padding-left:18px;font-size:13px;color:var(--dim);display:grid;gap:4px}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.panel-head h2{margin:0}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:5px;overflow:hidden;flex-wrap:wrap}
+.seg button{background:var(--well);border:0;border-right:1px solid var(--rule);padding:6px 11px;font-size:13px;color:var(--dim)}
+.seg button:last-child{border-right:0}
+.seg button[aria-selected="true"]{background:var(--a);color:var(--well);font-weight:600}
+.prio{display:flex;gap:6px;flex-wrap:wrap}
+.prio button{font-family:var(--font-mono);font-weight:600;height:36px;min-width:52px;padding:0 10px;border-radius:5px;border:1px solid var(--rule);background:var(--well);color:var(--faint)}
+.prio button[aria-pressed="true"]{color:var(--a);border-color:var(--a)}
+.prio button small{font-size:10px;color:var(--dim);margin-left:4px}
+.linkish{background:none;border:0;color:var(--a);padding:0;text-decoration:underline;font-size:inherit}
+.runes-open{display:flex;width:100%;align-items:center;gap:10px;margin-top:10px;background:var(--well);border:1px solid var(--rule);border-radius:4px;padding:8px 10px;text-align:left}
+.runes-label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint)}
+.runes-sum{font-size:13px;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sheet{position:fixed;inset:0;z-index:20;background:color-mix(in srgb,var(--well) 70%,transparent);display:flex;justify-content:center;align-items:flex-end;
+  padding:env(safe-area-inset-top,0px) max(0px,env(safe-area-inset-right,0px)) 0 max(0px,env(safe-area-inset-left,0px))}
+.sheet-body{background:var(--bg);border:1px solid var(--rule);border-bottom:0;border-radius:10px 10px 0 0;width:100%;max-width:760px;max-height:88vh;overflow:auto;
+  padding:14px max(16px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.sheet-actions{display:flex;gap:14px;align-items:center}
+.done{background:var(--a);color:var(--well);border:0;border-radius:5px;padding:7px 16px;font-weight:600}
+.tree-pick{display:grid;gap:10px;margin-bottom:12px}
+.rune-row{margin-bottom:10px}
+.rune-row > span{display:block;font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}
+.rune-opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.rune{display:flex;flex-direction:column;gap:2px;text-align:left;background:var(--band);border:1px solid var(--rule);border-radius:5px;padding:7px 9px;font-size:13px;min-width:0}
+.rune[aria-pressed="true"]{border-color:var(--a);box-shadow:inset 0 0 0 1px var(--a)}
+.rune .st{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint)}
+.rune .st.unmodeled{color:var(--warn)}
+.rune-detail{border-top:1px solid var(--rule);margin-top:12px;padding-top:12px;font-size:13px;color:var(--dim);display:grid;gap:8px}
+.rune-detail h3{margin:0;font-size:15px;color:var(--text)}
+.rune-detail p{margin:0;white-space:pre-line}
+.rune-detail .controls{display:flex;flex-wrap:wrap;gap:8px 14px}
+.rune-detail .controls label{display:flex;gap:6px;align-items:center}
+.rune-detail .controls input[type=number]{width:4.5em;background:var(--well);border:1px solid var(--rule);border-radius:4px;padding:3px 5px;font-family:var(--font-mono)}
+td.variant{padding-left:18px;color:var(--faint);font-size:12px}
 .small{font-size:12.5px;color:var(--faint)}
 </style>
 
@@ -134,24 +170,39 @@ tr.now td{background:color-mix(in srgb,var(--a) 9%,transparent)}
     </div>
     <div class="readout">
       <div class="kill"><small>Killed at</small><strong id="r-kill">–</strong></div>
-      <div><small>Dealt</small><strong id="r-dealt">0</strong></div>
-      <div><small>Target health</small><strong id="r-hp">0</strong></div>
+      <div><small>Dealt</small><strong id="r-dealt">0</strong> <span class="small mono"><span id="r-hp">0</span> left</span></div>
+      <div><small>Damage per second</small><strong id="r-dps">–</strong></div>
     </div>
     <div class="lanes"><canvas id="lanes"></canvas></div>
   </section>
 
   <div class="side">
     <section class="panel" aria-labelledby="h-script">
-      <h2 id="h-script">Script</h2>
-      <div class="script" id="script"></div>
-      <div class="add" id="add">
-        <button data-a="aa">AA</button><button data-a="q">Q</button><button data-a="w">W</button><button data-a="e">E</button><button data-a="r">R</button>
-        <button class="ghost" id="undo">Undo</button><button class="ghost" id="clear">Clear</button>
+      <div class="panel-head">
+        <h2 id="h-script">Fight</h2>
+        <div class="seg" role="tablist" aria-label="How the fight is played">
+          <button role="tab" id="mode-script" data-mode="script">Script</button>
+          <button role="tab" id="mode-seconds" data-mode="seconds">Seconds</button>
+        </div>
       </div>
-      <p class="hint">Tap a chip to remove it. Each action starts as soon as it can: in range, off cooldown, and with the attack timer ready.</p>
-      <div class="checks">
-        <label><input type="checkbox" id="fill"> Attack while waiting on a cooldown</label>
-        <label><input type="checkbox" id="keep"> Keep attacking after the script</label>
+      <div id="script-pane">
+        <div class="script" id="script"></div>
+        <div class="add" id="add">
+          <button data-a="aa">AA</button><button data-a="q">Q</button><button data-a="w">W</button><button data-a="e">E</button><button data-a="r">R</button>
+          <button class="ghost" id="undo">Undo</button><button class="ghost" id="clear">Clear</button>
+        </div>
+        <p class="hint">Tap a chip to remove it. Each action starts as soon as it can: in range, off cooldown, with the attack timer ready. An action that can be woven into the one before it (Samira's Q into her E) starts during it.</p>
+        <div class="checks">
+          <label><input type="checkbox" id="fill"> Attack while waiting on a cooldown</label>
+          <label><input type="checkbox" id="keep"> Keep attacking after the script</label>
+        </div>
+      </div>
+      <div id="seconds-pane" hidden>
+        <div class="row">
+          <label class="field"><span>Seconds</span><input type="number" id="seconds" min="1" max="60" step="1"></label>
+          <div class="field grow"><span>Abilities, by priority</span><div class="prio" id="prio"></div></div>
+        </div>
+        <p class="hint">Tap abilities in the order they should be used; tap again to drop one. Whatever is allowed is used as soon as it is off cooldown and in range, and the champion attacks in between.</p>
       </div>
     </section>
 
@@ -163,6 +214,7 @@ tr.now td{background:color-mix(in srgb,var(--a) 9%,transparent)}
         <div class="field"><span>Ranks</span><div class="ranks" id="ranks"></div></div>
       </div>
       <div class="items" id="items"></div>
+      <button class="runes-open" id="runes-open" aria-haspopup="dialog"><span class="runes-label">Runes</span><span class="runes-sum" id="runes-sum"></span></button>
       <div class="opts" id="opts"></div>
       <div class="checks"><label class="field" style="display:flex;gap:6px;align-items:center"><span>Crits</span>
         <select id="crits"><option value="average">Average</option><option value="never">Never</option><option value="always">Always</option></select></label></div>
@@ -185,10 +237,10 @@ tr.now td{background:color-mix(in srgb,var(--a) 9%,transparent)}
     <section class="panel" aria-labelledby="h-timing">
       <h2 id="h-timing">Timings</h2>
       <div class="table"><table>
-        <thead><tr><th>Action</th><th>Lock</th><th>Range</th><th>Speed</th></tr></thead>
+        <thead><tr><th>Action</th><th>Lock</th><th>Range</th><th>Speed</th><th>Channel</th></tr></thead>
         <tbody id="timings"></tbody>
       </table></div>
-      <p class="hint">Lock is the windup share of an attack, or the seconds a cast takes. Speed 0 lands at once. <span class="src data">data</span> is from the game files, <span class="src assumed">assumed</span> is a placeholder until the timing data is mirrored, <span class="src edited">edited</span> is yours. <button class="ghost" id="reset" style="background:none;border:0;color:var(--a);padding:0;text-decoration:underline">Reset edits</button></p>
+      <p class="hint">Lock is the windup share of an attack, or the seconds a cast takes. Speed 0 lands at once. <span class="src data">data</span> is from the game files, <span class="src model">model</span> from the champion's behaviour file, <span class="src assumed">assumed</span> a placeholder, <span class="src edited">edited</span> yours. Rows under an action are its variants. <button class="linkish" id="reset">Reset edits</button></p>
     </section>
 
     <section class="panel" aria-labelledby="h-log">
@@ -200,11 +252,26 @@ tr.now td{background:color-mix(in srgb,var(--a) 9%,transparent)}
     </section>
 
     <section class="panel" aria-labelledby="h-notes">
-      <h2 id="h-notes">Not modelled yet</h2>
+      <h2 id="h-notes">Notes</h2>
       <ul class="notes" id="notes"></ul>
     </section>
   </div>
 </main>
+
+<div class="sheet" id="rune-sheet" role="dialog" aria-modal="true" aria-labelledby="h-runes" hidden>
+  <div class="sheet-body">
+    <div class="panel-head">
+      <h2 id="h-runes">Runes</h2>
+      <div class="sheet-actions"><button class="linkish" id="runes-clear">Clear</button><button class="done" id="runes-close">Done</button></div>
+    </div>
+    <div class="tree-pick">
+      <div class="field"><span>Primary tree</span><div class="seg" id="primary"></div></div>
+      <div class="field"><span>Secondary tree</span><div class="seg" id="secondary"></div></div>
+    </div>
+    <div id="rune-rows"></div>
+    <div class="rune-detail" id="rune-detail"></div>
+  </div>
+</div>
 
 <script type="application/json" id="data">/*DATA*/</script>
 <script>/*APP*/</script>

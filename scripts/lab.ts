@@ -2,7 +2,7 @@
    lab/index.html with lab/page.js and the engine bundled in, and the dataset written into it.
    It talks to no server, so the file works opened on its own or published anywhere.
      ITEMIZE_PATCH        build with this compiled patch instead of the latest */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { build } from 'esbuild';
 import { DATA_DIR, ROOT, distDir } from '../src/pipeline/paths.ts';
@@ -29,8 +29,10 @@ const app = await build({
   entryPoints: [join(ROOT, 'lab', 'page.js')], bundle: true, format: 'iife', target: 'es2022', minify: true, write: false, legalComments: 'none',
 });
 const script = app.outputFiles[0]!.text;
+// runes: the trees and every rune with its model, the descriptions included
+const runes = existsSync(join(distDir(patch), 'runes.json')) ? read('runes.json') : undefined;
 // nothing inside a script element may close it
-const json = JSON.stringify({ patch, champions, items }).replace(/</g, '\\u003c');
+const json = JSON.stringify({ patch, champions, items, runes }).replace(/</g, '\\u003c');
 
 const fill = (html: string, mark: string, text: string) => {
   if (html.split(mark).length !== 2) throw new Error(`expected exactly one ${mark} in lab/index.html`);
