@@ -1,8 +1,8 @@
-/* Galio: the game file has Shield of Durand's charge and Hero's Entrance's channel per rank (mChannelDuration),
-   which the timing reader does not take. Shield of Durand charges to full over 1.25 seconds while its reach
-   grows from 275 to 450 (mCastRangeGrowthDuration, mCastRangeGrowthMax); the model's "fully charged" option
-   picks which. Justice Punch winds up, then lunges up to 650 within its 0.5 second total time. Hero's Entrance
-   lands 2.75 seconds after the cast, on an ally taken to be next to the target. */
+/* Galio: the game file has Shield of Durand's charge and Hero's Entrance's flight as channels (mChannelDuration);
+   here both are the cast's lock instead, since their damage lands when they end. Shield of Durand charges to
+   full over 1.25 seconds while its reach grows from 275 to 450 (mCastRangeGrowthDuration, mCastRangeGrowthMax);
+   the model's "fully charged" option picks which. Justice Punch winds up, then lunges up to 650 within its 0.5
+   second total time. Hero's Entrance lands 2.75 seconds after the cast, on an ally taken to be next to the target. */
 import { behaviour } from '../behaviour.ts';
 
 export default behaviour('Galio', {

@@ -1,7 +1,6 @@
-/* Zac: Elastic Slingshot charges for up to ChannelTime, rooted, to reach MaxRange, then flies onto the target; a
-   nearer target needs less charge (taken in thirds of the range). The charge and the flight are one lock, as the
-   timeline cannot start a dash after a cast: the flight is counted at MaximumSpeed over the band's longest reach.
-   Let's Bounce! bounces for DurationTooltip, during which he can cast only Unstable Matter. */
+/* Zac: Elastic Slingshot charges for up to ChannelTime, rooted, to reach MaxRange, then flies onto the target at
+   MaximumSpeed once the charge ends; a nearer target needs less charge (taken in thirds of the range). Let's
+   Bounce! bounces for DurationTooltip, during which he can cast only Unstable Matter. */
 import { behaviour } from '../behaviour.ts';
 
 export default behaviour('Zac', {
@@ -12,12 +11,12 @@ export default behaviour('Zac', {
   ],
   actions: {
     e: {
-      lock: 'ChannelTime + MaxRange / MaximumSpeed',
+      lock: 'ChannelTime',
       range: 'MaxRange',
-      dash: { speed: 'MaximumSpeed', distance: 'MaxRange', direction: 'toward' },
+      dash: { speed: 'MaximumSpeed', distance: 'MaxRange', direction: 'toward', afterLock: true },
       variants: [
-        { within: 'MaxRange / 3', lock: '(ChannelTime + MaxRange / MaximumSpeed) / 3' },
-        { within: 'MaxRange * 2 / 3', lock: '(ChannelTime + MaxRange / MaximumSpeed) * 2 / 3' },
+        { within: 'MaxRange / 3', lock: 'ChannelTime / 3' },
+        { within: 'MaxRange * 2 / 3', lock: 'ChannelTime * 2 / 3' },
       ],
     },
     r: { channel: 'DurationTooltip', allows: ['w'] },

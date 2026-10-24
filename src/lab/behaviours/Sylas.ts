@@ -1,6 +1,7 @@
-/* Sylas: Chain Lash's explosion, most of its damage, lands DetonationDelay after the cast. Kingslayer lunges onto
-   the target. One E is Abscond and Abduct together, as the model counts it: played as Abduct (SylasE2), the chain
-   pulling him to the target, which resets his attack. */
+/* Sylas: Chain Lash's chains land as they are thrown and its explosion, most of its damage, DetonationDelay
+   later. Kingslayer lunges onto the target. One E is Abscond and Abduct together, as the model counts it: played as
+   Abduct (SylasE2), the chain thrown when its cast ends and pulling him to the target (a dash of his own, not a
+   pull of the target), which resets his attack. */
 import { behaviour } from '../behaviour.ts';
 
 export default behaviour('Sylas', {
@@ -10,12 +11,9 @@ export default behaviour('Sylas', {
     'Abduct\'s pull is drawn at the chain\'s 2500 units a second (SylasE2) over its 850 cast range.',
   ],
   actions: {
-    q: { speed: 0, delay: 'DetonationDelay' },
+    q: { speed: 0, hitDelays: { explosion: 'DetonationDelay' } },
     w: { range: 400, dash: { speed: 1500, distance: 400, direction: 'toward' } },
-    e: { spell: 'SylasE2', dash: { speed: 2500, distance: 850, direction: 'toward' } },
+    e: { spell: 'SylasE2', dash: { speed: 2500, distance: 850, direction: 'toward', afterLock: true } },
   },
-  notes: [
-    'Chain Lash\'s chains land with the explosion.',
-    'Abscond, the first dash of E, is not played.',
-  ],
+  notes: ['Abscond, the first dash of E, is not played.'],
 });

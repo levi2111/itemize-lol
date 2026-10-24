@@ -1,11 +1,9 @@
 /* Gragas: Barrel Roll left to ferment (the model's option) explodes BarrelCookMaxTime after it lands. Drunken
-   Rage is a 0.75 second drink (mChannelDuration in the game file, per rank, which the timing reader does not
-   take) after which his next attack is empowered. Body Slam is a charge with a DashSpeed but no distance; it
-   cuts its own cooldown when it hits. Explosive Cask's cask is a fixed-time missile (GragasRBoom, 0.5 s). */
+   Rage is a 0.75 second drink (a channel in the game file) after which his next attack is empowered: here the
+   drink is the cast's lock, so the W damage, which the model counts as that attack's, lands as it ends. Body
+   Slam is a charge with a DashSpeed but no distance; it cuts its own cooldown by CooldownRefund when it hits.
+   Explosive Cask's cask is a fixed-time missile (GragasRBoom, 0.5 s). */
 import { behaviour } from '../behaviour.ts';
-
-/** GragasE.CooldownRefund */
-const REFUND = 0.4;
 
 export default behaviour('Gragas', {
   reviewed: '16.20.1',
@@ -24,7 +22,7 @@ export default behaviour('Gragas', {
   hooks: {
     onStart(c) { if (c.action === 'e') c.state.eAt = c.t; },
     onLand(c) {
-      if (c.action === 'e') c.setReadyAt('e', c.state.eAt! + (c.readyAt('e') - c.state.eAt!) * (1 - REFUND));
+      if (c.action === 'e') c.setReadyAt('e', c.state.eAt! + (c.readyAt('e') - c.state.eAt!) * (1 - c.value('CooldownRefund')));
     },
   },
   notes: [

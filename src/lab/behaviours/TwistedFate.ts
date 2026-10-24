@@ -9,21 +9,8 @@ export default behaviour('TwistedFate', {
   actions: {
     q: { range: 1450, speed: 1000 },
     // an attack: in attack range (525, edge to edge, plus his 65 radius)
-    w: { spell: 'GoldCardAttack', range: 525 + 65 },
+    w: { spell: 'GoldCardAttack', range: 525 + 65, asAttack: true },
     e: { requires: 0 },
-  },
-  hooks: {
-    canStart(c) {
-      return c.action !== 'w' || c.t >= c.attackReadyAt() - 1e-9;
-    },
-    onStart(c) {
-      if (c.action === 'aa') c.state.aaAt = c.t;
-      // the attack period, read off the timer the last attack set
-      if (c.action === 'w' && c.state.period) c.setAttackReadyAt(c.t + c.state.period);
-    },
-    onLand(c) {
-      if (c.action === 'aa' && c.state.aaAt !== undefined) c.state.period = c.attackReadyAt() - c.state.aaAt;
-    },
   },
   notes: [
     'The shuffle before a card is locked in is not timed: the card is thrown as soon as the attack timer allows.',

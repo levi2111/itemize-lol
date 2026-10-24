@@ -1,5 +1,6 @@
-/* Thresh: Death Sentence reaches as far as its scythe flies (ThreshQMissile), not the slot spell's 10000. The Box's
-   walls stand ThreshRCageRadius around him. */
+/* Thresh: Death Sentence reaches as far as its scythe flies (ThreshQMissile), a little past the 1075 the slot spell
+   shows. Its pull is not played: the game data gives no distance for it. The Box's walls stand ThreshRCageRadius
+   around him. */
 import { behaviour } from '../behaviour.ts';
 
 export default behaviour('Thresh', {

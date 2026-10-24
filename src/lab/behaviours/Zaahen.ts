@@ -1,7 +1,8 @@
 /* Zaahen: The Darkin Glaive is two casts, each a buff on his next attack that resets the attack timer: the first,
    and a recast within RecastWindow once that attack has landed (hook). The model counts both in one Q; its "qCast"
-   option lets each cast here count its own bonus. Grim Deliverance rises for its cast, then dives DashMaxDistance
-   at DashSpeed onto the target. */
+   option lets each cast here count its own bonus. Dreaded Return's stab pulls the target up to MaximumPullDistance
+   toward him at PullSpeed, the pull's damage landing as it ends. Grim Deliverance rises for its cast, then dives
+   DashMaxDistance at DashSpeed onto the target. */
 import { behaviour } from '../behaviour.ts';
 
 /** his attack range, 175 edge to edge, plus his 65 radius (game file): the buffs are cast in attack range */
@@ -18,7 +19,8 @@ export default behaviour('Zaahen', {
         { cast: 2, spell: 'ZaahenQ2', range: MELEE, options: { qCast: 2 } },
       ],
     },
-    r: { dash: { speed: 'DashSpeed', distance: 'DashMaxDistance', direction: 'toward' } },
+    w: { pull: 'MaximumPullDistance', hitDelays: { pull: 'MaximumPullDistance / PullSpeed' } },
+    r: { dash: { speed: 'DashSpeed', distance: 'DashMaxDistance', direction: 'toward', afterLock: true } },
   },
   hooks: {
     onStart(c) {

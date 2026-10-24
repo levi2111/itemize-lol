@@ -17,7 +17,6 @@ const unleash = (c: HookContext) => {
 export default behaviour('Yunara', {
   reviewed: '16.20.1',
   sources: [
-    'Arc of Judgment has no cooldown in the game file; its 10 seconds are from Data Dragon.',
     'The cast is taken to shorten in a straight line with bonus attack speed up to its cap; the data values give only the ends.',
   ],
   actions: {
@@ -26,7 +25,6 @@ export default behaviour('Yunara', {
     r: { range: 575 + 65 },
     w: {
       lock: 'Cast_Time_Base - (Cast_Time_Base - Cast_Time_Min) * min(1, bonusAs * 100 / Cast_Time_Attack_Speed_Cap)',
-      charges: { count: 1, recharge: '10 * 100 / (100 + abilityHaste)' },
       variants: [{
         when: 'transcended', spell: 'YunaraW2', speed: 0,
         lock: 'YunaraW.Cast_Time_Base_Empowered - (YunaraW.Cast_Time_Base_Empowered - YunaraW.Cast_Time_Min_Empowered) * min(1, bonusAs * 100 / YunaraW.Cast_Time_Attack_Speed_Cap_Empowered)',

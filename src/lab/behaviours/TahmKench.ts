@@ -1,7 +1,6 @@
 /* Tahm Kench: Abyssal Dive is a dive of ChannelTime to the target, the area hitting AoEDelayFromChannelStart after
    it began. Devour is TahmKenchR (the wrapper has no cast or range) and needs 3 stacks of An Acquired Taste, which
-   attacks and Tongue Lash add; a hook counts them. The devoured enemy is out of reach for EnemyDuration. Out of the
-   dive's reach he walks in first. */
+   attacks and Tongue Lash add; a hook counts them. The devoured enemy is out of reach for EnemyDuration. */
 import { behaviour, type HookContext } from '../behaviour.ts';
 
 /** TahmKenchPassive: MaxStacks, Duration, PerStackDecayTimer */
@@ -20,14 +19,12 @@ export default behaviour('TahmKench', {
       lock: 'ChannelTime',
       dash: { speed: '(950 + 50 * rank) / ChannelTime', distance: '950 + 50 * rank', direction: 'toward' },
       delay: 'AoEDelayFromChannelStart - ChannelTime',
-      // out of reach (from his centre, he has an 80 radius) he walks in first
-      variants: [{ beyond: '950 + 50 * rank - 80', dash: null }],
     },
     // the enemy is inside him: nothing to attack until it is spat out. The slot spell's cooldown is 0 in the game
-    // data; Devour's is DataCooldown, cut by ability haste: one charge coming back after it is that cooldown
+    // data; Devour's is DataCooldown, cut by ability haste
     r: {
       spell: 'TahmKenchR', channel: 'TahmKenchRWrapper.EnemyDuration',
-      charges: { count: 1, recharge: 'TahmKenchRWrapper.CDCalc * 100 / (100 + abilityHaste)' },
+      cooldown: 'TahmKenchRWrapper.CDCalc * 100 / (100 + abilityHaste)',
     },
   },
   hooks: {

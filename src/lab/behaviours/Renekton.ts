@@ -19,17 +19,14 @@ export default behaviour('Renekton', {
   },
   windows: [{ option: 'dominus', after: 'r', for: 'BuffDuration' }],
   hooks: {
-    // the empowered attack starts the attack timer like any attack; the period is learnt from his last attack
+    // the empowered attack starts the attack timer like any attack. Not `asAttack`: the cast resets the timer
+    // (Trait_AttackReset), so the strike never waits for it
     onStart(c) {
-      if (c.action === 'aa') c.state.aaAt = c.t;
-      if (c.action === 'w' && c.state.period) c.setAttackReadyAt(Math.max(c.attackReadyAt(), c.t + c.state.period));
-    },
-    onLand(c) {
-      if (c.action === 'aa' && c.state.aaAt !== undefined) c.state.period = c.attackReadyAt() - c.state.aaAt;
+      if (c.action === 'w') c.setAttackReadyAt(Math.max(c.attackReadyAt(), c.t + c.attackPeriod()));
     },
   },
   notes: [
-    'Ruthless Predator is played as the attack it empowers: it waits on nothing but its cooldown and restarts the attack timer. Before his first attack of the fight the timer is not known, so an attack may follow it at once.',
+    'Ruthless Predator is played as the attack it empowers: it waits on nothing but its cooldown and restarts the attack timer.',
     'Slice and Dice is one dash here: the recast\'s damage lands with the first.',
   ],
 });

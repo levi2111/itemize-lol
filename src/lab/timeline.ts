@@ -385,7 +385,9 @@ function playWith(s: Scenario, beh: BehaviourSrc | undefined): Played {
     });
     for (const l of fight.landings.slice(mark)) {
       const info = lineOf.get(`${l.owner}/${l.rule}`) ?? { line: 'items', label: l.rule };
-      pending.push({ t: when + l.delay, action: actionOf(info.line), owner: l.owner, rule: l.rule, line: info.line, label: info.label, type: l.type, raw: l.raw, dealt: l.dealt });
+      // a behaviour's delay for the rule moves the whole spread along with it
+      const later = (delays?.[l.rule] ?? 0) + l.delay;
+      pending.push({ t: when + later, action: actionOf(info.line), owner: l.owner, rule: l.rule, line: info.line, label: info.label, type: l.type, raw: l.raw, dealt: l.dealt });
     }
   };
 

@@ -1,11 +1,8 @@
 /* Vi: Vault Breaker is charged, then a dash of MinDashRange plus ExtraDashRangeAtMaxCharge at full charge (the
    model's "charged"). Denting Blows has no active. Relentless Force is an instant buff on her next attack, which
-   it resets, holding two charges with StaticCooldown between casts (a hook). Cease and Desist dashes onto the
-   target at RBaseSpeed. */
+   it resets, holding two charges with StaticCooldown between casts. Cease and Desist dashes onto the target at
+   RBaseSpeed. */
 import { behaviour } from '../behaviour.ts';
-
-/** ViE.StaticCooldown */
-const BETWEEN = 1;
 
 export default behaviour('Vi', {
   reviewed: '16.20.1',
@@ -15,25 +12,16 @@ export default behaviour('Vi', {
     'Cease and Desist\'s reach of 800 is ViR\'s range in the game file.',
   ],
   actions: {
+    // the dash's reach, from her centre (she has a 65 radius): further away she walks in first
     q: {
-      lock: 1.25,
+      lock: 1.25, range: 'MinDashRange + ExtraDashRangeAtMaxCharge + 65',
       dash: { speed: 1500, distance: 'MinDashRange + ExtraDashRangeAtMaxCharge', direction: 'toward' },
-      // a dash that would stop short of the target is not started: she walks in first (she has a 65 radius)
-      variants: [
-        { when: '!charged', beyond: 'MinDashRange', dash: null, range: 'MinDashRange + 65' },
-        { when: '!charged', lock: 0, dash: { speed: 1500, distance: 'MinDashRange', direction: 'toward' } },
-        { beyond: 'MinDashRange + ExtraDashRangeAtMaxCharge', dash: null, range: 'MinDashRange + ExtraDashRangeAtMaxCharge + 65' },
-      ],
+      variants: [{ when: '!charged', lock: 0, range: 'MinDashRange + 65', dash: { speed: 1500, distance: 'MinDashRange', direction: 'toward' } }],
     },
     w: { requires: 0 },
     // the game file's 0.25 seconds is the empowered attack's; cast it in attack range (125, edge to edge, plus her 65 radius)
-    e: { lock: 0, range: 125 + 65, charges: { count: 2, recharge: '(13 - rank) * 100 / (100 + abilityHaste)' } },
-    r: { dash: { speed: 'RBaseSpeed', distance: 800, direction: 'toward' }, variants: [{ beyond: 800 - 65, dash: null }] },
-  },
-  hooks: {
-    onStart(c) {
-      if (c.action === 'e') c.setReadyAt('e', c.t + BETWEEN);
-    },
+    e: { lock: 0, range: 125 + 65, charges: { count: 2, recharge: '(13 - rank) * 100 / (100 + abilityHaste)', gap: 'StaticCooldown' } },
+    r: { dash: { speed: 'RBaseSpeed', distance: 800, direction: 'toward' } },
   },
   notes: [
     'Vault Breaker\'s dash is drawn during its charge, so the punch lands when the charge ends.',
