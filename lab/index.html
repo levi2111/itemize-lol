@@ -1,0 +1,210 @@
+<title>itemize Fight Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: the floor and its timeline stay on top as one instrument; setup, script and timings stack
+   underneath. Two columns once there is room. The site's own palette: dark only, by design. */
+:root{
+  --bg:#0c2524;
+  --band:#123534;
+  --well:#081c1b;
+  --rule:#25504d;
+  --text:#ece7d8;
+  --dim:#a3beb7;
+  --faint:#6f948d;
+  --a:#eef035;
+  --b:#ff7fb2;
+  --phys:#f29a4a;
+  --magic:#6fb6f2;
+  --true:#ece7d8;
+  --warn:#ffb05c;
+  --font-ui:"Archivo",system-ui,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size:15px;line-height:1.35;-webkit-font-smoothing:antialiased;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 40px}
+button,input,select{font:inherit;color:inherit;margin:0}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--a);outline-offset:2px}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+.top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.top h1{font-size:22px;font-weight:800;font-stretch:112%;letter-spacing:-.01em;margin:0}
+.top h1 b{color:var(--a)}
+.tag{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);border:1px solid var(--rule);border-radius:3px;padding:1px 6px}
+.top .patch{margin-left:auto;font-family:var(--font-mono);font-size:12px;color:var(--faint)}
+
+.layout{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:980px){.layout{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);align-items:start}.stage{position:sticky;top:12px}}
+
+.stage{display:grid;gap:8px;min-width:0}
+.floor{position:relative;background:var(--well);border:1px solid var(--rule);border-radius:6px;overflow:hidden;aspect-ratio:16/10;max-width:100%}
+.floor canvas{display:block;width:100%;height:100%}
+.hud{position:absolute;left:10px;top:8px;right:10px;display:flex;justify-content:space-between;gap:8px;pointer-events:none;font-family:var(--font-mono);font-size:12px;color:var(--dim)}
+.hud .clock{color:var(--text);font-size:15px;font-weight:600}
+
+.readout{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+.readout div{background:var(--band);padding:7px 10px;min-width:0}
+.readout small{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint)}
+.readout strong{font-family:var(--font-mono);font-size:18px;font-weight:600;font-variant-numeric:tabular-nums}
+.readout .kill strong{color:var(--a)}
+
+.transport{display:flex;align-items:center;gap:8px}
+.transport button.play{width:44px;height:36px;border-radius:5px;border:1px solid var(--rule);background:var(--band);font-size:15px}
+.transport input[type=range]{flex:1;min-width:0;accent-color:var(--a)}
+.transport select{background:var(--band);border:1px solid var(--rule);border-radius:5px;padding:6px 4px;font-family:var(--font-mono);font-size:12px}
+
+.lanes{background:var(--well);border:1px solid var(--rule);border-radius:6px;overflow:hidden;touch-action:none}
+.lanes canvas{display:block;width:100%}
+
+.panel{background:var(--band);border:1px solid var(--rule);border-radius:6px;padding:12px;min-width:0}
+.panel h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);margin:0 0 10px}
+.panel + .panel{margin-top:14px}
+.side{min-width:0}
+
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+.field{display:grid;gap:3px;min-width:0}
+.field > span{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.07em}
+.field select,.field input{background:var(--well);border:1px solid var(--rule);border-radius:4px;padding:6px 7px;min-width:0}
+.field input[type=number]{width:5.2em;font-family:var(--font-mono)}
+.grow{flex:1 1 9em}
+.ranks{display:flex;gap:6px}
+.ranks label{display:grid;gap:2px;text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--faint)}
+.ranks input{width:3em;text-align:center}
+.items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:10px}
+@media (min-width:600px){.items{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.items select{width:100%;background:var(--well);border:1px solid var(--rule);border-radius:4px;padding:6px;font-size:13px}
+.checks{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:13px;color:var(--dim)}
+.checks label{display:flex;gap:6px;align-items:center}
+.checks input{accent-color:var(--a)}
+.opts{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--dim)}
+.opts label{display:flex;gap:6px;align-items:center}
+.opts input[type=number]{width:4em;background:var(--well);border:1px solid var(--rule);border-radius:4px;padding:3px 5px;font-family:var(--font-mono)}
+
+.script{display:flex;flex-wrap:wrap;gap:5px;min-height:34px;padding:6px;background:var(--well);border:1px solid var(--rule);border-radius:4px}
+.chip{font-family:var(--font-mono);font-size:13px;font-weight:600;min-width:34px;height:28px;padding:0 8px;border-radius:4px;border:1px solid var(--rule);background:var(--band)}
+.chip[data-a=aa]{color:var(--text)}
+.chip.cast{color:var(--a)}
+.chip.played{box-shadow:inset 0 -2px 0 var(--a)}
+.add{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.add button{font-family:var(--font-mono);font-weight:600;height:36px;min-width:44px;padding:0 10px;border-radius:5px;border:1px solid var(--rule);background:var(--well)}
+.add button.ghost{color:var(--dim);font-family:var(--font-ui);font-weight:500;font-size:13px}
+.hint{font-size:12.5px;color:var(--faint);margin:6px 0 0}
+
+.table{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);font-weight:600;text-align:left;padding:4px 6px;border-bottom:1px solid var(--rule)}
+td{padding:4px 6px;border-bottom:1px solid color-mix(in srgb,var(--rule) 55%,transparent);vertical-align:middle}
+td.num{font-family:var(--font-mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td input{width:5em;background:var(--well);border:1px solid var(--rule);border-radius:3px;padding:3px 5px;font-family:var(--font-mono);font-size:13px;text-align:right}
+.src{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.06em;padding:0 4px;border-radius:3px;border:1px solid currentColor;margin-left:4px;white-space:nowrap}
+.src.data{color:var(--dim)}
+.src.model{color:var(--magic)}
+.src.assumed{color:var(--warn)}
+.src.edited{color:var(--a)}
+.type-physical{color:var(--phys)}
+.type-magic{color:var(--magic)}
+.type-true{color:var(--true)}
+tr.now td{background:color-mix(in srgb,var(--a) 9%,transparent)}
+.notes{margin:0;padding-left:18px;font-size:13px;color:var(--dim);display:grid;gap:4px}
+.small{font-size:12.5px;color:var(--faint)}
+</style>
+
+<header class="top">
+  <h1>itemize <b>Fight Lab</b></h1>
+  <span class="tag">Private preview</span>
+  <span class="patch mono" id="patch"></span>
+</header>
+
+<main class="layout">
+  <section class="stage" aria-label="Fight">
+    <div class="floor">
+      <canvas id="floor"></canvas>
+      <div class="hud"><span class="clock" id="clock">0.00 s</span><span id="state"></span></div>
+    </div>
+    <div class="transport">
+      <button class="play" id="play" aria-label="Play">▶</button>
+      <input type="range" id="scrub" min="0" max="1" step="0.0333" value="0" aria-label="Time">
+      <select id="speed" aria-label="Playback speed"><option value="0.25">¼×</option><option value="0.5" selected>½×</option><option value="1">1×</option></select>
+    </div>
+    <div class="readout">
+      <div class="kill"><small>Killed at</small><strong id="r-kill">–</strong></div>
+      <div><small>Dealt</small><strong id="r-dealt">0</strong></div>
+      <div><small>Target health</small><strong id="r-hp">0</strong></div>
+    </div>
+    <div class="lanes"><canvas id="lanes"></canvas></div>
+  </section>
+
+  <div class="side">
+    <section class="panel" aria-labelledby="h-script">
+      <h2 id="h-script">Script</h2>
+      <div class="script" id="script"></div>
+      <div class="add" id="add">
+        <button data-a="aa">AA</button><button data-a="q">Q</button><button data-a="w">W</button><button data-a="e">E</button><button data-a="r">R</button>
+        <button class="ghost" id="undo">Undo</button><button class="ghost" id="clear">Clear</button>
+      </div>
+      <p class="hint">Tap a chip to remove it. Each action starts as soon as it can: in range, off cooldown, and with the attack timer ready.</p>
+      <div class="checks">
+        <label><input type="checkbox" id="fill"> Attack while waiting on a cooldown</label>
+        <label><input type="checkbox" id="keep"> Keep attacking after the script</label>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-build">
+      <h2 id="h-build">Champion</h2>
+      <div class="row">
+        <label class="field grow"><span>Champion</span><select id="champ"></select></label>
+        <label class="field"><span>Level</span><input type="number" id="level" min="1" max="18"></label>
+        <div class="field"><span>Ranks</span><div class="ranks" id="ranks"></div></div>
+      </div>
+      <div class="items" id="items"></div>
+      <div class="opts" id="opts"></div>
+      <div class="checks"><label class="field" style="display:flex;gap:6px;align-items:center"><span>Crits</span>
+        <select id="crits"><option value="average">Average</option><option value="never">Never</option><option value="always">Always</option></select></label></div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-target">
+      <h2 id="h-target">Target</h2>
+      <div class="row">
+        <label class="field grow"><span>Champion</span><select id="tchamp"></select></label>
+        <label class="field"><span>Level</span><input type="number" id="tlevel" min="1" max="18"></label>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="field grow"><span>Starts <b class="mono" id="dist-v"></b> away</span><input type="range" id="dist" min="150" max="1600" step="10" style="accent-color:var(--b)"></label>
+        <label class="field"><span>Does</span><select id="behaviour">
+          <option value="stand">Stands still</option><option value="away">Walks away</option><option value="strafe">Walks sideways</option><option value="toward">Walks at you</option></select></label>
+      </div>
+      <p class="hint" id="tstats"></p>
+    </section>
+
+    <section class="panel" aria-labelledby="h-timing">
+      <h2 id="h-timing">Timings</h2>
+      <div class="table"><table>
+        <thead><tr><th>Action</th><th>Lock</th><th>Range</th><th>Speed</th></tr></thead>
+        <tbody id="timings"></tbody>
+      </table></div>
+      <p class="hint">Lock is the windup share of an attack, or the seconds a cast takes. Speed 0 lands at once. <span class="src data">data</span> is from the game files, <span class="src assumed">assumed</span> is a placeholder until the timing data is mirrored, <span class="src edited">edited</span> is yours. <button class="ghost" id="reset" style="background:none;border:0;color:var(--a);padding:0;text-decoration:underline">Reset edits</button></p>
+    </section>
+
+    <section class="panel" aria-labelledby="h-log">
+      <h2 id="h-log">What landed</h2>
+      <div class="table"><table>
+        <thead><tr><th>Time</th><th>From</th><th>Hit</th><th style="text-align:right">Dealt</th></tr></thead>
+        <tbody id="log"></tbody>
+      </table></div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-notes">
+      <h2 id="h-notes">Not modelled yet</h2>
+      <ul class="notes" id="notes"></ul>
+    </section>
+  </div>
+</main>
+
+<script type="application/json" id="data">/*DATA*/</script>
+<script>/*APP*/</script>

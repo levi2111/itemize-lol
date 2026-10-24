@@ -116,7 +116,10 @@ src/worker/     the same API as a Cloudflare Worker
 web/            the site, wired to the API: two layouts, one page each (index.html the tabs, receipt.html the receipt), one app.js for both.
                 The tabs page alone has the Crits switch, ranks per build and the shops in the item picker. Both have each item's
                 settings menu (the button on its slot) and the card an ability shows when pointed at
-scripts/        calc.ts (one calculation from the command line), outliers.ts (sanity scan), bundle.ts (packs the dataset for the Worker)
+scripts/        calc.ts (one calculation from the command line), outliers.ts (sanity scan), bundle.ts (packs the dataset for the Worker),
+                lab.ts (builds the Fight Lab)
+src/lab/        the Fight Lab's timeline: a combo played on a clock and a floor; timings.ts holds hand-written timings
+lab/            the Fight Lab page, built by `npm run lab` into one file, .build/lab/index.html
 ```
 
 Environment: `PORT`, `ITEMIZE_PATCH`, `ITEMIZE_DATA_DIR`, `CALC_PER_MINUTE`, `TRUST_PROXY` (see `src/server/main.ts`); `ITEMIZE_CONTACT` sets the contact in the pipeline's User-Agent.
@@ -149,6 +152,12 @@ Checked against Riot's [Legal Jibber Jabber](https://www.riotgames.com/en/legal)
 2. **Declare the data sources in that registration**: Data Dragon, plus game-file data via Community Dragon. Riot's policy lists Data Dragon as the sanctioned source and says products "should use supported services". Community Dragon describes itself as operating in a gray area that Riot has acknowledged. Nearly every stats site depends on it, but get it on the record for this one. If Riot objects, only `src/pipeline/fetch.ts` needs a different source: nothing downstream knows where the files came from.
 3. **Keep a free tier.** Ads and subscriptions are allowed; charging requires a free tier to exist, and paid content must be transformative.
 4. **Do not present the site as official** or endorsed by Riot.
+
+## Fight Lab (preview)
+
+`npm run lab` builds a page that plays a combo out in time: the champion walks into range, winds up attacks on the attack timer, casts, waits on cooldowns, dashes, and its projectiles fly; every hit lands at its own moment, drawn on a top-down floor and a timeline. Fight still does all the damage, so a standing target takes exactly what `POST /calc` says. The page needs no server and is not part of the site yet.
+
+The dataset has cast times and cooldowns but not attack windups, projectile speeds or most ranges, so those are placeholders the page marks `assumed` and lets you edit. `src/lab/timings.ts` is where sourced numbers go, per champion.
 
 ## Not built yet
 
