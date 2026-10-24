@@ -74,7 +74,8 @@ export interface Scenario {
   items: ItemData[];
   runes?: RuneData[];
   build: BuildInput;
-  target: { champ: ChampionData; level: number };
+  /** an enemy champion at a level; or plain numbers, standing still; or null for raw damage with nobody to kill */
+  target: { champ: ChampionData; level: number } | { stats: TargetInput } | null;
   /** centre to centre at the start */
   distance: number;
   behaviour: Behaviour;
@@ -96,6 +97,9 @@ export interface Frame {
 export interface Landed {
   t: number;
   action: Action | 'item' | 'rune' | 'passive';
+  /** who dealt it and by which rule, as in the calculation's breakdown */
+  owner: string;
+  rule: string;
   line: string;
   label: string;
   type: DamageType;
@@ -113,7 +117,7 @@ export interface Played {
   events: Landed[];
   spans: Span[];
   maxHp: number;
-  target: TargetInput;
+  target: TargetInput | null;
   killedAt: number | null;
   end: number;
   /** total dealt; in seconds mode, within the window */
@@ -126,6 +130,8 @@ export interface Played {
   managed: string[];
   radius: { a: number; b: number };
   notes: string[];
+  /** the fight itself, for what a caller reports from it (settings, how often effects fired) */
+  fight: Fight;
 }
 
 const data = (v: number): Timed => ({ v, from: 'data' });
@@ -147,8 +153,9 @@ function fromData(champ: ChampionData, spell: string, rank: number, attackRange:
   const self = t?.targeting === 'Self' || t?.targeting === 'SelfAoe';
   const range = at(t?.range, rank), radius = at(t?.radius, rank);
   let reach: Timed;
-  // a spell centred on the champion reaches as far as its radius, or its range when it has no radius
-  if (self && radius) reach = data(radius);
+  // a spell centred on the champion reaches the larger of its radius and its range (Kai'Sa's Q: a small
+  // indicator, missiles that fly 600)
+  if (self && (radius || range)) reach = data(Math.max(radius ?? 0, range ?? 0));
   else if (range) reach = data(range);
   else if (self) reach = data(attackRange);
   else if (radius) reach = data(radius);
@@ -208,8 +215,10 @@ interface Busy { action: Action; state: 'windup' | 'cast' | 'dash' | 'channel'; 
 export function play(s: Scenario): Played {
   const seconds = s.mode.kind === 'seconds' ? s.mode.seconds : undefined;
   const horizon = seconds ?? s.horizon ?? 15;
-  const t0 = new Fight(s.target.champ, [], { champion: s.target.champ.id, level: s.target.level, ranks: { q: 0, w: 0, e: 0, r: 0 }, items: [] }, null);
-  const target: TargetInput = { hp: t0.stats.hp.total, armor: t0.stats.armor.total, mr: t0.stats.mr.total };
+  const enemy = s.target && 'champ' in s.target ? s.target : undefined;
+  const t0 = enemy && new Fight(enemy.champ, [], { champion: enemy.champ.id, level: enemy.level, ranks: { q: 0, w: 0, e: 0, r: 0 }, items: [] }, null);
+  const target: TargetInput | null = t0 ? { hp: t0.stats.hp.total, armor: t0.stats.armor.total, mr: t0.stats.mr.total } : s.target && 'stats' in s.target ? s.target.stats : null;
+  const maxHp = target?.hp ?? Infinity;
   /** damage already worked out that reaches the target later: instances of damage spread over time */
   const pending: Landed[] = [];
   let t = 0;
@@ -217,7 +226,7 @@ export function play(s: Scenario): Played {
   const notes = new Set<string>();
   const events: Landed[] = [], spans: Span[] = [], frames: Frame[] = [], started: Played['started'] = [];
   const beh = behaviourOf(s.champ.id);
-  const rA = s.champ.timing?.radius ?? DEFAULT_RADIUS, rB = s.target.champ.timing?.radius ?? DEFAULT_RADIUS;
+  const rA = s.champ.timing?.radius ?? DEFAULT_RADIUS, rB = enemy?.champ.timing?.radius ?? DEFAULT_RADIUS;
   const attackRange = s.champ.stats.attackRange;
   const value = (e: Expr, spell?: string, slot: CastSlot | 'p' = 'p') => fight.value(e, spell, slot);
   if (!s.champ.timing) notes.add('This dataset has no timing from the game files; cast times, windups and ranges are placeholders.');
@@ -280,7 +289,7 @@ export function play(s: Scenario): Played {
   const b = { x: s.distance, y: 0 };
   const centre = () => Math.hypot(b.x - a.x, b.y - a.y);
   const gap = () => Math.max(0, centre() - rA - rB);
-  const targetSpeed = t0.stats.moveSpeed.total;
+  const targetSpeed = t0?.stats.moveSpeed.total ?? 0;
   const ready: Record<CastSlot, number> = { q: 0, w: 0, e: 0, r: 0 };
   /** a recast chain in progress: casts made, when the next must come by, the first cast's time */
   const chain: Partial<Record<CastSlot, { n: number; expires: number; first: number }>> = {};
@@ -328,11 +337,11 @@ export function play(s: Scenario): Played {
       const lt = late.get(k);
       if (lt) { const r = Math.min(raw, lt.raw), d = Math.min(dealt, lt.dealt); raw -= r; dealt -= d; lt.raw -= r; lt.dealt -= d; }
       if (!(raw > 1e-6)) return;
-      events.push({ t: when, action: actionOf(h.line), line: h.line, label: h.label, type: h.type, raw, dealt });
+      events.push({ t: when, action: actionOf(h.line), owner: h.owner, rule: h.rule, line: h.line, label: h.label, type: h.type, raw, dealt });
     });
     for (const l of fight.landings.slice(mark)) {
       const info = lineOf.get(`${l.owner}/${l.rule}`) ?? { line: 'items', label: l.rule };
-      pending.push({ t: when + l.delay, action: actionOf(info.line), line: info.line, label: info.label, type: l.type, raw: l.raw, dealt: l.dealt });
+      pending.push({ t: when + l.delay, action: actionOf(info.line), owner: l.owner, rule: l.rule, line: info.line, label: info.label, type: l.type, raw: l.raw, dealt: l.dealt });
     }
   };
 
@@ -519,9 +528,9 @@ export function play(s: Scenario): Played {
     pending.sort((x, y) => x.t - y.t);
     while (pending.length && pending[0]!.t <= t + 1e-9) events.push(pending.shift()!);
     // the target's health as it is shown: what has reached it so far
-    const hp = Math.max(0, target.hp - events.reduce((sum, e) => sum + e.dealt, 0));
+    const hp = Math.max(0, maxHp - events.reduce((sum, e) => sum + e.dealt, 0));
     // the target moves: it does not wait for anyone
-    if (s.behaviour !== 'stand' && hp > 0) {
+    if (s.behaviour !== 'stand' && targetSpeed > 0 && hp > 0) {
       const d = Math.max(1e-6, centre()), ux = (b.x - a.x) / d, uy = (b.y - a.y) / d, step = targetSpeed * TICK;
       if (s.behaviour === 'away') { b.x += ux * step; b.y += uy * step; }
       else if (s.behaviour === 'strafe') { b.x += -uy * step; b.y += ux * step; }
@@ -571,7 +580,7 @@ export function play(s: Scenario): Played {
     if (main && main.state !== 'channel' && t >= main.until - 1e-9) release(main, true);
     else if (main?.state === 'channel' && t >= main.until - 1e-9) main = undefined;
 
-    const hpNow = Math.max(0, target.hp - events.reduce((sum, e) => sum + e.dealt, 0));
+    const hpNow = Math.max(0, maxHp - events.reduce((sum, e) => sum + e.dealt, 0));
     if (hpNow <= 1e-6 && killedAt === null) killedAt = t;
     if (killedAt === null) {
       if (!main) {
@@ -599,7 +608,7 @@ export function play(s: Scenario): Played {
     if (main) a.state = main.state;
     else if (a.state !== 'move' && a.state !== 'wait') a.state = 'idle';
 
-    frames.push({ t, a: { x: a.x, y: a.y, state: a.state }, b: { x: b.x, y: b.y }, hp: hpNow, shots: shots.map(p => ({ x: p.x, y: p.y, action: p.action })) });
+    frames.push({ t, a: { x: a.x, y: a.y, state: a.state }, b: { x: b.x, y: b.y }, hp: Number.isFinite(hpNow) ? hpNow : 0, shots: shots.map(p => ({ x: p.x, y: p.y, action: p.action })) });
     if (killedAt !== null && t >= killedAt) break;
     const settled = !main && !woven && !reaching && !shots.length && !delayed.length && !pending.length;
     if (s.mode.kind === 'script' && settled && cursor >= s.mode.script.length && !s.mode.keepAttacking) break;
@@ -615,8 +624,8 @@ export function play(s: Scenario): Played {
   const timings = {} as Played['timings'];
   for (const act of ['aa', ...CAST_SLOTS] as Action[]) timings[act] = { ...plans[act].base, variants: plans[act].variants.map(v => ({ label: v.label, timing: v.timing })) };
   return {
-    frames, events, spans, maxHp: target.hp, target, killedAt, end,
+    frames, events, spans, maxHp: target?.hp ?? 0, target, killedAt, end,
     dealt: events.reduce((sum, e) => sum + e.dealt, 0),
-    started, timings, managed, radius: { a: rA, b: rB }, notes: [...notes, ...(beh?.notes ?? [])],
+    started, timings, managed, radius: { a: rA, b: rB }, notes: [...notes, ...(beh?.notes ?? [])], fight,
   };
 }

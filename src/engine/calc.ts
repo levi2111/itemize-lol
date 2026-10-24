@@ -2,8 +2,10 @@
    damage, and report where every point of damage came from. Pure and synchronous. */
 import type { CastSlot, ChampionData, DamageType, ItemData, RuneData, Slot } from '../shared/types.ts';
 import { CAST_SLOTS, SLOTS } from '../shared/types.ts';
+import { play, type Played } from '../lab/timeline.ts';
+import { windupSeconds } from '../pipeline/timing.ts';
 import { defaultSequence, Fight, type Hit } from './sim.ts';
-import { CalcError, CRIT_MODES, type AbilityInfo, type Action, type Amount, type BuildInput, type ByType, type CalcRequest, type CalcResult, type CritMode, type DataSource, type ItemInfo, type SourceLine, type TargetInput } from './types.ts';
+import { CalcError, CRIT_MODES, type AbilityInfo, type Action, type Amount, type BuildInput, type ByType, type CalcRequest, type CalcResult, type ComboTimeline, type CritMode, type DataSource, type ItemInfo, type SourceLine, type TargetInput } from './types.ts';
 
 export const LIMITS = {
   items: 6,
@@ -16,6 +18,10 @@ export const LIMITS = {
   horizon: 60,
   /** seconds simulated for DPS when there is no target to kill */
   window: 10,
+  /** combo.seconds */
+  seconds: 60,
+  /** seconds the timeline plays a scripted combo for at most */
+  timeline: 90,
 } as const;
 
 const TYPES: DamageType[] = ['physical', 'magic', 'true'];
@@ -45,6 +51,8 @@ interface Checked {
   target: TargetInput | null;
   sequence: Action[];
   crits: CritMode;
+  /** seconds mode: how long, and the abilities it may use by priority */
+  seconds?: { seconds: number; abilities: CastSlot[] };
 }
 
 /** Settings by id for things in the build (items, runes): each one must be in the build and name a control it has. */
@@ -123,9 +131,15 @@ function check(data: DataSource, req: CalcRequest): Checked {
     for (const a of ACTIONS) counts[a] = int(c.counts?.[a] ?? 0, `combo.counts.${a}`, 0, LIMITS.count);
     sequence = defaultSequence(counts);
   }
+  let seconds: Checked['seconds'];
+  if (c.seconds !== undefined) {
+    const abilities = c.abilities ?? [];
+    if (!Array.isArray(abilities) || abilities.some(a => !CAST_SLOTS.includes(a))) throw new CalcError('combo.abilities', 'combo.abilities must list abilities: q, w, e, r');
+    seconds = { seconds: real(c.seconds, 'combo.seconds', 1, LIMITS.seconds), abilities: [...new Set(abilities)] };
+  }
   const crits = c.crits ?? 'average';
   if (!CRIT_MODES.includes(crits)) throw new CalcError('combo.crits', `combo.crits must be one of ${CRIT_MODES.join(', ')}`);
-  return { champ, items, runes, build: { champion: champ.id, level, ranks, items: ids, options, itemOptions, runes: runeIds, runeOptions }, target, sequence, crits };
+  return { champ, items, runes, build: { champion: champ.id, level, ranks, items: ids, options, itemOptions, runes: runeIds, runeOptions }, target, sequence, crits, ...(seconds && { seconds }) };
 }
 
 function lines(champ: ChampionData, hits: Hit[], spread: Fight['spread'], sequence: Action[]): SourceLine[] {
@@ -183,17 +197,21 @@ function sustain(c: Checked): { dps: Amount; timeToKill: number | null; caveats:
     return { dps: { raw: t.raw / f.time, dealt: t.dealt / f.time }, timeToKill: null, caveats: f.caveats };
   }
   const total = zero();
+  // an attack's damage lands after its windup and, for ranged champions, its flight across their attack range
+  const timing = c.champ.timing?.attack;
+  const landsAfter = () => (timing ? windupSeconds(timing, c.champ.stats.attackSpeed, f.stats.attackSpeed.total) : 0)
+    + (timing?.missileSpeed ? f.stats.attackRange / timing.missileSpeed : 0);
   while (f.time < LIMITS.horizon) {
-    const hpBefore = f.targetHp!, t0 = f.time, period = f.attackPeriod;
+    const hpBefore = f.targetHp!, t0 = f.time, delay = landsAfter();
     // an attack's hits are whatever the log gained; consecutive hits of one rule merge, so diff totals instead
     const before = sum(0);
     f.act('aa');
     const after = sum(0);
     const hit = { raw: after.raw - before.raw, dealt: after.dealt - before.dealt };
     if (f.targetHp === 0 && hit.dealt > 0) {
-      // the killing attack is counted only as far as it was needed, so time to kill moves smoothly with health
+      // the target dies when the killing attack lands; that attack counts only as far as it was needed
       const part = hpBefore / hit.dealt;
-      const ttk = t0 + part * period;
+      const ttk = t0 + delay;
       total.raw += hit.raw * part; total.dealt += hpBefore;
       return { dps: { raw: total.raw / ttk, dealt: total.dealt / ttk }, timeToKill: ttk, caveats: f.caveats };
     }
@@ -239,37 +257,51 @@ function itemInfo(c: Checked, fight: Fight, crits: CritMode, of: 'item' | 'rune'
 
 export function calculate(data: DataSource, req: CalcRequest): CalcResult {
   const c = check(data, req);
-  const play = (crits: CritMode) => {
+  const replay = (crits: CritMode) => {
     const f = new Fight(c.champ, c.items, c.build, c.target, { runes: c.runes, crits });
     f.begin();
     for (const a of c.sequence) f.act(a);
     f.end();
     return f;
   };
-  const fight = play(c.crits);
-  const comboLines = lines(c.champ, fight.hits, fight.spread, c.sequence);
-
-  // A line with hits that can crit also gets its total in each way of counting them: the same combo,
-  // played again with no crits and with every one. A crit changes the target's health for what comes
-  // after it, so each is a whole fight of its own, not the hits rescaled.
-  if (fight.hits.some(h => h.crit)) {
-    const fights = Object.fromEntries(CRIT_MODES.map(m => [m, m === c.crits ? fight : play(m)])) as Record<CritMode, Fight>;
-    const critLines = new Set(CRIT_MODES.flatMap(m => fights[m].hits.filter(h => h.crit).map(h => h.line)));
-    const totals = Object.fromEntries(CRIT_MODES.map(m => [m, m === c.crits ? comboLines : lines(c.champ, fights[m].hits, fights[m].spread, c.sequence)])) as Record<CritMode, SourceLine[]>;
-    for (const l of comboLines) {
-      if (!critLines.has(l.key)) continue;
-      l.crits = Object.fromEntries(CRIT_MODES.map(m => [m, { ...totals[m].find(x => x.key === l.key)!.total }])) as Record<CritMode, Amount>;
+  let fight: Fight, hits: Hit[], sequence: Action[], comboLines: SourceLine[], timeline: ComboTimeline;
+  if (c.seconds) {
+    // seconds mode: the timeline decides what is used and when; the combo is what landed in time
+    const played = play(scenario(c, c.crits, { kind: 'seconds', seconds: c.seconds.seconds, abilities: c.seconds.abilities }));
+    fight = played.fight;
+    sequence = played.started.map(s => s.action);
+    hits = played.events.map(e => ({ line: e.line as Hit['line'], owner: e.owner, rule: e.rule, label: e.label, type: e.type, raw: e.raw, dealt: e.dealt, instances: 1, crit: false }));
+    comboLines = lines(c.champ, hits, new Map(), sequence);
+    timeline = timelineOf(c, played);
+  } else {
+    fight = replay(c.crits);
+    hits = fight.hits;
+    sequence = c.sequence;
+    comboLines = lines(c.champ, fight.hits, fight.spread, c.sequence);
+    // A line with hits that can crit also gets its total in each way of counting them: the same combo,
+    // played again with no crits and with every one. A crit changes the target's health for what comes
+    // after it, so each is a whole fight of its own, not the hits rescaled.
+    if (fight.hits.some(h => h.crit)) {
+      const fights = Object.fromEntries(CRIT_MODES.map(m => [m, m === c.crits ? fight : replay(m)])) as Record<CritMode, Fight>;
+      const critLines = new Set(CRIT_MODES.flatMap(m => fights[m].hits.filter(h => h.crit).map(h => h.line)));
+      const totals = Object.fromEntries(CRIT_MODES.map(m => [m, m === c.crits ? comboLines : lines(c.champ, fights[m].hits, fights[m].spread, c.sequence)])) as Record<CritMode, SourceLine[]>;
+      for (const l of comboLines) {
+        if (!critLines.has(l.key)) continue;
+        l.crits = Object.fromEntries(CRIT_MODES.map(m => [m, { ...totals[m].find(x => x.key === l.key)!.total }])) as Record<CritMode, Amount>;
+      }
     }
+    timeline = timelineOf(c, play(scenario(c, c.crits, { kind: 'script', script: c.sequence, keepAttacking: false, fillWithAutos: false })));
   }
   const total = zero(), types = byType();
-  for (const h of fight.hits) {
+  for (const h of hits) {
     total.raw += h.raw; total.dealt += h.dealt;
     types[h.type].raw += h.raw; types[h.type].dealt += h.dealt;
   }
+  const hpLeft = c.target ? Math.max(0, c.target.hp - total.dealt) : null;
   const s = sustain(c);
   const caveats = new Set([...fight.caveats, ...s.caveats]);
   for (const slot of CAST_SLOTS) {
-    if (c.sequence.includes(slot) && c.build.ranks[slot] < 1) caveats.add(`${c.champ.slots[slot].name} is in the combo but has no rank, so it does nothing.`);
+    if (sequence.includes(slot) && c.build.ranks[slot] < 1) caveats.add(`${c.champ.slots[slot].name} is in the combo but has no rank, so it does nothing.`);
   }
 
   // the build's stats as the fight starts; stats that follow stacks may have grown during the combo
@@ -285,18 +317,19 @@ export function calculate(data: DataSource, req: CalcRequest): CalcResult {
       basicHaste: r4(st.basicHaste), ultHaste: r4(st.ultHaste),
       lifeSteal: r4(st.lifeSteal), omnivamp: r4(st.omnivamp), attackRange: st.attackRange, gold: st.gold,
     },
-    sequence: c.sequence,
+    sequence,
     combo: {
       crits: c.crits,
       total: round(total),
       byType: { physical: round(types.physical), magic: round(types.magic), true: round(types.true) },
       blocked: r2(total.raw - total.dealt),
       lines: comboLines,
-      hpLeft: fight.targetHp === null ? null : r2(fight.targetHp),
-      kills: fight.targetHp === 0,
+      hpLeft: hpLeft === null ? null : r2(hpLeft),
+      kills: hpLeft === 0,
     },
     dps: round(s.dps),
     timeToKill: s.timeToKill === null ? null : r2(s.timeToKill),
+    timeline,
     abilities: abilityInfo(c, c.crits),
     options: fight.optionValues,
     items: itemInfo(c, fight, c.crits),
@@ -310,3 +343,28 @@ export function championAsTarget(champ: ChampionData, level: number): TargetInpu
   const f = new Fight(champ, [], { champion: champ.id, level, ranks: { q: 0, w: 0, e: 0, r: 0 }, items: [] }, null);
   return { hp: Math.round(f.stats.hp.total), armor: Math.round(f.stats.armor.total), mr: Math.round(f.stats.mr.total) };
 }
+
+/** The scenario the calculation plays on the timeline: the build against its target standing at attack range. */
+function scenario(c: Checked, crits: CritMode, mode: Parameters<typeof play>[0]['mode']): Parameters<typeof play>[0] {
+  const r = c.champ.timing?.radius ?? 65;
+  return {
+    champ: c.champ, items: c.items, runes: c.runes, build: c.build, target: c.target ? { stats: c.target } : null,
+    distance: c.champ.stats.attackRange + 2 * r, behaviour: 'stand', mode, crits, horizon: LIMITS.timeline,
+  };
+}
+
+function timelineOf(c: Checked, played: Played): ComboTimeline {
+  const landed = played.killedAt ?? played.events.reduce((m, e) => Math.max(m, e.t), 0);
+  // a target that dies early ends the fight: the rate is over the time it took
+  const seconds = c.seconds ? Math.min(c.seconds.seconds, played.killedAt ?? Infinity) : Math.max(landed, played.started.length ? TICK_MIN : 0);
+  const dealt = played.events.reduce((s, e) => ({ raw: s.raw + e.raw, dealt: s.dealt + e.dealt }), zero());
+  const per = (a: number) => seconds > 0 ? a / seconds : 0;
+  const playedActions = played.started.filter(s => !s.filler);
+  // actions left when the target died were not needed; others not played were held back
+  const skipped = c.seconds || played.killedAt !== null ? [] : c.sequence.filter((_, i) => !playedActions.some(s => s.index === i));
+  return {
+    seconds: r2(seconds), dealt: round(dealt), dps: round({ raw: per(dealt.raw), dealt: per(dealt.dealt) }),
+    killedAt: played.killedAt === null ? null : r2(played.killedAt), skipped, notes: played.notes,
+  };
+}
+const TICK_MIN = 1 / 30;

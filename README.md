@@ -64,6 +64,9 @@ Then `npm test`, commit `data/dist/` and `web/art/`, and push: that deploys. `da
 
 ## Coverage today (patch 26.20)
 
+Runes: all 69 have hand-written models (`src/models/runes/`), with damage, stats, or a note that they change neither.
+
+
 Every champion has a hand-written model: 864 of the 865 abilities and passives are `curated`, none are `verified` yet. The one left `unmodeled` is Mel's Rebuttal, whose damage is a share of whatever enemy projectile it reflects. Summoner's Rift items: 72 are hand-written, every fighter, marksman and mage item whose passive or active changes damage among them, and 57 of those have settings the site lets the user change (stacks, a condition, uses of an active, procs counted by hand). 11 have stats that count and a passive that does not: the Doran's items, Tear of the Goddess, Bramble Vest, and support and tank items (Zeke's Convergence, Redemption, Ardent Censer, Bloodsong and the other support quest items). ARAM's and Arena's copies of a Rift item use the Rift item's model when it binds; Arena changed the passives of 39 of its copies, which are marked `stale` for that. Arena's own items are mostly unmodeled. Items are the model-writing backlog now: `npm run data:report -- --status unmodeled`.
 
 What `curated` does not promise: nobody has checked these against the live game. The weakest spots are the things the game data has no number for and a model had to assume, each behind an option with a note: how fast a pet, clone or turret attacks (Shaco's boxes, Heimerdinger's turrets, Malzahar's Voidlings, Yorick's Maiden, Zyra's plants, Kindred's Wolf), and how much of a long effect a target really sits through (Renekton's Dominus, Xerath's barrage).
@@ -80,6 +83,7 @@ All under `/api/v1`. Reads are cacheable and revalidate by ETag.
 | `GET /champions` | Every champion: id, name, tags, base stats, model status per ability. |
 | `GET /champions/:id` | One kit: ability names, icons, max ranks, status, notes, options. |
 | `GET /champions/:id/target?level=` | That champion's health, armor and magic resist at a level, for using it as the target. |
+| `GET /runes` | The rune page: the five trees with their rows, the three rows of stat shards, and every rune with its description, status, notes, settings (`controls`) and named effects. |
 | `GET /items` | The items of three shops, Summoner's Rift, ARAM and Arena: name, gold, tags, the shops that sell each (`shops`), stats, status, notes, and what a page can let the user set about each (`controls`) and its named effects (`effects`). |
 | `POST /calc` | The calculation. One or two builds against one target. |
 
@@ -91,8 +95,13 @@ All under `/api/v1`. Reads are cacheable and revalidate by ETag.
   "builds": [{ "items": [6672, 3006, 3124, 3115] }, { "items": [6655, 3020, 3115, 4645], "ranks": { "q": 3, "w": 1, "e": 5, "r": 2 } }],
   "target": { "hp": 2400, "armor": 80, "mr": 50 },     // or { "champion": "Ornn", "level": 13 }, or null for raw output
   "combo": { "counts": { "aa": 3, "q": 1, "w": 1 }, "crits": "average" }   // or { "sequence": ["aa", "q", "aa", "w", "aa"] }
+                                                                            // or { "seconds": 8, "abilities": ["q", "w"] }
 }
 ```
+
+A build may carry `runes` (rune ids: a keystone, minor runes, stat shards) and `runeOptions`, settings by rune id like `itemOptions`; both can also be given once for every build at the top level.
+
+Every result also plays the combo out in time against the target standing at attack range (`timeline`): attack windups and the attack timer, cast times, cooldowns, projectiles, dashes and channels, from the game files and the champion's behaviour file. It reports how long the combo takes until its last hit lands (or the kill), what landed and the damage per second over that time, and any action that could not be played. `combo.seconds` asks instead how much lands in that many seconds: the champion uses `abilities` by priority as they come off cooldown and attacks in between; the combo, its breakdown and `sequence` are then what was played. Time to kill now runs until the killing attack lands, its windup and flight included.
 
 A build's own `ranks` replace the shared ones for that build. `crits` is how the combo counts critical strikes: `average` (at the build's crit chance, the default), `never` or `always`; DPS and time to kill always use the average. A source line that can crit carries `crits`: its total in each of the three, so a page can show a hit with and without one.
 
@@ -155,12 +164,13 @@ Checked against Riot's [Legal Jibber Jabber](https://www.riotgames.com/en/legal)
 
 ## Fight Lab (preview)
 
-`npm run lab` builds a page that plays a combo out in time: the champion walks into range, winds up attacks on the attack timer, casts, waits on cooldowns, dashes, and its projectiles fly; every hit lands at its own moment, drawn on a top-down floor and a timeline. Fight still does all the damage, so a standing target takes exactly what `POST /calc` says. The page needs no server and is not part of the site yet.
+`npm run lab` builds a page that plays a combo out in time: the champion walks into range, winds up attacks on the attack timer, casts, waits on cooldowns, dashes, channels, weaves one cast into another, and its projectiles fly; every hit lands at its own moment, drawn on a top-down floor and a timeline. Fight still works out all the damage, so a standing target takes exactly what `POST /calc` says. A fight is either a script of actions or a number of seconds using allowed abilities by priority. The page needs no server and is not part of the site yet.
 
-The dataset has cast times and cooldowns but not attack windups, projectile speeds or most ranges, so those are placeholders the page marks `assumed` and lets you edit. `src/lab/timings.ts` is where sourced numbers go, per champion.
+Timing comes from the game files (attack windups and their modifier, projectile speeds, cast and animation times, ranges, channels, attack resets); what they cannot say (which spell object a cast uses, dashes, recasts, weaving, buffs with a duration, forms chosen by distance) is written per champion in `src/lab/behaviours/`. [docs/lab.md](docs/lab.md) is the guide; Samira's file is the worked example.
 
 ## Not built yet
 
-- Runes, summoner spells, and the target's own items (the UI marks that last one "soon").
+- Summoner spells, and the target's own items (the UI marks that last one "soon").
+- Runes and the combo timeline in the site's pages: the API has both, the Fight Lab shows them.
 - Attack speed that ramps within a fight. Ramping effects count as fully ramped for sustained damage and not at all in a short combo; each affected item says so in its notes.
 - Saved builds. The share link encodes the whole build in the URL, so it needs no storage.

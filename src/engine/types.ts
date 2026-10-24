@@ -37,6 +37,11 @@ export interface ComboInput {
   /** how critical strikes count in the combo: at the build's crit chance (the default), none, or every one that can.
       Sustained damage and time to kill always use the average */
   crits?: CritMode;
+  /** or a number of seconds: the champion uses `abilities` by priority as they come off cooldown and attacks in
+      between, and the combo is what lands in that time (played on the timeline, against a target standing in range) */
+  seconds?: number;
+  /** the abilities seconds mode may use, highest priority first; none when left out (attacks only) */
+  abilities?: CastSlot[];
 }
 export type CritMode = 'average' | 'never' | 'always';
 export const CRIT_MODES: readonly CritMode[] = ['average', 'never', 'always'];
@@ -70,6 +75,20 @@ export interface SourceLine {
   over?: OverTime;
   /** set when the line holds hits that can crit: its total with no crits, at the build's crit chance, and with every one */
   crits?: Record<CritMode, Amount>;
+}
+
+export interface ComboTimeline {
+  /** seconds from the first action to the last damage landing, or to the kill */
+  seconds: number;
+  /** what landed in that time; can differ from the combo's total when an action could not be played (see notes) */
+  dealt: Amount;
+  /** dealt / seconds */
+  dps: Amount;
+  /** seconds at which the target died, or null */
+  killedAt: number | null;
+  /** actions of the combo the timeline could not play: not learned, or held back by what they need (Samira's Style) */
+  skipped: Action[];
+  notes: string[];
 }
 
 /** Damage that takes time to land: a burn, a channel, a zone the target stands in. */
@@ -160,8 +179,11 @@ export interface CalcResult {
   };
   /** sustained basic attacks with everything they trigger */
   dps: Amount;
-  /** seconds of sustained basic attacks to kill from full health; null without a target or beyond the horizon */
+  /** seconds of sustained basic attacks to kill from full health, until the killing attack lands (its windup and flight
+      included); null without a target or beyond the horizon */
   timeToKill: number | null;
+  /** the combo played out in time against a target standing in range: attack windups, cast times, cooldowns, projectiles */
+  timeline: ComboTimeline;
   /** the passive has no cast and no cooldown */
   abilities: Record<Slot, AbilityInfo>;
   /** the value each of the champion's options had: what the caller set, or the default for this build */

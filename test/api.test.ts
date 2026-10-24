@@ -109,3 +109,35 @@ test('calc is rate limited per client', async () => {
   for (let i = 0; i < 5; i++) codes.push((await calc({ ...KAISA, builds: [{}] }, limited)).status);
   assert.deepEqual(codes, [200, 200, 200, 429, 429]);
 });
+
+test('runes: the rune page, and a build takes runes and their settings', async () => {
+  const j = await (await get('/runes')).json() as any;
+  assert.equal(j.styles.length, 5);
+  assert.equal(j.shards.length, 3);
+  const conq = j.runes.find((r: any) => r.name === 'Conqueror');
+  assert.equal(conq.kind, 'keystone');
+  assert.ok(conq.controls.some((c: any) => c.id === 'stacks'));
+  const plain = await (await calc({ ...KAISA, builds: [{ items: [3031] }] })).json() as any;
+  const with_ = await (await calc({ ...KAISA, builds: [{ items: [3031], runes: [8010, 5008, 5005, 5011], runeOptions: { 8010: { stacks: 12 } } }] })).json() as any;
+  const [a, b] = [plain.results[0], with_.results[0]];
+  assert.ok(b.stats.ad.total > a.stats.ad.total && b.stats.attackSpeed.total > a.stats.attackSpeed.total);
+  assert.equal(b.runes.find((r: any) => r.id === 8010).settings.stacks, 12);
+  const bad = await calc({ ...KAISA, builds: [{ items: [], runes: [8010, 8112] }] });
+  assert.equal(bad.status, 400, 'two keystones are refused');
+});
+
+test('calc plays the combo on the timeline, and seconds mode uses abilities by priority', async () => {
+  const j = await (await calc({ ...KAISA, builds: [{ items: [3031, 3124] }], target: { champion: 'Ornn', level: 13 } })).json() as any;
+  const tl = j.results[0].timeline;
+  assert.ok(tl.seconds > 0 && tl.dps.dealt > 0);
+  // attack windups, cast times and travel: the combo takes real time
+  assert.ok(tl.seconds > 1);
+  const s = await (await calc({ ...KAISA, builds: [{ items: [3031, 3124] }], target: { champion: 'Malphite', level: 18, hp: 20000 }, combo: { seconds: 8, abilities: ['q', 'w'] } })).json() as any;
+  const r = s.results[0];
+  assert.equal(r.timeline.seconds, 8);
+  assert.ok(r.sequence.filter((a: string) => a === 'q').length >= 2);
+  assert.ok(!r.sequence.includes('e') && !r.sequence.includes('r'));
+  assert.ok(Math.abs(r.combo.total.dealt - r.timeline.dealt.dealt) < 0.05);
+  assert.equal((await calc({ ...KAISA, builds: [{ items: [] }], combo: { seconds: 500 } })).status, 400);
+  assert.equal((await calc({ ...KAISA, builds: [{ items: [] }], combo: { seconds: 5, abilities: ['x'] } })).status, 400);
+});
