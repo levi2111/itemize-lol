@@ -66,6 +66,8 @@ Then `npm test`, commit `data/dist/` and `web/art/`, and push: that deploys. `da
 
 Runes: all 69 have hand-written models (`src/models/runes/`), with damage, stats, or a note that they change neither.
 
+Timing: every champion's attack windup, projectiles, cast times, ranges and channels come from the game files; 167 champions also have a behaviour file (`src/lab/behaviours/`) for what the files cannot say, and the rest play correctly from the files alone. Numbers a behaviour had to type (mostly dash speeds the game data lacks) are cited in its `sources`; none of them has been checked against the live game yet.
+
 
 Every champion has a hand-written model: 864 of the 865 abilities and passives are `curated`, none are `verified` yet. The one left `unmodeled` is Mel's Rebuttal, whose damage is a share of whatever enemy projectile it reflects. Summoner's Rift items: 72 are hand-written, every fighter, marksman and mage item whose passive or active changes damage among them, and 57 of those have settings the site lets the user change (stacks, a condition, uses of an active, procs counted by hand). 11 have stats that count and a passive that does not: the Doran's items, Tear of the Goddess, Bramble Vest, and support and tank items (Zeke's Convergence, Redemption, Ardent Censer, Bloodsong and the other support quest items). ARAM's and Arena's copies of a Rift item use the Rift item's model when it binds; Arena changed the passives of 39 of its copies, which are marked `stale` for that. Arena's own items are mostly unmodeled. Items are the model-writing backlog now: `npm run data:report -- --status unmodeled`.
 

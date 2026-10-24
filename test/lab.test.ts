@@ -110,3 +110,14 @@ test('lab: seconds mode uses the allowed abilities on cooldown and counts damage
   const autosOnly = play(scenario({ mode: { kind: 'seconds', seconds: 6, abilities: [] }, distance: 450 }));
   assert.ok(r.dealt > autosOnly.dealt);
 });
+
+test('lab: a recast chain holds its cooldown until the chain ends (Riven\'s Broken Wings, counted from the first)', () => {
+  const build = { champion: 'Riven', level: 13, ranks: { q: 5, w: 3, e: 3, r: 2 }, items: [] };
+  const r = play(scenario({ build, mode: script(['q', 'q', 'q', 'q']), distance: 300, horizon: 20 }, 'Riven'));
+  const qs = r.started.filter(s => s.action === 'q');
+  assert.equal(qs.length, 4);
+  // the three casts of the chain come one after another; the fourth waits for the cooldown from the first
+  assert.ok(qs[2]!.t - qs[0]!.t < 2, 'the chain is cast quickly');
+  const cd = data.champion('Riven')!.spells[data.champion('Riven')!.slots.q.spell]!.cooldown![5]!;
+  assert.ok(qs[3]!.t - qs[0]!.t >= cd - TICK, `the next chain waits ${cd} s from the first cast`);
+});
