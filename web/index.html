@@ -141,6 +141,21 @@ body[data-target="raw"] .tot-bar{visibility:hidden}
 .mv i{font-style:normal}
 .mv.win,body[data-compare="off"] .mv{color:var(--text);font-weight:600}
 
+/* ---------- the patch notice ---------- */
+/* One line in the free middle of the row above the totals, when a patch changed the numbers of the build
+   a visitor came back to (app.js, the patch notice). Cut short when the row has no room; its tooltip has it all. */
+.pn{display:flex;align-items:center;gap:.3rem;min-width:0;margin:0 auto;padding:.22rem .15rem .22rem .6rem;border:1px solid var(--rule);border-left:2px solid var(--text);border-radius:3px;background:var(--well);font-size:.77rem;color:var(--dim);animation:pn-in .35s ease-out both}
+.hero-top>:not(.pn){flex-shrink:0}  /* the line gives way, not the controls beside it */
+.pn-t{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pn-t strong{font-weight:700;color:var(--text)}
+.pn-t b{font-family:var(--font-mono);font-size:.73rem;font-weight:600;color:var(--text)}
+.pn-t em{font-style:normal;color:var(--text)}
+.pn-t .tag{vertical-align:.05em}
+.pn-x{flex:none;width:1.5rem;height:1.5rem;display:grid;place-items:center;border-radius:2px;font-size:1.05rem;line-height:1;color:var(--faint)}
+.pn-x:hover{color:var(--text);background:rgba(236,231,216,.08)}
+@keyframes pn-in{from{opacity:0;transform:translateY(-.25rem)}}
+@media (prefers-reduced-motion:reduce){.pn{animation:none}}
+
 /* ---------- tabs ---------- */
 .tabs{display:flex;gap:.3rem;padding:0 1.5rem;border-bottom:1px solid var(--rule)}
 .tab{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:.9rem;align-items:center;min-width:16rem;max-width:23rem;padding:.6rem 1rem .55rem;margin-bottom:-1px;border-bottom:2px solid transparent;color:var(--dim)}
@@ -632,6 +647,7 @@ label.ic{cursor:pointer}
           </div>
         </div>
       </div>
+      <p class="pn" id="patch-note" role="status" hidden></p>
       <div class="hero-mode">
         <span class="lbl">Crits</span>
         <div class="seg" id="crit-seg" role="radiogroup" aria-label="Count critical strikes as">

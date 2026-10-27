@@ -150,6 +150,7 @@ async function recalc() {
     if (mine !== seq) return;
     S.res = {a: out.results[0], b: out.results[1] || null};
     paintResults();
+    remember();
   } catch (e) {
     if (mine !== seq) return;
     $('#quality').hidden = false;
@@ -1273,6 +1274,118 @@ function setLayout(link) {
   location.assign(link.getAttribute('href') + hash);
 }
 
+/* ---------- the remembered build ---------- */
+/* The build a visitor last worked on comes back on their next visit, on either layout. It is kept in this
+   browser (localStorage `build`, the share link's encoding) whenever a change settles, that is when its
+   calculation is in, so a state the API turns down is never kept. A build that came in a link is someone
+   else's until it is edited: looking at it leaves the visitor's own in place. Until the visitor presses
+   something the page is still settling on what it opened with (the kit trims the ranks, an enemy's stats
+   arrive), so no settle before that counts as an edit. */
+const KEEP = 'build';
+let opened = null;                  // the state the page settled on before the visitor did anything
+let owned = false;                  // the page has been edited since, so what it shows is the visitor's build
+let kept = null;                    // the state last written
+let touched = false;                // the visitor has pressed a key or a pointer
+function remembered() {
+  try {
+    const r = JSON.parse(localStorage.getItem(KEEP));
+    return r && typeof r.s === 'string' ? r : null;
+  } catch (e) { return null; }
+}
+/* What the page opens on: the build the visit brought, else the visitor's own from last time, else the
+   default. applyState checks every field and loadKit checks the options against the kit, so a build kept
+   before a patch removed an item, a setting or an option comes back without just that. */
+function restore() {
+  const given = brought();
+  if (given) return applyState(given);
+  const r = remembered(), s = r && decodeState(r.s);
+  // a champion's page (/vayne) opens on that champion: the visitor's own build only if it is for them
+  if (!s || (PAGE_CHAMP && s.c !== S.champ.id)) return;
+  kept = r.s; back = r;
+  try { applyState(s); } catch (e) {}
+}
+/* The record also holds what the visitor saw with the build, for the patch notice: the dataset (`data`)
+   and each build's numbers (`seen`). */
+function remember() {
+  if (!S.res) return;
+  const now = encodeState();
+  if (!owned) {
+    if (!touched || opened === null) { opened = now; review(); return; }
+    if (now === opened) return;
+    owned = true;
+    notice(null);
+  }
+  if (now === kept) return;
+  try { localStorage.setItem(KEEP, JSON.stringify({s: now, data: dataOf(served), seen: seenNow()})); kept = now; dropLink(); } catch (e) {}
+}
+function wireRemember() {
+  const touch = () => { touched = true; };
+  document.addEventListener('pointerdown', touch, {capture: true, once: true});
+  document.addEventListener('keydown', touch, {capture: true, once: true});
+  // a build's name changes no number, so nothing recalculates: it is kept on its own once typing pauses
+  let wait = 0;
+  for (const k of ['a', 'b']) $(`#name-${k}`).addEventListener('input', () => { clearTimeout(wait); wait = setTimeout(remember, 400); });
+  $('#patch-note')?.addEventListener('click', e => { if (e.target.closest('.pn-x')) notice(null); });
+}
+
+/* ---------- the patch notice ---------- */
+/* A patch, or the dataset rebuilt, can change what the build a visitor comes back to deals. Once the first
+   calculation of such a visit is in, one line says what moved since they last saw it, and only if something
+   did: a build's combo or DPS by at least NOTICE of what it was (and by a whole point, the totals' own
+   step), or which build leads. 1% is the step in which the page itself compares builds (a verdict's
+   "+12% combo"); less than that cannot change how two builds compare, and is the drift a balance pass
+   leaves on things it did not touch. The record then takes the new numbers, so the line shows once; it goes
+   when dismissed or when the build is edited. */
+const NOTICE = 0.01;
+let served = null;                  // GET /meta: the dataset the numbers come from
+let back = null;                    // the remembered record the page opened on, as it was before this visit
+const dataOf = m => m && {patch: m.patch, built: m.builtAt};
+/* Each build's combo and DPS against the target, as the page shows them. */
+function seenNow() {
+  const out = {};
+  for (const k of S.compare && S.res.b ? ['a', 'b'] : ['a']) out[k] = [Math.round(S.res[k].combo.total.dealt), Math.round(S.res[k].dps.dealt)];
+  return out;
+}
+/* Each settle before the visitor does anything is still the build they came back to: it is compared with what
+   they saw last time, and that is updated. The receipt page counts crits at the average and shows one set of
+   ranks, so a build kept with others is left for the tabs page. */
+function review() {
+  const was = back && decodeState(back.s), data = dataOf(served);
+  if (!was || !data || (was.k ?? 'average') !== S.crits || !!was.rb !== S.split) return;
+  const seen = seenNow(), news = back.seen && (back.data?.patch !== data.patch || back.data?.built !== data.built);
+  notice(news ? patchNews(back.seen, seen, back.data?.patch !== data.patch) : null);
+  try { localStorage.setItem(KEEP, JSON.stringify({...back, data, seen})); } catch (e) {}
+}
+/* The line, or null when nothing moved enough. `was` and `now` are seenNow()'s. One build's line names each
+   number that moved; a comparison's names one: the combo if it moved or changed hands, else DPS, so the line
+   fits above the totals. */
+function patchNews(was, now, patched) {
+  const ks = Object.keys(now);
+  if (ks.join() !== Object.keys(was).join() || !ks.every(k => Array.isArray(was[k]) && was[k].every(Number.isFinite))) return null;
+  const moved = (x, y) => Math.abs(y - x) >= Math.max(1, Math.abs(x) * NOTICE);
+  const lead = (s, i) => !s.b ? 'a' : s.a[i] > s.b[i] ? 'a' : s.b[i] > s.a[i] ? 'b' : '';
+  const on = [0, 1].filter(i => ks.some(k => moved(was[k][i], now[k][i])) || lead(was, i) !== lead(now, i));
+  if (!on.length) return null;
+  const tag = k => `<span class="tag ${k} xs">${k.toUpperCase()}</span>`;
+  const step = (k, i) => was[k][i] === now[k][i] ? `still <b>${nf(now[k][i])}</b>` : `<b>${nf(was[k][i])} → ${nf(now[k][i])}</b>`;
+  let text;
+  if (ks.length === 1) text = 'your ' + on.map((i, n) => `${['combo', 'DPS'][i]} ${n ? '' : 'went '}${step('a', i)}`).join(', ');
+  else {
+    const i = on[0], dps = i ? ' on DPS' : '', l = lead(now, i);
+    text = (i ? 'DPS ' : '') + ks.map(k => `<span class="pn-k">${tag(k)} ${step(k, i)}</span>`).join(', ');
+    if (lead(was, i) !== l) text += `. <em>${l ? `${tag(l)} leads${dps} now` : `A and B tie${dps} now`}</em>.`;
+  }
+  return `<strong>${patched ? `Patch ${esc(served.displayPatch)}` : `Updated ${esc(served.displayPatch)} data`}:</strong> ${text}`;
+}
+function notice(html) {
+  const el = $('#patch-note');
+  if (!el) return;
+  el.hidden = !html;
+  el.innerHTML = html ? `<span class="pn-t">${html}</span><button class="pn-x" aria-label="Dismiss" title="Dismiss">×</button>` : '';
+  // cut short when the line is longer than its room: the whole of it is the tooltip
+  if (html) $('.pn-t', el).title = $('.pn-t', el).textContent;
+}
+
 /* ---------- share link ---------- */
 /* The link carries the build in its query, `?s=`, on the layout's own page, so a server sees it:
    Cloudflare answers those two addresses through the Worker, which describes the build in the page's
@@ -1290,13 +1403,26 @@ function encodeState() {
   if (Object.keys(io.a).length || Object.keys(io.b).length) s.io = io;
   return btoa(unescape(encodeURIComponent(JSON.stringify(s)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-/* A build arrives in the link, or from the other layout's page when the visitor has just swapped. */
-function decodeState() {
+/* The build this visit brought, if it brought one: from the other layout's page when the visitor has just
+   swapped, else in the link. Read once, at boot; the hand-over is used up. */
+function brought() {
   let text = null;
   try { text = sessionStorage.getItem('carry'); sessionStorage.removeItem('carry'); } catch (e) {}
   text ||= /[?&]s=([\w-]+)/.exec(location.search)?.[1] || /[#&]s=([\w-]+)/.exec(location.hash)?.[1];
-  if (!text) return null;
-  try { return JSON.parse(decodeURIComponent(escape(atob(text.replace(/-/g, '+').replace(/_/g, '/'))))); } catch (e) { return null; }
+  return text ? decodeState(text) : null;
+}
+/* Takes the build out of the address once the page has moved on from it, so a reload shows the build kept
+   since (see remember) rather than the link's. It is in the query, or after `#` in older links. */
+function dropLink() {
+  const drop = (part, lead) => part.replace(/([?#&])s=[\w-]+&?/, '$1').replace(new RegExp(`^\\${lead}$|&$`), '');
+  const q = drop(location.search, '?'), h = drop(location.hash, '#');
+  if (q !== location.search || h !== location.hash) history.replaceState(history.state, '', location.pathname + q + h);
+}
+function decodeState(text) {
+  try {
+    const s = JSON.parse(decodeURIComponent(escape(atob(text.replace(/-/g, '+').replace(/_/g, '/')))));
+    return s && typeof s === 'object' && !Array.isArray(s) ? s : null;
+  } catch (e) { return null; }
 }
 function applyState(s) {
   const int = (v, lo, hi, d) => Number.isFinite(+v) ? Math.max(lo, Math.min(hi, Math.round(+v))) : d;
@@ -1508,6 +1634,7 @@ function wire() {
     e.target.style.visibility = '';
     e.target.classList.remove('wait');
   }, true);
+  wireRemember();
 }
 
 async function boot() {
@@ -1519,14 +1646,14 @@ async function boot() {
   useArt(art);
   $('#patch').textContent = meta.displayPatch;
   $('#legal').textContent = meta.legal;
+  served = meta;
   S.champs = champs.map(c => ({id: c.id, key: c.key, name: c.name, title: c.title, tags: c.tags || [], ranged: !!c.ranged, critDamage: c.stats?.critDamage, slug: c.slug}))
     .sort((x, y) => x.name.localeCompare(y.name));
   S.items = new Map(items.map(i => [i.id, i]));
   S.champ = S.champs.find(c => c.id === S.champ.id) || S.champs[0];
   startOnPageChamp();
 
-  const saved = decodeState();
-  if (saved) applyState(saved);
+  restore();
   followChamp();
   const tab = /[#&]tab=(build|target|break|stats)\b/.exec(location.hash);
   if (tab && !RECEIPT) setTab(tab[1]);
