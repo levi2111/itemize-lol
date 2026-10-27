@@ -250,7 +250,7 @@ body[data-compare="on"] .slot.uniq::after{content:"";position:absolute;left:0;ri
 .add-b span.hint{font-weight:400}
 .add-b:hover{border-color:var(--b);color:var(--text)}
 
-.picker{position:absolute;left:0;right:0;bottom:calc(100% + .6rem);height:16rem;z-index:20;display:grid;grid-template-columns:26rem minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;background:var(--well);border:1px solid var(--faint);border-radius:4px;box-shadow:0 1rem 2rem rgba(0,0,0,.5)}
+.picker{position:absolute;left:0;right:0;bottom:calc(100% + .6rem);height:18.5rem;z-index:20;display:grid;grid-template-columns:26rem minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;background:var(--well);border:1px solid var(--faint);border-radius:4px;box-shadow:0 1rem 2rem rgba(0,0,0,.5)}
 .picker-ctl{display:grid;align-content:start;gap:.6rem;padding:.8rem;border-right:1px solid var(--rule);min-height:0;overflow:hidden}
 .picker-top{display:flex;align-items:center;justify-content:space-between;gap:.6rem}
 .picker-for{display:flex;align-items:center;gap:.45rem;font-weight:700;font-size:.9rem;white-space:nowrap}
@@ -264,6 +264,33 @@ body[data-compare="on"] .slot.uniq::after{content:"";position:absolute;left:0;ri
 .picker-foot b{color:var(--text)}
 .picker-foot .g{font-family:var(--font-mono);color:var(--a)}
 .picker-foot span:last-child{overflow:hidden;text-overflow:ellipsis}
+/* the search: how it read the words, the role tabs over the list, and the best match at its head */
+.item-read{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem;min-height:1.25rem;font-size:.74rem;color:var(--faint)}
+.item-read b{font-weight:600;padding:0 .38rem;border:1px solid var(--faint);border-radius:2px;color:var(--text);white-space:nowrap}
+.item-read i,.item-read em{font-style:normal}
+.item-read button{color:var(--dim);text-decoration:underline dotted;text-underline-offset:2px}
+.item-read button:hover{color:var(--text)}
+.item-read button+button::before{content:"·";display:inline-block;margin-right:.3rem;color:var(--faint)}
+.picker-main{display:flex;flex-direction:column;min-width:0;min-height:0}
+.picker-main .picker-grid{flex:1;min-height:0}
+.item-roles{flex:none;display:flex;padding:0 .4rem;border-bottom:1px solid var(--rule);overflow-x:auto;scrollbar-width:none}
+.role{display:flex;align-items:center;gap:.3rem;padding:.5rem .5rem .4rem;font-size:.78rem;font-weight:600;color:var(--dim);white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-1px}
+.role:hover{color:var(--text)}
+.role[aria-selected="true"]{color:var(--text);border-bottom-color:var(--text)}
+.role .n{font-family:var(--font-mono);font-size:.66rem;font-weight:500;color:var(--faint)}
+.role.none{opacity:.45}
+.role .you{width:.36rem;height:.36rem;border-radius:50%;background:var(--dim)}
+.pi.away{opacity:.45}
+.pi.away:hover,.pi.away:focus-visible{opacity:1}
+.pbest{grid-column:1/-1;display:grid;grid-template-columns:2.8rem minmax(0,1fr) auto;gap:.7rem;align-items:center;padding:.35rem .6rem .35rem .35rem;border:1px solid var(--faint);border-radius:3px;background:rgba(236,231,216,.04);text-align:left}
+.pbest:hover,.pbest:focus-visible,.pbest.peek{outline:2px solid var(--text);outline-offset:1px}
+.pbest .pi{display:block}
+.pb-t{display:grid;min-width:0}
+.pb-t b,.pb-t span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pb-t span{font-size:.76rem;color:var(--dim)}
+.pbest kbd{font-family:var(--font-mono);font-size:.66rem;border:1px solid var(--rule);border-radius:3px;padding:.1rem .35rem;color:var(--dim)}
+.grp button{font-weight:600;letter-spacing:0;text-transform:none;color:var(--dim);text-decoration:underline;text-underline-offset:2px}
+.grp button:hover{color:var(--text)}
 
 /* ---------- target tab ---------- */
 .pane-target{display:grid;grid-template-columns:28rem minmax(0,1fr);gap:1.5rem 3.5rem;align-content:start}
@@ -950,6 +977,9 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
 .picker-foot span:last-child{flex-basis:100%;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
 .picker-foot em{margin-left:auto;font-style:normal;font-weight:600;color:var(--text)}
 .pi.peek{outline:2px solid var(--text);outline-offset:1px;z-index:1}
+.item-read.idle{display:none}
+.role{padding:.65rem .55rem .55rem}
+.pbest{grid-template-columns:3.1rem minmax(0,1fr)}
 .slot{scroll-margin:7rem 0 calc(min(64vh,36rem) + 1rem)}
 .menu{max-width:calc(100vw - 1.5rem)}
 .menu a{padding:.65rem .5rem}
@@ -1191,7 +1221,8 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
         <div class="picker" id="picker" role="dialog" aria-label="Choose an item" hidden>
           <div class="picker-ctl">
             <div class="picker-top"><span class="picker-for" id="picker-for"></span><button class="esc" id="picker-x">Esc</button></div>
-            <input class="search" type="search" id="item-q" placeholder="Search items" autocomplete="off" aria-label="Search items">
+            <input class="search" type="search" id="item-q" placeholder="Name, nickname or stat" autocomplete="off" spellcheck="false" aria-label="Search items by name, nickname or stat">
+            <div class="item-read" id="item-read"></div>
             <div class="chips" id="item-chips"></div>
             <div class="shop" id="shop">
               <span class="lbl">Shop</span>
@@ -1200,7 +1231,10 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
               <button class="chip" data-shop="arena" aria-pressed="false" title="Add Arena's own items">+ Arena</button>
             </div>
           </div>
-          <div class="picker-grid" id="item-grid"></div>
+          <div class="picker-main">
+            <div class="item-roles" id="item-roles" role="tablist" aria-label="Items by role"></div>
+            <div class="picker-grid" id="item-grid"></div>
+          </div>
           <div class="picker-foot" id="item-foot"></div>
         </div>
       </div>

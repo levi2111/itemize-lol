@@ -260,6 +260,8 @@ export interface ChampionData {
 
 /** Summoner's Rift, ARAM, Arena. */
 export type ItemShop = 'sr' | 'aram' | 'arena';
+/** The in-game shop's role filters, in its order. */
+export type ItemRole = 'Fighter' | 'Marksman' | 'Assassin' | 'Mage' | 'Tank' | 'Support';
 
 export interface ItemData {
   id: number;
@@ -271,6 +273,12 @@ export interface ItemData {
   shops: ItemShop[];
   /** builds into other items: shown under Components in the picker */
   component: boolean;
+  /** the shop's role filters that list it */
+  roles: ItemRole[];
+  /** what players call it, lower case, letters and digits only: "bork", "qss" */
+  aliases: string[];
+  /** what it does that the picker's search finds it by: "antiheal", "shield" */
+  traits: string[];
   /** epicness tier from game data: 5+ is a completed item */
   tier: number;
   stats: Partial<Record<StatModTarget, number>>;

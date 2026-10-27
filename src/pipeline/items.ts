@@ -6,7 +6,7 @@
    is sold on, but its lists cannot be taken as they are (see SHOPS), so each shop has its own
    filter. ARAM and Arena sell their own copies of many Rift items, with other ids and often
    other stats; a copy is an item of its own here, sold in its own shop. */
-import type { ItemData, ItemShop, StatModTarget } from '../shared/types.ts';
+import type { ItemData, ItemRole, ItemShop, StatModTarget } from '../shared/types.ts';
 import { clean, compileCalcs, matchNameCase, type CompileLog } from './calc.ts';
 import { expandTooltip, findDamageRefs, type StringTable } from './tooltip.ts';
 
@@ -51,6 +51,39 @@ const STAT_FIELDS: Record<string, StatModTarget> = {
   mPercentLifeStealMod: 'lifeSteal',
   PercentOmnivampMod: 'omnivamp',
 };
+/** The shop's role filters: the game files list an item's as flags, one number per role. */
+const ROLE_FLAGS: [number, ItemRole][] = [[1, 'Fighter'], [2, 'Marksman'], [4, 'Assassin'], [16, 'Mage'], [8, 'Tank'], [32, 'Support']];
+const rolesOf = (g: Raw | undefined): ItemRole[] => {
+  const flags: number[] = (g?.mItemAttributes ?? []).filter((n: unknown) => typeof n === 'number');
+  return ROLE_FLAGS.filter(([bit]) => flags.some(f => f & bit)).map(([, role]) => role);
+};
+
+/** What players call items, beyond Data Dragon's own list (`colloq`). By name, so a shop's copy of an item has them too. */
+const NICKNAMES: Record<string, string[]> = {
+  "Lord Dominik's Regards": ['ldr', 'doms'],
+  "Rabadon's Deathcap": ['cap', 'dcap'],
+  "Berserker's Greaves": ['zerks', 'zerkers'],
+  "Sorcerer's Shoes": ['sorcs'],
+  'Plated Steelcaps': ['tabi'],
+  "Mercury's Treads": ['mercs'],
+  'Ionian Boots of Lucidity': ['ionians'],
+  'Morellonomicon': ['morello'],
+  'Thornmail': ['thorns'],
+};
+/** Data Dragon's that name another item: Cull is not a Doran's Blade, and Last Whisper is the "lw" Lord Dominik's builds from. */
+const NOT_NICKNAMES: Record<string, string[]> = { 'Cull': ['dblade'], "Lord Dominik's Regards": ['lw'] };
+/** Data Dragon's that are stat words: the picker reads these as the stat, which finds all such items rather than one. */
+const STAT_WORDS = new Set(['grievous', 'lethality']);
+const nickname = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+const aliasesOf = (name: string, colloq: unknown): string[] => {
+  const dd = typeof colloq === 'string' ? colloq.split(';').map(nickname) : [];
+  const wrong = new Set(NOT_NICKNAMES[name] ?? []);
+  return [...new Set([...dd, ...(NICKNAMES[name] ?? [])])].filter(a => a.length > 1 && !wrong.has(a) && !STAT_WORDS.has(a));
+};
+
+/** What an item's tooltip says it does, for the picker's search. Anti-heal reads "Grievous Wounds", or "40% Wounds" alone. */
+const TRAITS: [string, RegExp][] = [['antiheal', /\bWounds\b/], ['shield', /<shield>/i]];
+
 /** Data Dragon stat names for the subset it publishes, to cross-check the game files. */
 const DD_STATS: Record<string, StatModTarget> = {
   FlatPhysicalDamageMod: 'ad', FlatMagicDamageMod: 'ap', FlatHPPoolMod: 'hp', FlatMPPoolMod: 'mana', FlatArmorMod: 'armor',
@@ -84,6 +117,13 @@ export function compileItems(ddItems: Raw, bin: Raw, table: StringTable, log: Co
     }
   }
   const sells = (shop: ItemShop, id: string) => shopsOf.get(Number(id))?.includes(shop) ?? false;
+  // an item the shop lists under no role (the upgraded boots, a support item's later forms) is listed under its recipe's
+  const rolesFrom = (id: number, depth = 0): ItemRole[] => {
+    const own = rolesOf(game.get(id));
+    if (own.length || depth > 3) return own;
+    const from = (dd[id]?.from ?? []).flatMap((f: string) => rolesFrom(Number(f), depth + 1));
+    return ROLE_FLAGS.map(([, role]) => role).filter(role => from.includes(role));
+  };
 
   const items: CompiledItem[] = [];
   for (const [id, shops] of shopsOf) {
@@ -117,6 +157,9 @@ export function compileItems(ddItems: Raw, bin: Raw, table: StringTable, log: Co
       id, name: it.name, gold: it.gold.total, tags, plaintext: it.plaintext ?? '', shops,
       // only a component if it builds into something one of its shops sells: boots "build into" upgrades they do not
       component: Array.isArray(it.into) && it.into.some((to: string) => shops.some(s => sells(s, to))),
+      roles: rolesFrom(id),
+      aliases: aliasesOf(it.name, it.colloq),
+      traits: TRAITS.filter(([, re]) => re.test(tooltip ?? '')).map(([t]) => t),
       tier: typeof g.epicness === 'number' ? g.epicness : 0,
       stats, dataValues, calcs,
       damageRefs: tooltip ? findDamageRefs(tooltip, { calc: n => find(calcs, n), dv: n => find(dataValues, n) }) : [],

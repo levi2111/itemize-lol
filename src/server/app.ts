@@ -43,6 +43,7 @@ const championView = (c: ChampionData) => ({
 });
 const itemView = (i: ItemData) => ({
   id: i.id, name: i.name, gold: i.gold, tags: i.tags, plaintext: i.plaintext, shops: i.shops, component: i.component, stats: i.stats,
+  roles: i.roles, aliases: i.aliases, traits: i.traits,
   status: i.model.status, notes: i.model.notes,
   // what a page can let the user set about the item; defaults depend on the build, so a calculation reports them
   controls: (i.model.controls ?? []).map(c => ({

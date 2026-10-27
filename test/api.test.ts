@@ -77,6 +77,8 @@ test('items say which shops sell them', async () => {
   const byId = new Map(items.map(i => [i.id, i]));
   assert.ok(byId.get(3031).shops.includes('sr'));
   assert.ok(items.every(i => Array.isArray(i.shops) && i.shops.length));
+  // and what the picker's search and role tabs read
+  assert.ok(items.every(i => Array.isArray(i.roles) && Array.isArray(i.aliases) && Array.isArray(i.traits)));
   assert.ok(items.some(i => i.shops.includes('aram') && !i.shops.includes('sr')));
   assert.ok(items.some(i => i.shops.includes('arena') && !i.shops.includes('sr')));
 });

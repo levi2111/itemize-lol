@@ -115,6 +115,24 @@ test('each shop sells one item per name, and the Rift none of the items Data Dra
   assert.ok(ie.some(i => i.shops.includes('sr')) && ie.some(i => i.shops.includes('arena') && !i.shops.includes('sr')));
 });
 
+test("items carry the shop's roles, what players call them and what the search finds them by", () => {
+  const rift = (name: string) => data.items.find(i => i.name === name && i.shops.includes('sr'))!;
+  assert.deepEqual(rift("Lord Dominik's Regards").roles, ['Marksman']);
+  assert.deepEqual(rift('Thornmail').roles, ['Tank', 'Support']);
+  // the upgraded boots are listed under no role in the game files, and take their recipe's
+  assert.deepEqual(rift('Gunmetal Greaves').roles, rift("Berserker's Greaves").roles);
+  assert.ok(data.items.filter(i => i.shops.includes('sr')).every(i => i.roles.length));
+  // Data Dragon's nicknames and ours; none it gets wrong, and none that is a stat word
+  assert.ok(rift('Blade of The Ruined King').aliases.includes('bork'));
+  assert.ok(rift("Berserker's Greaves").aliases.includes('zerks'));
+  assert.ok(!rift('Cull').aliases.includes('dblade') && !rift("Lord Dominik's Regards").aliases.includes('lw'));
+  assert.ok(data.items.every(i => !i.aliases.includes('lethality') && i.aliases.every(a => /^[a-z0-9]{2,}$/.test(a))));
+  // anti-heal reads "Grievous Wounds" on some items and "40% Wounds" on others
+  assert.deepEqual(data.items.filter(i => i.shops.includes('sr') && i.traits.includes('antiheal')).map(i => i.name).sort(),
+    ['Bramble Vest', 'Chempunk Chainsword', "Executioner's Calling", 'Morellonomicon', 'Mortal Reminder', 'Oblivion Orb', 'Thornmail']);
+  assert.ok(rift("Sterak's Gage").traits.includes('shield'));
+});
+
 test('automatic models read a stated hit count but refuse to guess one', () => {
   const samira = data.champion('Samira')!;
   const r = autoAbilityModel(samira, 'r');

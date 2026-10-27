@@ -272,7 +272,7 @@ body[data-compare="on"] .slot.uniq::after{content:"";position:absolute;left:.1re
 .add-b{height:3.4rem;display:flex;align-items:center;gap:.7rem;padding:0 .9rem;border:1px dashed var(--chalk-faint);border-radius:2px;font-weight:600;color:var(--chalk-dim)}
 .add-b:hover{border-color:var(--hl-b);color:var(--chalk)}
 
-.picker{position:absolute;left:0;right:0;bottom:calc(100% + .9rem);height:24rem;z-index:20;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;background:#081d1c;border:1px solid var(--chalk);border-radius:3px;box-shadow:0 1.2rem 2.5rem rgba(0,0,0,.55)}
+.picker{position:absolute;left:0;right:0;bottom:calc(100% + .9rem);height:26rem;z-index:20;display:grid;grid-template-rows:auto auto auto minmax(0,1fr) auto;background:#081d1c;border:1px solid var(--chalk);border-radius:3px;box-shadow:0 1.2rem 2.5rem rgba(0,0,0,.55)}
 .picker-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:.7rem;align-items:center;padding:.7rem .8rem .55rem}
 .picker-for{display:flex;align-items:center;gap:.45rem;font-weight:700;font-size:.84rem;white-space:nowrap}
 .chips{display:flex;flex-wrap:wrap;gap:.3rem;padding:0 .8rem .6rem}
@@ -285,6 +285,33 @@ body[data-compare="on"] .slot.uniq::after{content:"";position:absolute;left:.1re
 .picker-foot b{color:var(--chalk)}
 .picker-foot .g{font-family:var(--font-mono);color:var(--hl-a)}
 .picker-foot span:last-child{overflow:hidden;text-overflow:ellipsis}
+/* the search: how it read the words, the role tabs over the list, and the best match at its head */
+.item-read{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:.3rem;min-height:1.2rem;font-size:.72rem;color:var(--chalk-faint)}
+.item-read b{font-weight:600;padding:0 .38rem;border:1px solid var(--chalk-faint);border-radius:2px;color:var(--chalk);white-space:nowrap}
+.item-read i,.item-read em{font-style:normal}
+.item-read button{color:var(--chalk-dim);text-decoration:underline dotted;text-underline-offset:2px}
+.item-read button:hover{color:var(--chalk)}
+.item-read button+button::before{content:"·";display:inline-block;margin-right:.3rem;color:var(--chalk-faint)}
+.item-roles{display:flex;padding:0 .4rem;margin-bottom:.5rem;border-bottom:1px solid var(--rule);overflow-x:auto;scrollbar-width:none}
+.role{display:flex;align-items:center;gap:.3rem;padding:.45rem .5rem .4rem;font-size:.76rem;font-weight:600;color:var(--chalk-dim);white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-1px}
+.role:hover{color:var(--chalk)}
+.role[aria-selected="true"]{color:var(--chalk);border-bottom-color:var(--chalk)}
+.role .n{font-family:var(--font-mono);font-size:.64rem;font-weight:500;color:var(--chalk-faint)}
+.role.none{opacity:.45}
+.role .you{width:.36rem;height:.36rem;border-radius:50%;background:var(--chalk-dim)}
+.pi.away{opacity:.45}
+.pi.away:hover,.pi.away:focus-visible{opacity:1}
+.pbest{grid-column:1/-1;display:grid;grid-template-columns:2.8rem minmax(0,1fr) auto;gap:.7rem;align-items:center;padding:.35rem .6rem .35rem .35rem;border:1px solid var(--chalk-faint);border-radius:2px;background:rgba(239,233,216,.04);text-align:left}
+.pbest:hover,.pbest:focus-visible,.pbest.peek{outline:2px solid var(--chalk);outline-offset:1px}
+.pbest .pi{display:block}
+.pb-t{display:grid;min-width:0}
+.pb-t b,.pb-t span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pb-t span{font-size:.74rem;color:var(--chalk-dim)}
+.pbest kbd{font-family:var(--font-mono);font-size:.64rem;border:1px solid var(--rule);border-radius:2px;padding:.1rem .35rem;color:var(--chalk-dim)}
+.grp{display:flex;align-items:baseline;gap:.6rem}
+.grp em{font-style:normal;letter-spacing:0;text-transform:none}
+.grp button{font-family:var(--font-ui);letter-spacing:0;text-transform:none;color:var(--chalk-dim);text-decoration:underline;text-underline-offset:2px}
+.grp button:hover{color:var(--chalk)}
 
 /* ---------- receipt ---------- */
 .till{position:relative;z-index:5}
@@ -793,12 +820,16 @@ input[type=range]::-moz-range-thumb{width:.8rem;height:1.6rem}
 
 /* sheets: the item picker rises over the lower part of the screen and leaves the builds in view above it,
    the champion's options, an item's settings and the champion picker come with the page dimmed behind */
-.picker{position:fixed;z-index:35;left:0;right:0;top:auto;bottom:0;height:min(64vh,36rem);grid-template-rows:auto auto minmax(0,1fr) auto;
+.picker{position:fixed;z-index:35;left:0;right:0;top:auto;bottom:0;height:min(64vh,36rem);grid-template-rows:auto auto auto minmax(0,1fr) auto;
   padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);border-width:1px 0 0;border-radius:.75rem .75rem 0 0;box-shadow:0 -1rem 2.5rem rgba(0,0,0,.55)}
 .picker-head{grid-template-columns:minmax(0,1fr) auto;gap:.55rem;padding:.6rem .75rem .55rem}
 .picker-head .search{grid-area:2/1/3/-1}
 .picker .chips,.cm .chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:0 .75rem .6rem}
-.picker-grid{grid-template-columns:repeat(auto-fill,minmax(3.1rem,1fr));gap:.45rem;padding:.6rem .75rem .75rem;border-top:1px solid var(--rule);overscroll-behavior:contain}
+.picker-grid{grid-template-columns:repeat(auto-fill,minmax(3.1rem,1fr));gap:.45rem;padding:.6rem .75rem .75rem;overscroll-behavior:contain}
+.item-read.idle{display:none}
+.item-roles{margin-bottom:0}
+.role{padding:.65rem .55rem .55rem}
+.pbest{grid-template-columns:3.1rem minmax(0,1fr)}
 .picker-foot{flex-wrap:wrap;align-content:center;row-gap:.1rem;min-height:3.6rem;padding:.5rem .75rem;white-space:normal}
 .picker-foot span:last-child{flex-basis:100%;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
 .picker-foot em{margin-left:auto;font-style:normal;font-weight:600;color:var(--chalk)}
@@ -973,10 +1004,12 @@ input[type=range]::-moz-range-thumb{width:.8rem;height:1.6rem}
         <div class="picker" id="picker" role="dialog" aria-label="Choose an item" hidden>
           <div class="picker-head">
             <span class="picker-for" id="picker-for"></span>
-            <input class="search" type="search" id="item-q" placeholder="Search items" autocomplete="off" aria-label="Search items">
+            <input class="search" type="search" id="item-q" placeholder="Name, nickname or stat" autocomplete="off" spellcheck="false" aria-label="Search items by name, nickname or stat">
             <button class="esc" id="picker-x">Esc</button>
+            <div class="item-read" id="item-read"></div>
           </div>
           <div class="chips" id="item-chips"></div>
+          <div class="item-roles" id="item-roles" role="tablist" aria-label="Items by role"></div>
           <div class="picker-grid" id="item-grid"></div>
           <div class="picker-foot" id="item-foot"></div>
         </div>

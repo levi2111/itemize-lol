@@ -40,11 +40,41 @@ const S = {
   itemOpts: {a: {}, b: {}},
 };
 
-const ITEM_FILTERS = [
-  ['All', null], ['Attack damage',['Damage']], ['Ability power',['SpellDamage']], ['Attack speed',['AttackSpeed']],
-  ['Crit',['CriticalStrike']], ['On-hit',['OnHit']], ['Penetration',['ArmorPenetration','MagicPenetration']],
-  ['Haste',['AbilityHaste','CooldownReduction']], ['Defense',['Health','Armor','SpellBlock']], ['Boots',['Boots']],
+/* The item picker's stat words: what a word reads as, the words for it, and the items that have it.
+   A chip is a stat word written into the search. */
+const hasStat = (...keys) => it => keys.some(k => it.stats?.[k]);
+const hasTag = (...tags) => it => tags.some(t => it.tags.includes(t));
+const hasTrait = t => it => !!it.traits?.includes(t);
+const STAT_WORDS = [
+  ['attack damage', ['ad', 'attack damage'], hasStat('ad')],
+  ['ability power', ['ap', 'ability power'], hasStat('ap')],
+  ['attack speed', ['as', 'attack speed'], hasStat('attackSpeed')],
+  ['crit', ['crit', 'critical strike', 'crit chance'], hasStat('critChance', 'critDamage')],
+  ['lethality', ['lethality', 'leth', 'armor pen', 'armour pen', 'arpen', 'armor penetration'], hasStat('lethality', 'armorPenPct')],
+  ['magic pen', ['magic pen', 'mpen', 'magic penetration'], hasStat('magicPenFlat', 'magicPenPct')],
+  ['penetration', ['pen', 'penetration'], hasStat('lethality', 'armorPenPct', 'magicPenFlat', 'magicPenPct')],
+  ['ability haste', ['ah', 'haste', 'ability haste', 'cdr', 'cooldown'], hasStat('abilityHaste')],
+  ['health', ['hp', 'health'], hasStat('hp')],
+  ['armor', ['armor', 'armour'], hasStat('armor')],
+  ['magic resist', ['mr', 'magic resist', 'magic resistance'], hasStat('mr')],
+  ['resists', ['resists', 'resistances'], hasStat('armor', 'mr')],
+  ['defense', ['defense', 'defence'], hasStat('hp', 'armor', 'mr')],
+  ['anti-heal', ['anti heal', 'antiheal', 'grievous', 'grievous wounds', 'wounds', 'gw', 'heal cut', 'healing reduction'], hasTrait('antiheal')],
+  ['shield', ['shield', 'shields'], hasTrait('shield')],
+  ['life steal', ['life steal', 'lifesteal', 'ls'], hasStat('lifeSteal')],
+  ['omnivamp', ['omnivamp', 'vamp'], hasStat('omnivamp')],
+  ['on-hit', ['on hit', 'onhit'], hasTag('OnHit')],
+  ['move speed', ['ms', 'move speed', 'movement speed', 'movespeed'], hasStat('moveSpeed', 'movePct')],
+  ['mana', ['mana'], it => !!it.stats?.mana || it.tags.includes('ManaRegen')],
+  ['tenacity', ['tenacity'], hasTag('Tenacity')],
+  ['slow', ['slow', 'slows'], hasTag('Slow')],
+  ['active', ['active'], hasTag('Active')],
+  ['boots', ['boots', 'shoes'], hasTag('Boots')],
 ];
+const ITEM_CHIPS = [['Attack damage', 'attack damage'], ['Ability power', 'ability power'], ['Attack speed', 'attack speed'], ['Crit', 'crit'],
+  ['On-hit', 'on hit'], ['Penetration', 'pen'], ['Haste', 'haste'], ['Defense', 'defense'], ['Anti-heal', 'anti heal'], ['Boots', 'boots']];
+/* the shop's role tabs, in its order; a champion's classes go by the same names */
+const ITEM_ROLES = ['All', 'Fighter', 'Marksman', 'Assassin', 'Mage', 'Tank', 'Support'];
 const ROLES = ['All','Fighter','Tank','Mage','Assassin','Marksman','Support'];
 const STATUS_WORD = {auto:'estimate', unmodeled:'not counted', stale:'needs review'};
 
@@ -382,7 +412,7 @@ function setLevel(n) {
 }
 
 /* ---------- builds and item picker ---------- */
-let pick = null, itemFilter = 0;
+let pick = null;
 function renderBuilds() {
   const sets = {a: new Set(S.builds.a.filter(Boolean)), b: new Set(S.builds.b.filter(Boolean))};
   for (const k of ['a','b']) {
@@ -425,40 +455,168 @@ function openPicker(b, i) {
   pick = {b, i};
   $('#picker').hidden = false;
   pickerLabel(); renderBuilds();
-  const q = $('#item-q'); q.value = ''; renderItems();
+  const q = $('#item-q'); q.value = ''; searching = false; renderItems();
   if (!touched()) q.focus();
 }
 function closePicker() {
   if (!pick) return;
   pick = null; $('#picker').hidden = true; renderBuilds();
 }
-function footIdle() { $('#item-foot').innerHTML = `<span>${touched() ? 'Tap an item for its details, and again to pick it.' : 'Hover an item for details. Enter picks the first result.'}</span>`; }
-function renderItems() {
-  const q = $('#item-q').value.trim().toLowerCase(), f = ITEM_FILTERS[itemFilter][1];
-  const match = it => (!q || it.name.toLowerCase().includes(q)) && (!f || it.tags.some(t => f.includes(t)));
-  const sold = (it, m) => (it.shops || ['sr']).includes(m);
-  const all = [...S.items.values()].filter(match).sort((x, y) => x.name.localeCompare(y.name));
-  const cell = it => `<button class="pi" data-id="${it.id}" aria-label="${esc(it.name)}, ${nf(it.gold)} gold${shopOf(it) ? ', ' + SHOP[shopOf(it)] : ''}">${itemIco(it.id)}${badge(it)}</button>`;
-  const sr = all.filter(i => sold(i, 'sr'));
-  const fin = sr.filter(i => !i.component), comp = sr.filter(i => i.component);
-  let html = (fin.length ? `<div class="grp">Finished items</div>${fin.map(cell).join('')}` : '')
-    + (comp.length ? `<div class="grp">Components</div>${comp.map(cell).join('')}` : '');
-  // an added shop lists what the Rift does not sell: its own items, and its copies of Rift items
-  const shown = new Set(sr), missed = [];
-  for (const m of ADDABLE) {
-    const list = all.filter(i => !shown.has(i) && sold(i, m));
-    if (!list.length) continue;
-    if (!S.shops[m]) { missed.push(m); continue; }
-    list.forEach(i => shown.add(i));
-    html += `<div class="grp">${SHOP[m]} <em>its own items and its copies of Rift items</em></div>${list.map(cell).join('')}`;
+/* The search reads what players type: a name or a piece of one, a nickname from the item data ("bork"),
+   initials worked out from the name ("ldr"; "botrk" or "brk"), or a stat word ("lethality", "anti heal").
+   Words combine, and an item must answer every one. A word on its way to a stat word ("letha") reads as
+   that stat once it has four letters, as long as no item answers it by name. Results rank by how they
+   answer: a nickname above initials, above the start of the name, above a stat. */
+const fold = s => s.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/['’.,:!]/g, '').replace(/[-_/]+/g, ' ').replace(/\s+/g, ' ').trim();
+const STAT_WORD = new Map(STAT_WORDS.flatMap(([, words], i) => words.map(w => [w, i])));
+const statsStarting = t => STAT_WORDS.flatMap(([, words], i) => words.some(w => w.length > t.length && w.startsWith(t)) ? [i] : []);
+const finds = new WeakMap();
+function findOf(it) {
+  let f = finds.get(it);
+  if (!f) {
+    const words = fold(it.name).split(' '), small = new Set(['of', 'the']);
+    const ini = [words, words.filter(w => !small.has(w))].map(ws => ws.map(w => w[0]).join('')).filter(x => x.length > 1);
+    finds.set(it, f = {name: words.join(' '), flat: words.join(''), words, ini: [...new Set(ini)], nick: it.aliases || []});
   }
-  if (!sr.length && missed.length) html = `<div class="miss">No Summoner's Rift item matches. The ${missed.map(m => SHOP[m]).join(' and ')} shop${missed.length > 1 ? 's have' : ' has'} some: ${missed.map(m => `<button class="chip" data-shop="${m}">+ ${SHOP[m]}</button>`).join('')}</div>` + html;
-  $('#item-grid').innerHTML = html || '<div class="grp">No items match</div>';
+  return f;
+}
+// how well an item answers one word of the search: [score, how], or null
+function answer(it, t, byStat = true) {
+  const f = findOf(it), x = t.text, flat = x.replace(/ /g, '');
+  let best = null;
+  const hit = (s, how) => { if (!best || s > best[0]) best = [s, how]; };
+  if (f.nick.includes(flat)) hit(100, 'nick');
+  else if (flat.length >= 3 && f.nick.some(n => n.startsWith(flat))) hit(50, 'nick');
+  // initials that are also a stat word read as the stat first: "mr" is magic resist before Mortal Reminder
+  if (f.ini.includes(flat)) hit(t.stat && !t.part ? 20 : 90, 'ini');
+  if (f.name.startsWith(x)) hit(80, 'name');
+  else if (f.words.some(w => w.startsWith(x))) hit(60, 'name');
+  else if (flat.length >= 3 && f.flat.includes(flat)) hit(40, 'name');
+  if (byStat && t.stat?.some(i => STAT_WORDS[i][2](it))) hit(t.part ? 25 : 30, 'stat');
+  return best;
+}
+// the search as words: {text, stat: the stat words it reads as, part: on its way to one}
+function readQuery(q) {
+  const w = fold(q).split(' ').filter(Boolean), out = [];
+  for (let i = 0; i < w.length;) {
+    let took = 0;
+    for (let n = Math.min(3, w.length - i); n > 0 && !took; n--) {
+      const t = w.slice(i, i + n).join(' ');
+      if (STAT_WORD.has(t)) { out.push({text: t, stat: [STAT_WORD.get(t)]}); took = n; }
+      // a stat phrase still being typed: "armor p", "attack sp"
+      else if (n > 1 && i + n === w.length && t.length >= 4 && statsStarting(t).length) { out.push({text: t, stat: statsStarting(t), part: true}); took = n; }
+    }
+    if (!took) { out.push({text: w[i]}); took = 1; }
+    i += took;
+  }
+  const items = [...S.items.values()];
+  for (const t of out) {
+    if (t.stat || t.text.length < 4 || items.some(it => answer(it, t, false))) continue;
+    const s = statsStarting(t.text);
+    if (s.length) Object.assign(t, {stat: s, part: true});
+  }
+  return out;
+}
+/* The role tabs: the shop's roles. The picker opens on the champion's class, and a tab chosen stays
+   until the champion changes. While searching, each tab counts its matches, and the matches outside
+   the open tab are listed after its own, so a search never comes up empty for being on the wrong tab. */
+let itemRole = null, found = new Map(), bestFind = null;
+// a search being written, which Esc clears; after a pick the words stay, selected, and Esc closes the picker
+let searching = false;
+const champClass = () => ITEM_ROLES.includes(S.champ.tags?.[0]) ? S.champ.tags[0] : null;
+const roleNow = () => itemRole?.champ === S.champ.id ? itemRole.role : champClass() || 'All';
+const inRole = (it, role) => role === 'All' || !it.roles || it.roles.includes(role);
+const sold = (it, m) => (it.shops || ['sr']).includes(m);
+const offered = it => sold(it, 'sr') || ADDABLE.some(m => S.shops[m] && sold(it, m));
+function setItemRole(role) {
+  itemRole = {champ: S.champ.id, role};
+  renderItems();
+  if (!touched()) $('#item-q').focus();
+}
+// what found an item, for the footer and the best match: "Nickname “bork”", "Has crit and attack speed"
+function foundBy(r) {
+  const out = [], stats = [];
+  for (const [t, how] of r.how) {
+    if (how === 'nick') out.push(`Nickname “${t.text}”`);
+    else if (how === 'ini') out.push(`Initials “${t.text.toUpperCase()}”`);
+    else if (how === 'stat') stats.push(STAT_WORDS[t.stat.find(i => STAT_WORDS[i][2](r.it))][0]);
+  }
+  if (stats.length) out.push('Has ' + stats.join(' and '));
+  return out;
+}
+function footIdle() {
+  $('#item-foot').innerHTML = `<span>${touched() ? 'Tap an item for its details, and again to pick it.'
+    : bestFind ? `Enter picks <b>${esc(bestFind.it.name)}</b>.` : 'Hover an item for details. Enter picks the first result.'}</span>`;
+}
+function paintReading(toks) {
+  const el = $('#item-read');
+  el.classList.toggle('idle', !toks.length);
+  if (!toks.length) { el.innerHTML = `<span>Try</span>${['LDR', 'bork', 'lethality', 'anti heal', 'ap pen'].map(x => `<button data-try="${x}">${x}</button>`).join('')}`; return; }
+  el.innerHTML = '<span>Reading as</span>' + toks.map(t => {
+    const flat = t.text.replace(/ /g, ''), items = [...S.items.values()].filter(offered);
+    const by = items.find(it => findOf(it).nick.includes(flat) || (!t.stat || t.part) && findOf(it).ini.includes(flat));
+    if (by) return `<b class="nm">${esc(t.text)} = ${esc(by.name)}</b>`;
+    if (t.stat) return `<b class="st">${t.stat.map(i => STAT_WORDS[i][0]).join(' or ')}</b>${items.some(it => findOf(it).ini.includes(flat)) ? '<em>or initials</em>' : ''}`;
+    return `<b>“${esc(t.text)}”</b>`;
+  }).join('<i>+</i>');
+}
+function renderItems() {
+  const toks = readQuery($('#item-q').value), role = roleNow();
+  const all = [];
+  for (const it of S.items.values()) {
+    const how = toks.map(t => [t, answer(it, t)]);
+    if (how.some(([, a]) => !a)) continue;
+    all.push({it, s: how.reduce((s, [, a]) => s + a[0], 0), top: Math.max(0, ...how.map(([, a]) => a[0])), how: how.map(([t, a]) => [t, a[1]])});
+  }
+  const shown = all.filter(r => offered(r.it)).sort(toks.length
+    ? (x, y) => y.s - x.s || inRole(y.it, role) - inRole(x.it, role) || sold(y.it, 'sr') - sold(x.it, 'sr') || x.it.component - y.it.component || x.it.name.localeCompare(y.it.name)
+    : (x, y) => x.it.name.localeCompare(y.it.name));
+  found = new Map(shown.map(r => [r.it.id, r]));
+  // the best match is what Enter picks: an item a word found by name, ahead of every other
+  const top = shown[0], next = shown.find(r => r.it.name !== top?.it.name);
+  bestFind = toks.length && top && top.top >= 40 && (!next || top.s > next.s) ? top : null;
+
+  const cell = (it, away) => `<button class="pi${away ? ' away' : ''}" data-id="${it.id}" aria-label="${esc(it.name)}, ${nf(it.gold)} gold${shopOf(it) ? ', ' + SHOP[shopOf(it)] : ''}">${itemIco(it.id)}${badge(it)}</button>`;
+  let html = '';
+  if (bestFind) {
+    const it = bestFind.it, by = foundBy(bestFind);
+    html += `<button class="pbest" data-id="${it.id}" aria-label="Best match: ${esc(it.name)}, ${nf(it.gold)} gold"><span class="pi">${itemIco(it.id)}${badge(it)}</span>
+      <span class="pb-t"><b>${esc(it.name)}</b><span>${[...by, nf(it.gold) + ' gold', !inRole(it, role) && it.roles?.length ? `${it.roles[0]} item` : ''].filter(Boolean).join(' · ')}</span></span>${touched() ? '' : '<kbd>Enter</kbd>'}</button>`;
+  }
+  const here = shown.filter(r => r !== bestFind && inRole(r.it, role)).map(r => r.it);
+  const sr = here.filter(i => sold(i, 'sr')), fin = sr.filter(i => !i.component), comp = sr.filter(i => i.component);
+  html += (fin.length ? `<div class="grp">Finished items</div>${fin.map(i => cell(i)).join('')}` : '')
+    + (comp.length ? `<div class="grp">Components</div>${comp.map(i => cell(i)).join('')}` : '');
+  // an added shop lists what the Rift does not sell: its own items, and its copies of Rift items
+  const listed = new Set(sr);
+  for (const m of ADDABLE) {
+    const list = here.filter(i => !listed.has(i) && S.shops[m] && sold(i, m));
+    list.forEach(i => listed.add(i));
+    if (list.length) html += `<div class="grp">${SHOP[m]} <em>its own items and its copies of Rift items</em></div>${list.map(i => cell(i)).join('')}`;
+  }
+  if (toks.length && shown.length && !here.length && !(bestFind && inRole(bestFind.it, role))) html += `<div class="grp">No ${role} item matches</div>`;
+  const away = toks.length && role !== 'All' ? shown.filter(r => r !== bestFind && !inRole(r.it, role)).map(r => r.it) : [];
+  if (away.length) html += `<div class="grp">Other roles <em>${away.length}</em><button data-role="All">Show all</button></div>${away.map(i => cell(i, true)).join('')}`;
+  if (!shown.length) {
+    const missed = ADDABLE.filter(m => !S.shops[m] && all.some(r => !sold(r.it, 'sr') && sold(r.it, m)));
+    html = missed.length ? `<div class="miss">No ${ADDABLE.some(m => S.shops[m]) ? 'item in these shops' : "Summoner's Rift item"} matches. The ${missed.map(m => SHOP[m]).join(' and ')} shop${missed.length > 1 ? 's have' : ' has'} some: ${missed.map(m => `<button class="chip" data-shop="${m}">+ ${SHOP[m]}</button>`).join('')}</div>`
+      : '<div class="grp">No items match</div>';
+  }
+  $('#item-grid').innerHTML = html;
+
+  const mine = champClass();
+  $('#item-roles').innerHTML = ITEM_ROLES.map(r => {
+    const n = toks.length ? shown.filter(x => inRole(x.it, r)).length : null;
+    return `<button class="role${n === 0 ? ' none' : ''}" role="tab" data-role="${r}" aria-selected="${r === role}">${r}${r === mine ? `<i class="you" title="${esc(S.champ.name)}'s class"></i>` : ''}${n === null ? '' : `<span class="n">${n}</span>`}</button>`;
+  }).join('');
+  $$('#item-chips [data-w]').forEach(c => c.setAttribute('aria-pressed', toks.some(t => !t.part && t.stat?.[0] === STAT_WORD.get(c.dataset.w))));
+  paintReading(toks);
   footIdle();
 }
 function choose(id) {
   if (!pick) return;
   S.builds[pick.b][pick.i] = id;
+  searching = false;
   const next = S.builds[pick.b].findIndex((v, j) => !v && j > pick.i);
   if (next > -1) { pick.i = next; pickerLabel(); renderBuilds(); const q = $('#item-q'); if (!touched() || document.activeElement === q) { q.select(); q.focus(); } }
   else closePicker();
@@ -739,7 +897,7 @@ function wireTouch() {
   }, true);
   // the item picker: the first tap on an item shows its details in the footer, a second tap picks it
   $('#item-grid').addEventListener('click', e => {
-    const p = e.target.closest('.pi');
+    const p = e.target.closest('[data-id]');
     if (!p || !touched() || p.classList.contains('peek')) return;
     e.stopPropagation();
     $$('#item-grid .peek').forEach(x => x.classList.remove('peek'));
@@ -2179,20 +2337,37 @@ function wire() {
     const slot = e.target.closest('.slot');
     if (slot && e.target === slot && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openPicker(slot.dataset.b, +slot.dataset.i); }
   });
-  $('#item-chips').innerHTML = ITEM_FILTERS.map(([l], i) => `<button class="chip" data-f="${i}" aria-pressed="${i === 0}">${l}</button>`).join('');
+  // a chip writes its stat word into the search, or takes it out
+  $('#item-chips').innerHTML = ITEM_CHIPS.map(([l, w]) => `<button class="chip" data-w="${w}" aria-pressed="false">${l}</button>`).join('');
   $('#item-chips').addEventListener('click', e => {
     const c = e.target.closest('.chip'); if (!c) return;
-    itemFilter = +c.dataset.f;
-    $$('#item-chips .chip').forEach(x => x.setAttribute('aria-pressed', x === c));
-    renderItems();
+    const q = $('#item-q'), toks = readQuery(q.value), k = STAT_WORD.get(c.dataset.w);
+    const on = toks.some(t => !t.part && t.stat?.[0] === k);
+    q.value = on ? toks.filter(t => t.part || t.stat?.[0] !== k).map(t => t.text).join(' ') : `${q.value.trim()} ${c.dataset.w}`.trim();
+    searching = true; renderItems();
+    if (!touched()) q.focus();
   });
-  $('#item-q').addEventListener('input', renderItems);
-  $('#item-q').addEventListener('keydown', e => { if (e.key === 'Enter') { const f = $('#item-grid .pi'); if (f) choose(+f.dataset.id); } });
-  $('#item-grid').addEventListener('click', e => { const p = e.target.closest('.pi'); if (p) choose(+p.dataset.id); });
+  $('#item-roles').addEventListener('click', e => { const r = e.target.closest('[data-role]'); if (r) setItemRole(r.dataset.role); });
+  $('#item-read').addEventListener('click', e => {
+    const t = e.target.closest('[data-try]'); if (!t) return;
+    $('#item-q').value = t.dataset.try; searching = true; renderItems();
+    if (!touched()) $('#item-q').focus();
+  });
+  $('#item-q').addEventListener('input', () => { searching = true; renderItems(); });
+  $('#item-q').addEventListener('keydown', e => {
+    // Enter picks the best match, or the first item; the down arrow goes into the list
+    if (e.key === 'Enter') { const f = $('#item-grid [data-id]'); if (f) choose(+f.dataset.id); }
+    if (e.key === 'ArrowDown') { const f = $('#item-grid [data-id]'); if (f) { e.preventDefault(); f.focus(); } }
+  });
+  $('#item-grid').addEventListener('click', e => {
+    const r = e.target.closest('[data-role]'); if (r) { setItemRole(r.dataset.role); return; }
+    const p = e.target.closest('[data-id]'); if (p) choose(+p.dataset.id);
+  });
   $('#item-grid').addEventListener('mouseover', e => {
-    const p = e.target.closest('.pi'); if (!p) return;
-    const it = S.items.get(+p.dataset.id), shop = shopOf(it);
-    const about = (shop ? `${SHOP[shop]} item. ` : '') + (it.status === 'unmodeled' ? 'Stats are counted; its passive is not yet.' : it.plaintext || it.tags.join(', '));
+    const p = e.target.closest('[data-id]'); if (!p) return;
+    const it = S.items.get(+p.dataset.id), shop = shopOf(it), by = found.get(it.id) ? foundBy(found.get(it.id)) : [];
+    const about = (by.length ? `${by.join('. ')}. ` : '') + (shop ? `${SHOP[shop]} item. ` : '')
+      + (it.status === 'unmodeled' ? 'Stats are counted; its passive is not yet.' : it.plaintext || it.tags.join(', '));
     $('#item-foot').innerHTML = `<b>${esc(it.name)}</b><span class="g">${nf(it.gold)} g</span><span>${esc(about)}</span>`;
   });
   $('#item-grid').addEventListener('mouseleave', footIdle);
@@ -2248,7 +2423,10 @@ function wire() {
     if (e.key === 'Escape') {
       if (itemMenu) { const k = itemMenu; closeItemMenu(); $(`.slot[data-b="${k.b}"][data-i="${k.i}"] [data-cfg]`)?.focus(); }
       else if (menu) { const b = menu; setMenu(null); b.focus(); }
-      else if (!$('#champ-modal').hidden) closeChamps(); else closePicker();
+      else if (!$('#champ-modal').hidden) closeChamps();
+      // a search being written is cleared first, and the picker closes on the next press
+      else if (pick && searching && $('#item-q').value) { e.preventDefault(); $('#item-q').value = ''; searching = false; renderItems(); }
+      else closePicker();
       return;
     }
     if (e.ctrlKey || e.metaKey || e.altKey || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || !$('#champ-modal').hidden) return;
