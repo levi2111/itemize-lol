@@ -82,6 +82,7 @@ All under `/api/v1`. Reads are cacheable and revalidate by ETag.
 | `GET /champions/:id/target?level=` | That champion's health, armor and magic resist at a level, for using it as the target. |
 | `GET /items` | The items of three shops, Summoner's Rift, ARAM and Arena: name, gold, tags, the shops that sell each (`shops`), stats, status, notes, and what a page can let the user set about each (`controls`) and its named effects (`effects`). |
 | `POST /calc` | The calculation. One or two builds against one target. |
+| `POST /links` | A short link for a build: `{ "s": <the page's state>, "layout": "tabs" \| "receipt" }` in, `{ "id", "url" }` out. See Short links. |
 
 ```jsonc
 // POST /api/v1/calc
@@ -112,7 +113,8 @@ src/models/     hand-written models: champions/*.ts, items/*.ts, models.lock.jso
 src/shared/     dataset types, formula evaluator
 src/engine/     stats, mitigation, the fight simulation, the calculation
 src/server/     HTTP API, and the Node server that also serves the site; share links read as the page reads them, and what a preview says
-src/worker/     the same API as a Cloudflare Worker, and the link previews of shared builds
+src/worker/     the same API as a Cloudflare Worker, and the short links with their link previews
+migrations/     the short links' table, for D1 (wrangler d1 migrations) and for the Node server's SQLite file alike
 src/og/         the preview images: a PNG writer that reuses a champion card's compressed rows, glyphs, the card's layout
 web/            the site, wired to the API: two layouts, one page each (index.html the tabs, receipt.html the receipt), one app.js for both.
                 The tabs page alone has the Crits switch, ranks per build and the shops in the item picker. Both have each item's
@@ -122,11 +124,11 @@ scripts/        calc.ts (one calculation from the command line), outliers.ts (sa
                 site.ts (prepares web/ for Cloudflare), og.ts (the champions' cards), og-glyphs.ts (the glyphs, with Chrome)
 ```
 
-Environment: `PORT`, `ITEMIZE_PATCH`, `ITEMIZE_DATA_DIR`, `CALC_PER_MINUTE`, `TRUST_PROXY` (see `src/server/main.ts`); `ITEMIZE_CONTACT` sets the contact in the pipeline's User-Agent.
+Environment: `PORT`, `ITEMIZE_PATCH`, `ITEMIZE_DATA_DIR`, `CALC_PER_MINUTE`, `LINKS_PER_MINUTE`, `ITEMIZE_LINKS`, `TRUST_PROXY` (see `src/server/main.ts`); `ITEMIZE_CONTACT` sets the contact in the pipeline's User-Agent.
 
 ## Deploying
 
-Production is a Cloudflare Worker (`wrangler.jsonc`). Cloudflare serves the site as static files, with the headers in `web/_headers`, and the Worker answers `/api/v1` from the dataset packed into it at build time. Before each deploy `scripts/site.ts` copies `web/` to `.build/site/` and renames the scripts after their contents, so everything but the pages themselves is cached forever. The tabs are at `/` and the receipt layout at `/receipt`; the gear in the top bar swaps between them and remembers the choice in the browser. The browser also keeps the last build the visitor changed, and both pages open on it; a share link opens on its own build, which replaces theirs only once they edit it. If a patch has since moved that build's combo or DPS by 1% or more, or changed which build leads, one line on their first visit after says so. Saved builds stay in the browser too (the tabs page's Saved tab, the receipt's Saved builds menu, one list under `saved` in localStorage): the server never sees them.
+Production is a Cloudflare Worker (`wrangler.jsonc`). Cloudflare serves the site as static files, with the headers in `web/_headers`, and the Worker answers `/api/v1` from the dataset packed into it at build time, and the short links (`/b/<id>`). Every page is a plain file the Worker never sees: on the Workers Free plan, once the 100,000 requests of a day are used up, Cloudflare answers whatever would run the Worker with a 429, and that leaves the pages up. Before each deploy `scripts/site.ts` copies `web/` to `.build/site/` and renames the scripts after their contents, so everything but the pages themselves is cached forever. The tabs are at `/` and the receipt layout at `/receipt`; the gear in the top bar swaps between them and remembers the choice in the browser. The browser also keeps the last build the visitor changed, and both pages open on it; a share link (see Short links) opens on its own build, which replaces theirs only once they edit it. If a patch has since moved that build's combo or DPS by 1% or more, or changed which build leads, one line on their first visit after says so. Saved builds stay in the browser too (the tabs page's Saved tab, the receipt's Saved builds menu, one list under `saved` in localStorage): the server never sees them.
 
 Each champion also has a page of its own for searches to land on: `/vayne` is the tabs page with Vayne already chosen, and a title, description, canonical and link preview of its own. The slug is the champion's name in lower case, apostrophes and periods dropped and every other gap a hyphen: `kaisa`, `dr-mundo`, `nunu-willump`, `wukong`. Data Dragon ids and a few other names redirect to it with a 301 (`/MonkeyKing`, `/Vayne`, `/leesin`, `/kai-sa`, `/mundo`). `/receipt/vayne` is the same page in the receipt layout, for visitors who chose that one; its canonical is `/vayne`, as `/receipt`'s is `/`. Choosing another champion on such a page moves the address to that champion's page. `src/server/pages.ts` makes all of it: `scripts/site.ts` writes the pages as `vayne.html` and `receipt/vayne.html` (Cloudflare serves `/vayne` from `vayne.html` with a 200; `vayne/index.html` would redirect to `/vayne/`), with `sitemap.xml`, `robots.txt` and `_redirects`, and the Node server makes the same per request.
 
@@ -137,11 +139,27 @@ npm run deploy          # publish it
 
 Pushing to `main` runs the tests and then deploys (`.github/workflows/ci.yml`). `npm start` remains the Node server for development; both run the same `src/server/app.ts`.
 
+### Short links
+
+**Copy build link** copies `https://itemize.lol/b/x7Kq2Pa`. The page sends its state (the same string a long link carries in `?s=`) and its layout to `POST /api/v1/links`, which keeps them in a Cloudflare D1 database and names them. The id is 7 base62 characters of a SHA-256 of the layout and the state, so the same build always gets the same link and is stored once; if a different build already holds those 7, the link takes 8, and so on (`src/server/links.ts`). A row is the id, the layout, the state and the day it was made, nothing about who made it. `POST /links` checks that the state is a build the page can read (`src/server/share.ts`), takes at most 4,096 characters, and allows 20 a minute per address (`LINK_LIMIT` in `wrangler.jsonc`; `LINKS_PER_MINUTE` on Node).
+
+- `/b/<id>` runs the Worker first (`run_worker_first`), which looks the id up (in Cloudflare's cache first: an id never changes what it holds, so a link is read from D1 about once per data centre) and answers with the layout's page, the build written into it as `<script type="application/json" id="shared-build">`, and the build's link preview. `brought()` in `web/app.js` opens it. A visitor who chose the other layout is sent there by `layout.js` with the build handed over, as the layout menu hands it over. Once the visitor edits the build, the address moves to the layout's page (a champion page that shared one goes back to the champion's page). An id that does not exist gets the tabs page with its own build and a 404.
+- When a short link cannot be made (offline, the limit, D1 down or past its daily allowance) the button copies the long link, `/?s=…` or `/receipt?s=…`, so sharing never breaks. Long links, and the older `#s=` ones, still open their build, but their preview is the site's own.
+- Capacity on the Free plan: 100,000 rows written a day (a new link writes one; sharing a build that already has a link writes none), 5 million rows read a day, 500 MB per database. A link is about 350 bytes, so that is over a million links. Past a daily allowance D1 refuses until 00:00 UTC; the button falls back to long links meanwhile, and links already cached keep opening.
+- On Node, `npm start` keeps them in `data/links.sqlite` (`ITEMIZE_LINKS` to move it) with `node:sqlite`, made by the same migrations. Locally, `npm run dev:worker` uses a local copy of D1 in `.wrangler/`: run `npx wrangler d1 migrations apply itemize-links --local` once.
+
+**Setting it up, once.** These change your Cloudflare account, so they are yours to run:
+
+1. `npx wrangler d1 create itemize-links`. It prints a `database_id`.
+2. Put it in `wrangler.jsonc` in place of `00000000-0000-0000-0000-000000000000` (`d1_databases`), and commit. Until then `wrangler deploy` fails, so do this before merging.
+3. `npx wrangler d1 migrations apply itemize-links --remote` makes the table.
+4. CI applies new migrations before each deploy (`.github/workflows/ci.yml`). The `CLOUDFLARE_API_TOKEN` secret needs the D1 Edit permission for that, next to Workers Scripts Edit; without it the step fails and nothing is deployed.
+
 ### Link previews
 
-A shared build is a link to a page with the build in its query: `/?s=…` or `/receipt?s=…`. Pasted into Discord, Slack, X, Reddit, WhatsApp or iMessage it unfurls into the result: a title naming the builds, a sentence with the verdict, and a 1200×630 image of the comparison.
+A shared build is a short link, `/b/<id>`. Pasted into Discord, Slack, X, Reddit, WhatsApp or iMessage it unfurls into the result: a title naming the builds, a sentence with the verdict, and a 1200×630 image of the comparison. `/`, `/receipt` and the champion pages carry the site's own tags (a champion page its own), whatever is in their address.
 
-- Those two addresses go through the Worker first (`run_worker_first` in `wrangler.jsonc`). Without `s` it returns the page as Cloudflare serves it. With one, `src/worker/preview.ts` reads the link as the page does (`src/server/share.ts`), runs the engine, and rewrites the head's Open Graph and Twitter tags (`src/server/preview.ts`). A link that cannot be read keeps the site's own tags, which both pages carry.
+- `src/worker/preview.ts` reads the stored build as the page does (`src/server/share.ts`), runs the engine, and writes the head's title, description, Open Graph and Twitter tags (`src/server/preview.ts`, `src/server/links.ts`). A build that cannot be read keeps the site's own tags. The Node server writes the same tags but draws no image, so its previews show the site's card.
 - The image is `/og/b/<version>/<layout>/<s>.png`, drawn by the Worker and kept in Cloudflare's cache. The version names the data, the art and the drawing code, so an address never shows stale numbers. Drawing takes a few milliseconds of CPU because almost nothing is drawn per request: `npm run site` draws every champion's card at build time (`scripts/og.ts`, served at `/og/<id>.png`, which is also the image of the champion's own page), and a build's card copies its compressed rows and compresses only the rows it draws on (`src/og/png.ts`). The cards are cached in `.build/og-cache/`, so later builds take seconds.
 - Text is drawn from glyphs rasterised from the site's fonts. After changing the faces or sizes in `src/og/font.ts`, run `node scripts/og-glyphs.ts` (it needs Chrome) and commit `src/og/glyphs.bin`.
 - Changing what a link holds means changing `encodeState`/`applyState` in `web/app.js` and `src/server/share.ts` together; `test/share.test.ts` pins down the pairs.

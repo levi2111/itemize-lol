@@ -9,6 +9,7 @@ import { CalcError, type CalcResult, type TargetInput } from '../engine/types.ts
 import type { ChampionData, ItemData, Slot } from '../shared/types.ts';
 import { SLOTS } from '../shared/types.ts';
 import type { ServedData } from './dataset.ts';
+import { createLink, readLinkBody, type LinkStore } from './links.ts';
 import { championSlugs } from './pages.ts';
 
 /** Riot requires this wording, readily visible, on every product that uses its assets. */
@@ -21,6 +22,12 @@ export interface AppOptions {
   clientAddress?: (c: Context) => string | undefined;
   /** a limiter kept outside this process, used instead of calcPerMinute; resolves false to refuse */
   calcGate?: (c: Context) => Promise<boolean>;
+  /** where short links are kept (links.ts); without it POST /links answers 503 and the page shares a long link */
+  links?: (c: Context) => LinkStore | undefined;
+  /** requests per minute per client on POST /links; 0 turns the limit off */
+  linksPerMinute?: number;
+  /** as calcGate, for POST /links */
+  linkGate?: (c: Context) => Promise<boolean>;
 }
 
 /** At most two builds are compared, as in the UI. */
@@ -59,6 +66,8 @@ export function createApp(data: ServedData, opts: AppOptions = {}) {
   const app = new Hono();
   const etag = `"${data.manifest.patch}-${Date.parse(data.manifest.builtAt).toString(36)}"`;
   const limit = opts.calcPerMinute ? fixedWindow(opts.calcPerMinute) : undefined;
+  const linkLimit = opts.linksPerMinute ? fixedWindow(opts.linksPerMinute) : undefined;
+  const refuse = (c: Context, retryAfter: number) => { c.header('Retry-After', String(retryAfter)); return c.json({ error: { message: 'too many requests' } }, 429); };
 
   app.use(secureHeaders({
     contentSecurityPolicy: {
@@ -107,7 +116,7 @@ export function createApp(data: ServedData, opts: AppOptions = {}) {
 
   api.post('/calc', bodyLimit({ maxSize: 16 * 1024 }), async c => {
     const gate = opts.calcGate ? { ok: await opts.calcGate(c), retryAfter: 60 } : limit?.(opts.clientAddress?.(c) || 'unknown');
-    if (gate && !gate.ok) { c.header('Retry-After', String(gate.retryAfter)); return c.json({ error: { message: 'too many requests' } }, 429); }
+    if (gate && !gate.ok) return refuse(c, gate.retryAfter);
     let body: any;
     try { body = await c.req.json(); } catch { return c.json({ error: { message: 'body must be JSON' } }, 400); }
     try {
@@ -143,6 +152,25 @@ export function createApp(data: ServedData, opts: AppOptions = {}) {
       if (err instanceof CalcError) return c.json({ error: { field: err.field, message: err.message } }, 400);
       throw err;
     }
+  });
+
+  /* A short link for a build: { s, layout } in, { id, url } out, the same id for the same build every time.
+     Each one is a row written, so it has a limit of its own, well under the calculation's: sharing is a click,
+     not something a page does as it is used. */
+  api.post('/links', bodyLimit({ maxSize: 8 * 1024 }), async c => {
+    const gate = opts.linkGate ? { ok: await opts.linkGate(c), retryAfter: 60 } : linkLimit?.(opts.clientAddress?.(c) || 'unknown');
+    if (gate && !gate.ok) return refuse(c, gate.retryAfter);
+    let body: unknown;
+    try { body = await c.req.json(); } catch { return c.json({ error: { message: 'body must be JSON' } }, 400); }
+    const link = readLinkBody(body);
+    if (typeof link === 'string') return c.json({ error: { message: link } }, 400);
+    const store = opts.links?.(c);
+    c.header('Cache-Control', 'no-store');
+    if (!store) return c.json({ error: { message: 'short links are not available' } }, 503);
+    let id: string;
+    // the store being down or full (D1 refuses writes past its daily allowance) leaves the page its long link
+    try { id = await createLink(store, link); } catch (err) { console.error('links', err); return c.json({ error: { message: 'could not store the link' } }, 503); }
+    return c.json({ id, url: `${new URL(c.req.url).origin}/b/${id}` });
   });
 
   api.notFound(c => c.json({ error: { message: 'not found' } }, 404));
