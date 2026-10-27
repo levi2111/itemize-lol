@@ -1273,6 +1273,11 @@ function setLayout(link) {
 }
 
 /* ---------- share link ---------- */
+/* The link carries the build in its query, `?s=`, on the layout's own page, so a server sees it:
+   Cloudflare answers those two addresses through the Worker, which describes the build in the page's
+   link-preview tags (src/worker/preview.ts). src/server/share.ts reads `s` exactly as applyState does
+   and builds the request recalc would send, so keep the two in step. Older links carried it after `#`. */
+const shareUrl = () => `${location.origin}${RECEIPT ? '/receipt' : '/'}?s=${encodeState()}`;
 function encodeState() {
   const s = {c: S.champ.id, l: S.level, r: SLOTS.map(k => S.ranks[k]), o: S.order, a: S.builds.a, b: S.builds.b, n: [$('#name-a').value, $('#name-b').value],
     m: S.compare ? 1 : 0, t: S.target, d: S.target === 'raw' ? S.dummy : readDials(), e: [S.enemy.id, S.enemy.level], q: ACTIONS.map(k => S.combo[k]),
@@ -1288,7 +1293,7 @@ function encodeState() {
 function decodeState() {
   let text = null;
   try { text = sessionStorage.getItem('carry'); sessionStorage.removeItem('carry'); } catch (e) {}
-  text ||= /[#&]s=([\w-]+)/.exec(location.hash)?.[1];
+  text ||= /[?&]s=([\w-]+)/.exec(location.search)?.[1] || /[#&]s=([\w-]+)/.exec(location.hash)?.[1];
   if (!text) return null;
   try { return JSON.parse(decodeURIComponent(escape(atob(text.replace(/-/g, '+').replace(/_/g, '/'))))); } catch (e) { return null; }
 }
@@ -1450,7 +1455,7 @@ function wire() {
   });
 
   $('#share').addEventListener('click', async e => {
-    const b = e.currentTarget, url = `${location.origin}${location.pathname}#s=${encodeState()}`;
+    const b = e.currentTarget, url = shareUrl();
     history.replaceState(null, '', url);
     let ok = true;
     try { await navigator.clipboard.writeText(url); } catch (err) { ok = false; }

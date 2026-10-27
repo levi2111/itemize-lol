@@ -284,6 +284,30 @@ export function calculate(data: DataSource, req: CalcRequest): CalcResult {
   };
 }
 
+/** The headline of a calculation: combo damage, sustained DPS and time to kill, the same numbers `calculate`
+    reports, without the breakdown by source, crit, ability and item. A link preview needs no more, and this
+    costs a third of the whole (the same fight and the same sustained attacks, nothing else played). */
+export interface Headline {
+  combo: Pick<CalcResult['combo'], 'total' | 'hpLeft' | 'kills'>;
+  dps: Amount;
+  timeToKill: number | null;
+}
+export function headline(data: DataSource, req: CalcRequest): Headline {
+  const c = check(data, req);
+  const fight = new Fight(c.champ, c.items, c.build, c.target, { crits: c.crits });
+  fight.begin();
+  for (const a of c.sequence) fight.act(a);
+  fight.end();
+  const total = zero();
+  for (const h of fight.hits) { total.raw += h.raw; total.dealt += h.dealt; }
+  const s = sustain(c);
+  return {
+    combo: { total: round(total), hpLeft: fight.targetHp === null ? null : r2(fight.targetHp), kills: fight.targetHp === 0 },
+    dps: round(s.dps),
+    timeToKill: s.timeToKill === null ? null : r2(s.timeToKill),
+  };
+}
+
 /** A champion's own health and resistances at a level, for using them as the target. */
 export function championAsTarget(champ: ChampionData, level: number): TargetInput {
   const f = new Fight(champ, [], { champion: champ.id, level, ranks: { q: 0, w: 0, e: 0, r: 0 }, items: [] }, null);
