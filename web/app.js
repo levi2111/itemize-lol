@@ -284,6 +284,7 @@ function setChamp(c) {
   if (S.orderB === 'manual') S.orderB = 'qew';
   S.ranks = autoRanks(S.order); S.ranksB = autoRanks(S.orderB);
   paintChamp(); nameKit(); paintSkills(); renderLines(); renderSteps(); loadKit();
+  followChamp();
 }
 let comboFresh = false;
 
@@ -1335,6 +1336,32 @@ function applyState(s) {
   }
 }
 
+/* ---------- champion pages ---------- */
+/* /vayne is the tabs page with Vayne already chosen, and /receipt/vayne the receipt's (src/server/pages.ts makes them).
+   The page names its champion's slug on <html> and shows her name before any script runs, so it starts on her and
+   never shows Kai'Sa first. There the address follows the champion: choosing another moves it to that champion's
+   page, the tab's title follows, and the layout menu leads to the same champion in the other layout.
+   On / and /receipt nothing here does anything. */
+const PAGE_CHAMP = document.documentElement.dataset.champ;
+let pageTitle = null;               // the page's title after its champion's name
+/* At boot, before a link's build is applied: the page's champion, with the combo any kit starts with
+   (the default one is Kai'Sa's, which leaves out her E and R). */
+function startOnPageChamp() {
+  const c = PAGE_CHAMP && S.champs.find(x => x.slug === PAGE_CHAMP);
+  if (!c) return;
+  S.champ = c;
+  S.combo = {aa:3, q:1, w:1, e:1, r:1};
+  comboFresh = true;
+  if (document.title.startsWith(c.name)) pageTitle = document.title.slice(c.name.length);
+}
+function followChamp() {
+  if (!PAGE_CHAMP || !S.champ.slug) return;
+  const page = layout => (layout === 'receipt' ? '/receipt/' : '/') + S.champ.slug, here = page(RECEIPT ? 'receipt' : 'tabs');
+  if (location.pathname !== here) history.replaceState(null, '', here + location.search + location.hash);
+  if (pageTitle !== null) document.title = S.champ.name + pageTitle;
+  for (const a of $$('#set-menu a[data-layout]')) a.setAttribute('href', page(a.dataset.layout));
+}
+
 /* ---------- wiring ---------- */
 function wire() {
   wireTip();
@@ -1492,13 +1519,15 @@ async function boot() {
   useArt(art);
   $('#patch').textContent = meta.displayPatch;
   $('#legal').textContent = meta.legal;
-  S.champs = champs.map(c => ({id: c.id, key: c.key, name: c.name, title: c.title, tags: c.tags || [], ranged: !!c.ranged, critDamage: c.stats?.critDamage}))
+  S.champs = champs.map(c => ({id: c.id, key: c.key, name: c.name, title: c.title, tags: c.tags || [], ranged: !!c.ranged, critDamage: c.stats?.critDamage, slug: c.slug}))
     .sort((x, y) => x.name.localeCompare(y.name));
   S.items = new Map(items.map(i => [i.id, i]));
   S.champ = S.champs.find(c => c.id === S.champ.id) || S.champs[0];
+  startOnPageChamp();
 
   const saved = decodeState();
   if (saved) applyState(saved);
+  followChamp();
   const tab = /[#&]tab=(build|target|break|stats)\b/.exec(location.hash);
   if (tab && !RECEIPT) setTab(tab[1]);
   $('#order').value = S.order;

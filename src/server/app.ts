@@ -9,6 +9,7 @@ import { CalcError, type CalcResult, type TargetInput } from '../engine/types.ts
 import type { ChampionData, ItemData, Slot } from '../shared/types.ts';
 import { SLOTS } from '../shared/types.ts';
 import type { ServedData } from './dataset.ts';
+import { championSlugs } from './pages.ts';
 
 /** Riot requires this wording, readily visible, on every product that uses its assets. */
 export const LEGAL = 'itemize.lol isn\'t endorsed by Riot Games and doesn\'t reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.';
@@ -83,7 +84,9 @@ export function createApp(data: ServedData, opts: AppOptions = {}) {
   };
 
   const meta = { ...data.manifest, legal: LEGAL };
-  const champions = data.index;
+  // each with the address of its page (/vayne), which the page moves to when that champion is chosen
+  const slugs = championSlugs(data.index);
+  const champions = data.index.map(c => ({ ...c, slug: slugs.get(c.id) }));
   const items = data.items.map(itemView);
 
   api.get('/meta', c => cached(c, meta));

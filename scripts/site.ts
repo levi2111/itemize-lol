@@ -4,15 +4,20 @@
      - the art index is written into the page, with a preload for the item sheet, so the first
        pictures are on their way before any script has run.
    There is a page per layout, and both get the same treatment.
+   Then each champion gets a page of its own in both layouts, made from those (src/server/pages.ts), with the
+   sitemap, robots.txt and the redirects of other names.
    It also draws the preview images made ahead of time (scripts/og.ts) into og/, and writes the
    version that names the images the Worker draws (.build/og-version.txt).
-   The Node server needs none of this and serves web/ as it is. */
+   The Node server needs none of the renaming and serves web/ as it is; it makes the champion pages itself, with the
+   same functions. */
 import { createHash } from 'node:crypto';
 import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT } from '../src/pipeline/paths.ts';
 import type { ArtIndex } from '../src/pipeline/art.ts';
 import { buildOg } from './og.ts';
+import { Dataset } from '../src/server/dataset.ts';
+import { championPage, championSite, redirectsFile, robots, sitemap, SOURCE } from '../src/server/pages.ts';
 
 const web = join(ROOT, 'web'), out = join(ROOT, '.build', 'site');
 mkdirSync(out, { recursive: true });
@@ -38,6 +43,7 @@ const named = (file: string) => {
 const app = named('app.js'), layout = named('layout.js');
 
 const art: ArtIndex = JSON.parse(readFileSync(join(web, 'art', 'index.json'), 'utf8'));
+const made: Record<string, string> = {};
 for (const page of PAGES) {
   let html = readFileSync(join(web, page), 'utf8');
   html = swap(page, html, '<script src="/app.js" defer></script>', `<script src="/${app}" defer></script>`);
@@ -48,9 +54,20 @@ for (const page of PAGES) {
     `<script type="application/json" id="art-index">${JSON.stringify(art).replaceAll('<', '\\u003c')}</script>`,
   ].join('\n'));
   writeFileSync(join(out, page), html);
+  made[page] = html;
 }
+
+// the champion pages, from the dataset the Worker is bundled with (scripts/bundle.ts reads the same ITEMIZE_PATCH)
+const data = new Dataset(process.env.ITEMIZE_PATCH);
+const site = championSite(data.index);
+mkdirSync(join(out, 'receipt'), { recursive: true });
+for (const p of site.pages) writeFileSync(join(out, p.file), championPage(made[SOURCE[p.layout]]!, data.champion(p.id)!, p.slug, p.layout));
+writeFileSync(join(out, 'sitemap.xml'), sitemap(site.slugs, data.manifest.builtAt));
+writeFileSync(join(out, 'robots.txt'), robots());
+writeFileSync(join(out, '_redirects'), redirectsFile(site.redirects));
+
 // a build's image follows from the cards and glyphs (the key buildOg returns), the data, and the code that reads a link and does the sums
 const og = await buildOg(out), version = createHash('sha256').update(og);
 for (const dir of ['src/engine', 'src/server', 'src/og']) for (const f of readdirSync(join(ROOT, dir)).sort()) version.update(readFileSync(join(ROOT, dir, f)));
 writeFileSync(join(ROOT, '.build', 'og-version.txt'), version.digest('hex').slice(0, 12));
-console.log(`site -> .build/site/ (${app}, ${layout}, art ${art.version})`);
+console.log(`site -> .build/site/ (${app}, ${layout}, art ${art.version}; ${site.pages.length} champion pages, ${site.redirects.size} redirects)`);

@@ -77,7 +77,7 @@ All under `/api/v1`. Reads are cacheable and revalidate by ETag.
 | | |
 | --- | --- |
 | `GET /meta` | Patch, data sources, coverage, and the legal notice. |
-| `GET /champions` | Every champion: id, name, tags, base stats, model status per ability. |
+| `GET /champions` | Every champion: id, name, tags, base stats, model status per ability, and the `slug` of its page on the site. |
 | `GET /champions/:id` | One kit: ability names, icons, max ranks, status, notes, options. |
 | `GET /champions/:id/target?level=` | That champion's health, armor and magic resist at a level, for using it as the target. |
 | `GET /items` | The items of three shops, Summoner's Rift, ARAM and Arena: name, gold, tags, the shops that sell each (`shops`), stats, status, notes, and what a page can let the user set about each (`controls`) and its named effects (`effects`). |
@@ -126,6 +126,8 @@ Environment: `PORT`, `ITEMIZE_PATCH`, `ITEMIZE_DATA_DIR`, `CALC_PER_MINUTE`, `TR
 ## Deploying
 
 Production is a Cloudflare Worker (`wrangler.jsonc`). Cloudflare serves the site as static files, with the headers in `web/_headers`, and the Worker answers `/api/v1` from the dataset packed into it at build time. Before each deploy `scripts/site.ts` copies `web/` to `.build/site/` and renames the scripts after their contents, so everything but the pages themselves is cached forever. The tabs are at `/` and the receipt layout at `/receipt`; the gear in the top bar swaps between them and remembers the choice in the browser.
+
+Each champion also has a page of its own for searches to land on: `/vayne` is the tabs page with Vayne already chosen, and a title, description, canonical and link preview of its own. The slug is the champion's name in lower case, apostrophes and periods dropped and every other gap a hyphen: `kaisa`, `dr-mundo`, `nunu-willump`, `wukong`. Data Dragon ids and a few other names redirect to it with a 301 (`/MonkeyKing`, `/Vayne`, `/leesin`, `/kai-sa`, `/mundo`). `/receipt/vayne` is the same page in the receipt layout, for visitors who chose that one; its canonical is `/vayne`, as `/receipt`'s is `/`. Choosing another champion on such a page moves the address to that champion's page. `src/server/pages.ts` makes all of it: `scripts/site.ts` writes the pages as `vayne.html` and `receipt/vayne.html` (Cloudflare serves `/vayne` from `vayne.html` with a 200; `vayne/index.html` would redirect to `/vayne/`), with `sitemap.xml`, `robots.txt` and `_redirects`, and the Node server makes the same per request.
 
 ```
 npm run dev:worker      # the Worker, locally

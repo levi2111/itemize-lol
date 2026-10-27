@@ -1,7 +1,9 @@
 /* Runs before the page is drawn. The two layouts are two pages, and a visitor who chose the other
-   one in the settings menu (app.js stores the choice) is sent to its page, keeping the link's build. */
+   one in the settings menu (app.js stores the choice) is sent to its page, keeping the link's build.
+   A champion's page has one in each layout as well (/vayne and /receipt/vayne), so it keeps its champion. */
 (() => {
-  const PAGES = {tabs: '/', receipt: '/receipt'};
+  const champ = document.documentElement.dataset.champ;
+  const PAGES = champ ? {tabs: '/' + champ, receipt: '/receipt/' + champ} : {tabs: '/', receipt: '/receipt'};
   let want = null;
   try { want = localStorage.getItem('layout'); } catch (e) {}
   if (!Object.hasOwn(PAGES, want) || want === document.documentElement.dataset.layout) return;
