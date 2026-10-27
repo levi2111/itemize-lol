@@ -1299,18 +1299,22 @@ function restore() {
   if (given) return applyState(given);
   const r = remembered(), s = r && decodeState(r.s);
   if (!s) return;
-  kept = r.s;
+  kept = r.s; back = r;
   try { applyState(s); } catch (e) {}
 }
+/* The record also holds what the visitor saw with the build, for the patch notice: the dataset (`data`)
+   and each build's numbers (`seen`). */
 function remember() {
+  if (!S.res) return;
   const now = encodeState();
   if (!owned) {
-    if (!touched || opened === null) { opened = now; return; }
+    if (!touched || opened === null) { opened = now; review(); return; }
     if (now === opened) return;
     owned = true;
+    notice(null);
   }
   if (now === kept) return;
-  try { localStorage.setItem(KEEP, JSON.stringify({s: now})); kept = now; dropLink(); } catch (e) {}
+  try { localStorage.setItem(KEEP, JSON.stringify({s: now, data: dataOf(served), seen: seenNow()})); kept = now; dropLink(); } catch (e) {}
 }
 function wireRemember() {
   const touch = () => { touched = true; };
@@ -1319,6 +1323,65 @@ function wireRemember() {
   // a build's name changes no number, so nothing recalculates: it is kept on its own once typing pauses
   let wait = 0;
   for (const k of ['a', 'b']) $(`#name-${k}`).addEventListener('input', () => { clearTimeout(wait); wait = setTimeout(remember, 400); });
+  $('#patch-note')?.addEventListener('click', e => { if (e.target.closest('.pn-x')) notice(null); });
+}
+
+/* ---------- the patch notice ---------- */
+/* A patch, or the dataset rebuilt, can change what the build a visitor comes back to deals. Once the first
+   calculation of such a visit is in, one line says what moved since they last saw it, and only if something
+   did: a build's combo or DPS by at least NOTICE of what it was (and by a whole point, the totals' own
+   step), or which build leads. 1% is the step in which the page itself compares builds (a verdict's
+   "+12% combo"); less than that cannot change how two builds compare, and is the drift a balance pass
+   leaves on things it did not touch. The record then takes the new numbers, so the line shows once; it goes
+   when dismissed or when the build is edited. */
+const NOTICE = 0.01;
+let served = null;                  // GET /meta: the dataset the numbers come from
+let back = null;                    // the remembered record the page opened on, as it was before this visit
+const dataOf = m => m && {patch: m.patch, built: m.builtAt};
+/* Each build's combo and DPS against the target, as the page shows them. */
+function seenNow() {
+  const out = {};
+  for (const k of S.compare && S.res.b ? ['a', 'b'] : ['a']) out[k] = [Math.round(S.res[k].combo.total.dealt), Math.round(S.res[k].dps.dealt)];
+  return out;
+}
+/* Each settle before the visitor does anything is still the build they came back to: it is compared with what
+   they saw last time, and that is updated. The receipt page counts crits at the average and shows one set of
+   ranks, so a build kept with others is left for the tabs page. */
+function review() {
+  const was = back && decodeState(back.s), data = dataOf(served);
+  if (!was || !data || (was.k ?? 'average') !== S.crits || !!was.rb !== S.split) return;
+  const seen = seenNow(), news = back.seen && (back.data?.patch !== data.patch || back.data?.built !== data.built);
+  notice(news ? patchNews(back.seen, seen, back.data?.patch !== data.patch) : null);
+  try { localStorage.setItem(KEEP, JSON.stringify({...back, data, seen})); } catch (e) {}
+}
+/* The line, or null when nothing moved enough. `was` and `now` are seenNow()'s. One build's line names each
+   number that moved; a comparison's names one: the combo if it moved or changed hands, else DPS, so the line
+   fits above the totals. */
+function patchNews(was, now, patched) {
+  const ks = Object.keys(now);
+  if (ks.join() !== Object.keys(was).join() || !ks.every(k => Array.isArray(was[k]) && was[k].every(Number.isFinite))) return null;
+  const moved = (x, y) => Math.abs(y - x) >= Math.max(1, Math.abs(x) * NOTICE);
+  const lead = (s, i) => !s.b ? 'a' : s.a[i] > s.b[i] ? 'a' : s.b[i] > s.a[i] ? 'b' : '';
+  const on = [0, 1].filter(i => ks.some(k => moved(was[k][i], now[k][i])) || lead(was, i) !== lead(now, i));
+  if (!on.length) return null;
+  const tag = k => `<span class="tag ${k} xs">${k.toUpperCase()}</span>`;
+  const step = (k, i) => was[k][i] === now[k][i] ? `still <b>${nf(now[k][i])}</b>` : `<b>${nf(was[k][i])} → ${nf(now[k][i])}</b>`;
+  let text;
+  if (ks.length === 1) text = 'your ' + on.map((i, n) => `${['combo', 'DPS'][i]} ${n ? '' : 'went '}${step('a', i)}`).join(', ');
+  else {
+    const i = on[0], dps = i ? ' on DPS' : '', l = lead(now, i);
+    text = (i ? 'DPS ' : '') + ks.map(k => `<span class="pn-k">${tag(k)} ${step(k, i)}</span>`).join(', ');
+    if (lead(was, i) !== l) text += `. <em>${l ? `${tag(l)} leads${dps} now` : `A and B tie${dps} now`}</em>.`;
+  }
+  return `<strong>${patched ? `Patch ${esc(served.displayPatch)}` : `Updated ${esc(served.displayPatch)} data`}:</strong> ${text}`;
+}
+function notice(html) {
+  const el = $('#patch-note');
+  if (!el) return;
+  el.hidden = !html;
+  el.innerHTML = html ? `<span class="pn-t">${html}</span><button class="pn-x" aria-label="Dismiss" title="Dismiss">×</button>` : '';
+  // cut short when the line is longer than its room: the whole of it is the tooltip
+  if (html) $('.pn-t', el).title = $('.pn-t', el).textContent;
 }
 
 /* ---------- share link ---------- */
@@ -1549,6 +1612,7 @@ async function boot() {
   useArt(art);
   $('#patch').textContent = meta.displayPatch;
   $('#legal').textContent = meta.legal;
+  served = meta;
   S.champs = champs.map(c => ({id: c.id, key: c.key, name: c.name, title: c.title, tags: c.tags || [], ranged: !!c.ranged, critDamage: c.stats?.critDamage}))
     .sort((x, y) => x.name.localeCompare(y.name));
   S.items = new Map(items.map(i => [i.id, i]));

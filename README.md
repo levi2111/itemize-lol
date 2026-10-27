@@ -123,7 +123,7 @@ Environment: `PORT`, `ITEMIZE_PATCH`, `ITEMIZE_DATA_DIR`, `CALC_PER_MINUTE`, `TR
 
 ## Deploying
 
-Production is a Cloudflare Worker (`wrangler.jsonc`). Cloudflare serves the site as static files, with the headers in `web/_headers`, and the Worker answers `/api/v1` from the dataset packed into it at build time. Before each deploy `scripts/site.ts` copies `web/` to `.build/site/` and renames the scripts after their contents, so everything but the pages themselves is cached forever. The tabs are at `/` and the receipt layout at `/receipt`; the gear in the top bar swaps between them and remembers the choice in the browser. The browser also keeps the last build the visitor changed, and both pages open on it; a share link opens on its own build, which replaces theirs only once they edit it.
+Production is a Cloudflare Worker (`wrangler.jsonc`). Cloudflare serves the site as static files, with the headers in `web/_headers`, and the Worker answers `/api/v1` from the dataset packed into it at build time. Before each deploy `scripts/site.ts` copies `web/` to `.build/site/` and renames the scripts after their contents, so everything but the pages themselves is cached forever. The tabs are at `/` and the receipt layout at `/receipt`; the gear in the top bar swaps between them and remembers the choice in the browser. The browser also keeps the last build the visitor changed, and both pages open on it; a share link opens on its own build, which replaces theirs only once they edit it. If a patch has since moved that build's combo or DPS by 1% or more, or changed which build leads, one line on their first visit after says so.
 
 ```
 npm run dev:worker      # the Worker, locally

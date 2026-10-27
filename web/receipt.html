@@ -307,6 +307,19 @@ body[data-compare="off"] .r-row{grid-template-columns:2.2rem minmax(0,1fr) 4.5re
 .r-foot-txt b{color:var(--ink);font-size:.72rem}
 .r-foot-txt span[title]{cursor:help;text-decoration:underline dotted;text-underline-offset:.2em}
 
+/* ---------- the patch notice ---------- */
+/* Printed under the receipt's header, boxed like a till's note, when a patch changed the numbers of the
+   build a visitor came back to (app.js, the patch notice). */
+.pn{display:flex;align-items:flex-start;gap:.4rem;margin:.65rem 0 0;padding:.3rem .2rem .3rem .5rem;border:1px dashed var(--ink);font-size:.7rem;line-height:1.35}
+.pn-t{flex:1;min-width:0}
+.pn-t strong{font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.pn-t b{font-weight:700}
+.pn-t em{font-style:normal;font-weight:700}
+.pn-k,.pn-t b,.pn-t em{white-space:nowrap}
+.pn-t .tag{vertical-align:-.1em}
+.pn-x{flex:none;padding:0 .25rem;font-size:.9rem;line-height:1;color:var(--ink-soft)}
+.pn-x:hover{color:var(--ink)}
+
 /* ---------- target ---------- */
 .tgt{display:flex;flex-direction:column;gap:1.05rem;padding:1.2rem 0 1.15rem}
 .tgt-mode{display:grid;gap:.5rem}
@@ -598,6 +611,7 @@ label.ic{cursor:pointer}
             <div><dt>Champion</dt><dd><span id="r-champ">Kai'Sa</span>, level <span id="r-lvl">13</span></dd></div>
             <div><dt>Target</dt><dd id="r-target"></dd></div>
           </dl>
+          <p class="pn" id="patch-note" role="status" hidden></p>
           <hr class="rule">
           <div class="r-row r-cols">
             <span>Qty</span><span>Source</span>
