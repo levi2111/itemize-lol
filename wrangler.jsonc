@@ -22,7 +22,7 @@
   // the short links (src/server/links.ts, migrations/). Made once with `npx wrangler d1 create itemize-links`,
   // whose database_id goes here (README, Short links); `wrangler dev` keeps a local copy in .wrangler/ whatever it says
   "d1_databases": [
-    { "binding": "LINKS", "database_name": "itemize-links", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }
+    { "binding": "LINKS", "database_name": "itemize-links", "database_id": "6a8a10b4-a32b-429c-8328-c5fbcf8075cd", "migrations_dir": "migrations" }
   ],
   "observability": { "enabled": true }
 }
