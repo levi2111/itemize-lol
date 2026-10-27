@@ -6,5 +6,5 @@
   try { want = localStorage.getItem('layout'); } catch (e) {}
   if (!Object.hasOwn(PAGES, want) || want === document.documentElement.dataset.layout) return;
   // never to the address this page was itself served from, whatever it turned out to hold
-  if (location.pathname !== PAGES[want]) location.replace(PAGES[want] + location.hash);
+  if (location.pathname !== PAGES[want]) location.replace(PAGES[want] + location.search + location.hash);
 })();

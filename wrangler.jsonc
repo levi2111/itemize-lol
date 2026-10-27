@@ -7,9 +7,10 @@
   // the workers.dev address stays up next to the domain, and each uploaded version gets a preview address
   "workers_dev": true,
   "preview_urls": true,
-  // the site: served straight from Cloudflare's edge, the Worker only sees what is not a file here
-  "assets": { "directory": ".build/site" },
-  // packs data/dist into .build/data.txt and prepares web/ in .build/site/
+  // the site: served straight from Cloudflare's edge, the Worker only sees what is not a file here,
+  // and the two pages, which it passes through unless their address carries a shared build (src/worker/preview.ts)
+  "assets": { "directory": ".build/site", "binding": "ASSETS", "run_worker_first": ["/", "/receipt"] },
+  // packs data/dist into .build/data.txt and prepares web/ in .build/site/, the preview images included
   "build": { "command": "node scripts/bundle.ts && node scripts/site.ts", "watch_dir": ["src", "web", "scripts"] },
   // POST /api/v1/calc, per client address
   "ratelimits": [
