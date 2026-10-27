@@ -167,7 +167,6 @@ function setTab(t) {
   $$('.tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
   $$('.pane').forEach(p => p.hidden = p.dataset.pane !== t);
   if (t !== 'build') closePicker();
-  if (t === 'saved') renderSaved();
 }
 function paintTabs() {
   if (RECEIPT) return;
@@ -1485,8 +1484,8 @@ function notice(html) {
 }
 
 /* ---------- saved builds ---------- */
-/* Builds kept in this browser, to come back to and switch between. The tabs page lists them in its Saved
-   tab, the receipt page in a menu under Saved builds in the top bar, and both read one list in localStorage.
+/* Builds kept in this browser, to come back to and switch between. Both pages list them in a menu under Saved
+   builds in the top bar, and both read one list in localStorage.
    An entry keeps encodeState()'s string, which is all that loading it needs, and a summary for the list (the
    champion, level and items) so that drawing the list never has to read that string. Loading one is what a
    shared link does at boot: applyState, then paintAll. */
@@ -1573,9 +1572,8 @@ function savedRow(e) {
 function renderSaved() {
   const ul = $('#saved-list');
   if (!ul || !S.items.size) return;
-  const list = readSaved(), n = list.length, badge = $('#saved-n'), sum = $('#ts-saved');
+  const list = readSaved(), n = list.length, badge = $('#saved-n');
   if (badge) { badge.textContent = n; badge.hidden = !n; badge.parentElement.setAttribute('aria-label', `Saved builds${n ? `, ${n}` : ''}`); }
-  if (sum) sum.textContent = n ? `${n} build${n === 1 ? '' : 's'}` : 'None yet';
   $('#saved-save').disabled = $('#saved-name').disabled = !!savedErr;
   // redrawing keeps the focus on the same button of the same entry
   const f = document.activeElement, back = ul.contains(f) && `[data-id="${f.closest('[data-id]')?.dataset.id}"] [data-act="${f.dataset.act}"]`;
@@ -1685,9 +1683,9 @@ function wireSaved() {
   box.addEventListener('click', e => {
     const b = e.target.closest('button[data-act]');
     if (!b || !acts[b.dataset.act]) return;
-    // a click here redraws the list under the pointer. In the receipt page's menu it stops here, or wire()'s
-    // handler would take the vanished button for a click outside the menu and close it.
-    if (box.matches('.menu')) e.stopPropagation();
+    // a click here redraws the list under the pointer, so it stops here, or wire()'s handler would take the
+    // vanished button for a click outside the menu and close it
+    e.stopPropagation();
     acts[b.dataset.act](b.closest('[data-id]')?.dataset.id);
   });
   // the field of an entry being renamed: Enter keeps the name, Esc goes back to the old one, and so does
@@ -1703,11 +1701,10 @@ function wireSaved() {
     const li = e.target.closest('.sv.editing');
     if (li && savedEdit === li.dataset.id && !li.contains(e.relatedTarget)) renameSaved(li.dataset.id, $('input', li).value);
   });
-  // Saved builds in the top bar: on the tabs page it opens the tab; on the receipt page it is the menu's
-  // button (see setMenu), and the menu opens freshly drawn with the focus in its name field
+  // Saved builds in the top bar is the menu's button (see setMenu): the menu opens freshly drawn, with the
+  // focus in its name field
   $('#saved-link')?.addEventListener('click', e => {
     e.preventDefault();
-    if (!RECEIPT) { setTab('saved'); $('.tab[data-tab="saved"]')?.focus(); return; }
     savedSay(''); savedUndo = null; savedEdit = null; renderSaved();
     setTimeout(() => { if (!$('#saved-menu').hidden) input.focus(); });
   });
@@ -1899,7 +1896,7 @@ const STOPS = RECEIPT ? [
     // on a phone the totals are the strip pinned at the top, and the rest of the band comes after the builds
     ph: {at: ['.tot.a', '.tot.b'], text: () => `What the combo deals to the target, and the share of its health that is. This strip stays in view as you scroll. Under the builds, <b>DPS</b> and <b>time to kill</b> say who wins a longer fight, and the combo is ${comboNow()}; its pencil changes it.`}},
   {at: ['.tab'], title: 'Every number, explained',
-    text: () => `<b>Breakdown</b> splits the damage by source, <b>More stats</b> lists every stat and <b>Saved</b> keeps builds in this browser${kb('; keys <span class="key">1</span> to <span class="key">5</span> switch tabs')}. <b>Copy build link</b>, top right, shares the whole setup.`},
+    text: () => `<b>Breakdown</b> splits the damage by source and <b>More stats</b> lists every stat${kb('; keys <span class="key">1</span> to <span class="key">4</span> switch tabs')}. <b>Copy build link</b>, top right, shares the whole setup, and <b>Saved builds</b>, top left, keeps it in this browser.`},
 ];
 const stopAt = i => PHONE.matches && STOPS[i].ph ? {...STOPS[i], ...STOPS[i].ph} : STOPS[i];
 function introDue() {
@@ -2256,7 +2253,7 @@ function wire() {
     }
     if (e.ctrlKey || e.metaKey || e.altKey || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || !$('#champ-modal').hidden) return;
     if (e.key === '?') { openIntro(); return; }
-    const tab = !RECEIPT && {1:'build', 2:'target', 3:'break', 4:'stats', 5:'saved'}[e.key];
+    const tab = !RECEIPT && {1:'build', 2:'target', 3:'break', 4:'stats'}[e.key];
     if (tab) { setTab(tab); return; }
     if (e.key.toLowerCase() === 'c') { e.preventDefault(); openChamps('atk'); }
   });
@@ -2305,7 +2302,7 @@ async function boot() {
 
   restore();
   followChamp();
-  const tab = /[#&]tab=(build|target|break|stats|saved)\b/.exec(location.hash);
+  const tab = /[#&]tab=(build|target|break|stats)\b/.exec(location.hash);
   if (tab && !RECEIPT) setTab(tab[1]);
   paintAll(); renderSaved();
   // a first visit: the welcome comes in over the page once the page is there to be seen behind it
