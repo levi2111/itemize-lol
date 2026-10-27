@@ -63,12 +63,13 @@ export function createApp(data: ServedData, opts: AppOptions = {}) {
   app.use(secureHeaders({
     contentSecurityPolicy: {
       defaultSrc: ["'self'"],
-      // art and fonts are the site's own files; nothing is loaded from another origin
+      // art and fonts are the site's own files; the only outside script is Cloudflare Web Analytics,
+      // which counts page views without cookies and reports them to cloudflareinsights.com
       imgSrc: ["'self'", 'data:'],
       styleSrc: ["'self'", "'unsafe-inline'"],
       fontSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      connectSrc: ["'self'"],
+      scriptSrc: ["'self'", 'https://static.cloudflareinsights.com'],
+      connectSrc: ["'self'", 'https://cloudflareinsights.com'],
       frameAncestors: ["'none'"],
     },
   }));

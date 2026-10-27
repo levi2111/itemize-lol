@@ -1308,7 +1308,7 @@ function paintQuality() {
 function paintResults() {
   if (RECEIPT) { paintReceipt(); renderLedger(); reprint(); }
   else { paintHero(); paintLines(); paintSide(); renderStats(); }
-  paintOpts(); paintTarget(); paintQuality(); paintItemMenu(); paintTip();
+  paintOpts(); paintTarget(); paintQuality(); paintItemMenu(); paintTip(); paintIntro();
 }
 
 /* ---------- champion options ---------- */
@@ -1382,7 +1382,7 @@ const KEEP = 'build';
 let opened = null;                  // the state the page settled on before the visitor did anything
 let owned = false;                  // the page has been edited since, so what it shows is the visitor's build
 let kept = null;                    // the state last written
-let touched = false;                // the visitor has pressed a key or a pointer
+let pressed = false;                // the visitor has pressed a key or a pointer
 function remembered() {
   try {
     const r = JSON.parse(localStorage.getItem(KEEP));
@@ -1407,7 +1407,7 @@ function remember() {
   if (!S.res) return;
   const now = encodeState();
   if (!owned) {
-    if (!touched || opened === null) { opened = now; review(); return; }
+    if (!pressed || opened === null) { opened = now; review(); return; }
     if (now === opened) return;
     owned = true;
     notice(null);
@@ -1416,7 +1416,7 @@ function remember() {
   try { localStorage.setItem(KEEP, JSON.stringify({s: now, data: dataOf(served), seen: seenNow()})); kept = now; dropLink(); } catch (e) {}
 }
 function wireRemember() {
-  const touch = () => { touched = true; };
+  const touch = () => { pressed = true; };
   document.addEventListener('pointerdown', touch, {capture: true, once: true});
   document.addEventListener('keydown', touch, {capture: true, once: true});
   // a build's name changes no number, so nothing recalculates: it is kept on its own once typing pauses
@@ -1816,9 +1816,230 @@ function followChamp() {
   for (const a of $$('#set-menu a[data-layout]')) a.setAttribute('href', page(a.dataset.layout));
 }
 
+/* ---------- the introduction ---------- */
+/* A first visit opens a welcome: what the site is for, and its three steps drawn from what is on the page
+   behind it (the champion, the builds, what each deals). From there a short tour shows the page one part at
+   a time. The veil over the page is the shadow of a hole: on the welcome the hole is the card itself, on
+   the tour it is the part being shown, and it glides from one stop to the next. A click inside the hole goes
+   through to the page and ends the tour, and so does a click outside it. Once closed it stays closed in this
+   browser; the ? in the top bar, or the ? key, brings it back. Inside a frame (the promo video's stage) it
+   never opens by itself. */
+const INTRO_KEY = 'intro';
+let intro = null;                   // {step: -1 on the welcome, else the tour's stop; auto: a first visit opened it; back, scroll: where focus and the page return to; shown; timer}
+const remPx = () => parseFloat(getComputedStyle(document.documentElement).fontSize);
+const val = x => typeof x === 'function' ? x() : x;
+const allChamps = () => S.champs.length ? `all ${S.champs.length}` : 'every champion';
+const comboNow = () => ACTIONS.some(k => S.combo[k]) ? `<b>${esc(comboText())}</b>` : '<b>empty</b>';
+const buildsText = () => (S.compare
+  ? 'Click a slot to choose an item. A and B share the champion and level, so the items are the only difference; the ones that differ are underlined.'
+  : 'Click a slot to choose an item. Add a second build to compare the two side by side.')
+  + ($('.slot .cfg:not(.info)') ? ' The round button on an item sets its stacks or active.' : '');
+/* Where the tour stops: the parts of the page it shows (one hole around all of them), and the side of the
+   hole its card goes on when there is room. */
+const STOPS = RECEIPT ? [
+  {at: ['#champ-btn', '.lvl', '.skills'], title: 'Your champion',
+    text: () => `Click the name, or press <span class="key">C</span>, to choose from ${allChamps()}. Set the level on the ruler; ability ranks follow the <b>max order</b>, or click a pip to set one yourself.`},
+  {at: ['#builds'], side: 'above', title: () => S.compare ? 'Two builds, A and B' : 'Your build', text: buildsText},
+  {at: ['.tgt'], side: 'left', title: "Who you're hitting",
+    text: 'A <b>target dummy</b> with the health, armor and magic resist you set, or a real <b>enemy champion</b> at its level. The bars show the health each build leaves it.'},
+  {at: ['.till'], side: 'right', title: 'The receipt',
+    text: 'Every ability, auto attack and item effect in the combo, itemized, with the bigger number highlighted. <b>DPS</b> and <b>time to kill</b> say who wins a longer fight. Type in the <b>Qty</b> column to change the combo.'},
+  {at: ['.ledger'], side: 'above', title: 'Every stat',
+    text: () => `${S.compare ? "Both builds' stats, side by side" : "Your build's stats"}. When you're done, <b>Copy build link</b> at the top shares the whole setup.`},
+] : [
+  {at: ['.setup'], title: 'Your champion',
+    text: () => `Click the champion, or press <span class="key">C</span>, to choose from ${allChamps()}. Set the level on the ruler; ability ranks follow the <b>max order</b>, or click a pip to set one yourself.`},
+  {at: ['#builds > .sec-head', '#builds .build', '#add-b'], side: 'above', title: () => S.compare ? 'Two builds, A and B' : 'Your build', text: buildsText},
+  {at: ['#tseg'], title: "Who you're hitting",
+    text: 'A <b>target dummy</b> with the health, armor and magic resist you set, or a real <b>enemy champion</b> at its level. <b>Raw output</b> is the damage before either. The numbers are in the <b>Target</b> tab.'},
+  {at: ['.totals', '.hero-side'], title: 'Who hits harder',
+    text: () => `What the combo deals to the target, and the share of its health that is. <b>DPS</b> and <b>time to kill</b> say who wins a longer fight. The combo, top left, is ${comboNow()}; its pencil changes it.`},
+  {at: ['.tab'], title: 'Every number, explained',
+    text: '<b>Breakdown</b> splits the damage by source and <b>More stats</b> lists every stat; keys <span class="key">1</span> to <span class="key">4</span> switch tabs. <b>Copy build link</b>, top right, shares the whole setup.'},
+];
+function introDue() {
+  if (self !== top) return false;
+  try { return !localStorage.getItem(INTRO_KEY); } catch (e) { return false; }
+}
+function helloHtml() {
+  const shared = intro.auto && /[#&]s=/.test(location.hash), ks = S.compare ? ['a', 'b'] : ['a'];
+  const items = k => [...S.builds[k].filter(Boolean), null, null, null, null].slice(0, 4)
+    .map(id => `<span class="in-it${id ? '' : ' empty'}">${id ? itemIco(id) : ''}</span>`).join('');
+  const tag = k => `<span class="tag ${k} xs">${k.toUpperCase()}</span>`;
+  return `<img class="in-art wait" alt="">
+    <div class="in-top">
+      <span class="in-eyebrow">${shared ? 'Someone shared a build with you' : 'Welcome to itemize.lol'}</span>
+      <h2 class="in-h" id="in-h">Which build<br><mark>hits harder?</mark></h2>
+      <p class="in-lede" id="in-lede">Put two League of Legends item builds side by side and see the damage each one really deals: every ability, auto attack and item effect, after the target's armor and magic resist.</p>
+    </div>
+    <ol class="in-steps">
+      <li><div class="in-pic in-champ"><span class="in-face">${champIco(S.champ.id)}</span><span class="in-who"><b>${esc(S.champ.name)}</b><small>Level ${S.level}</small></span></div>
+        <b><i>1</i>Pick a champion</b><span>Any of ${S.champs.length || 'them'}, at any level</span></li>
+      <li><div class="in-pic">${ks.map(k => `<div class="in-row">${tag(k)}${items(k)}</div>`).join('')}</div>
+        <b><i>2</i>${S.compare ? 'Fill two builds' : 'Fill a build'}</b><span>Click a slot, choose an item</span></li>
+      <li><div class="in-pic" id="in-res">${ks.map(k => `<div class="in-row ${k}" data-k="${k}">${tag(k)}<span class="in-bar"><i></i></span><b>–</b></div>`).join('')}</div>
+        <b><i>3</i>Read the damage</b><span>On a dummy or a real champion</span></li>
+    </ol>
+    <div class="in-acts">
+      <button class="in-go" data-in="tour">Show me around <span class="key">Enter</span></button>
+      <button class="in-skip" data-in="close">I'll explore on my own <span class="key">Esc</span></button>
+    </div>
+    <p class="in-foot">Patch ${esc($('#patch').textContent)} · Every number comes from the game's own files · The <b>?</b> at the top right brings this back</p>`;
+}
+function openIntro(auto) {
+  if (intro) return;
+  closePicker(); closeItemMenu(); closeChamps(); setMenu(null); hideTip();
+  const me = intro = {step: -1, auto: !!auto, back: document.activeElement, scroll: [scrollX, scrollY], shown: false};
+  const root = $('#intro');
+  root.className = 'intro hello';
+  root.innerHTML = `<div class="in-catch"></div><div class="in-hole"></div>
+    <div class="in-card hello" role="dialog" aria-modal="true" aria-labelledby="in-h" aria-describedby="in-lede">${helloHtml()}</div>`;
+  root.hidden = false;
+  if (ART) { const art = $('.in-art', root), url = splashUrl(S.champ.id); warm(url).then(() => { if (art.isConnected) art.src = url; }); }
+  placeIntro(true);
+  $('.in-go', root).focus({preventScroll: true});
+  // the damage is the welcome's last line, counted up once the card has come in
+  setTimeout(() => { if (intro === me) { me.shown = true; paintIntro(); } }, 420);
+}
+/* The welcome's third step: what each build deals, as the page shows it. */
+function paintIntro() {
+  const box = intro?.step === -1 && intro.shown && S.res && $('#in-res');
+  if (!box) return;
+  const v = {a: S.res.a.combo.total.dealt, b: S.compare && S.res.b ? S.res.b.combo.total.dealt : 0}, max = Math.max(1, v.a, v.b);
+  const still = box.dataset.done || matchMedia('(prefers-reduced-motion: reduce)').matches;
+  for (const row of $$('.in-row', box)) {
+    const k = row.dataset.k, n = $('b', row);
+    $('.in-bar i', row).style.width = `${(v[k] / max * 100).toFixed(1)}%`;
+    row.classList.toggle('lose', S.compare && Math.round(v[k]) < Math.round(v[k === 'a' ? 'b' : 'a']));
+    if (still) { n.textContent = nf(v[k]); continue; }
+    const t0 = performance.now();
+    const tick = t => { const p = Math.min(1, (t - t0) / 900); n.textContent = nf(v[k] * (1 - (1 - p) ** 3)); if (p < 1 && n.isConnected) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  }
+  box.dataset.done = 1;
+}
+/* A stop's hole: around everything it shows, with a little room, and kept inside the window. */
+function holeAt(s) {
+  const boxes = s.at.flatMap(q => $$(q)).filter(el => el.getClientRects().length).map(el => el.getBoundingClientRect());
+  const m = 4, pad = remPx() * .55;
+  if (!boxes.length) return {l: m, t: m, r: innerWidth - m, b: innerHeight - m};
+  return {l: Math.max(m, Math.min(...boxes.map(b => b.left)) - pad), t: Math.max(m, Math.min(...boxes.map(b => b.top)) - pad),
+    r: Math.min(innerWidth - m, Math.max(...boxes.map(b => b.right)) + pad), b: Math.min(innerHeight - m, Math.max(...boxes.map(b => b.bottom)) + pad)};
+}
+/* The tour's card goes beside the hole: on the stop's own side if it fits there, else the first side that does,
+   else over the page at the bottom of the window. */
+function placeCard(card, h, s) {
+  const w = card.offsetWidth, ht = card.offsetHeight, gap = remPx() * .9, m = remPx(), W = innerWidth, H = innerHeight;
+  const fits = {below: h.b + gap + ht <= H - m, above: h.t - gap - ht >= m, right: h.r + gap + w <= W - m, left: h.l - gap - w >= m};
+  const side = [s.side, 'below', 'above', 'right', 'left'].find(x => fits[x]);
+  const cx = x => Math.max(m, Math.min(x, W - w - m)), cy = y => Math.max(m, Math.min(y, H - ht - m));
+  const [x, y] = side === 'below' ? [cx(h.l), h.b + gap] : side === 'above' ? [cx(h.l), h.t - gap - ht]
+    : side === 'right' ? [h.r + gap, cy(h.t)] : side === 'left' ? [h.l - gap - w, cy(h.t)] : [cx((W - w) / 2), H - ht - m];
+  card.style.left = `${x}px`; card.style.top = `${y}px`;
+}
+/* Puts the hole and the card where they belong now. `still` is for the window moving under them (a resize, a
+   scroll): they jump there instead of gliding. */
+function placeIntro(still) {
+  const root = $('#intro');
+  if (!intro || !root) return;
+  const card = $('.in-card', root), hole = $('.in-hole', root), m = remPx() / 2;
+  if (still) root.classList.add('still');
+  let h;
+  if (intro.step < 0) {
+    const w = card.offsetWidth, ht = card.offsetHeight, x = Math.max(m, (innerWidth - w) / 2), y = Math.max(m, (innerHeight - ht) / 2);
+    card.style.left = `${x}px`; card.style.top = `${y}px`;
+    h = {l: x, t: y, r: x + w, b: y + ht};
+    $('.in-catch', root).style.clipPath = '';
+  } else {
+    h = holeAt(STOPS[intro.step]);
+    // the clicks outside the hole are caught; the ones inside reach the page
+    $('.in-catch', root).style.clipPath = `polygon(evenodd,0 0,100% 0,100% 100%,0 100%,0 0,${h.l}px ${h.t}px,${h.l}px ${h.b}px,${h.r}px ${h.b}px,${h.r}px ${h.t}px,${h.l}px ${h.t}px)`;
+    if (!card.classList.contains('out')) placeCard(card, h, STOPS[intro.step]);
+  }
+  Object.assign(hole.style, {left: `${h.l}px`, top: `${h.t}px`, width: `${h.r - h.l}px`, height: `${h.b - h.t}px`});
+  if (still) { void root.offsetWidth; root.classList.remove('still'); }
+}
+/* To the tour's stop i: the hole glides there at once, the card fades out and comes back beside it. */
+function go(i) {
+  if (!intro || i < 0) return;
+  if (i >= STOPS.length) return closeIntro();
+  const from = intro.step, root = $('#intro'), card = $('.in-card', root), hole = $('.in-hole', root);
+  intro.step = i;
+  if (!RECEIPT) setTab('build');
+  root.className = 'intro tour';
+  card.classList.add('out');
+  $(STOPS[i].at[0])?.scrollIntoView({block: 'nearest', inline: 'nearest'});
+  placeIntro();
+  hole.classList.remove('ping'); void hole.offsetWidth; hole.classList.add('ping');
+  clearTimeout(intro.timer);
+  intro.timer = setTimeout(() => {
+    if (intro?.step !== i) return;
+    if (from < 0) {
+      card.className = 'in-card stop out';
+      card.setAttribute('aria-labelledby', 'in-t'); card.setAttribute('aria-describedby', 'in-p');
+      card.innerHTML = `<div class="st-top"><span class="st-n"></span><span class="st-segs">${STOPS.map(() => '<i></i>').join('')}</span><button class="esc" data-in="close" title="End the tour">Esc</button></div>
+        <div class="st-body" aria-live="polite"><h3 class="in-t" id="in-t"></h3><p class="in-p" id="in-p"></p></div>
+        <div class="st-acts"><button class="btn" data-in="back"><span class="key">←</span> Back</button><button class="in-go" data-in="next"></button></div>`;
+    }
+    const s = STOPS[i], last = i === STOPS.length - 1, next = $('[data-in="next"]', card);
+    $('.st-n', card).textContent = `${i + 1} / ${STOPS.length}`;
+    $$('.st-segs i', card).forEach((el, j) => el.classList.toggle('on', j <= i));
+    $('#in-t').textContent = val(s.title);
+    $('#in-p').innerHTML = val(s.text);
+    $('[data-in="back"]', card).hidden = !i;
+    next.innerHTML = last ? 'Start building' : 'Next <span class="key">→</span>';
+    placeCard(card, holeAt(s), s);
+    card.classList.remove('out');
+    if (!card.contains(document.activeElement) || document.activeElement.hidden) next.focus({preventScroll: true});
+  }, from < 0 ? 240 : 150);
+}
+/* `through`: the visitor clicked into the page, so the page stays where the tour scrolled it (in a window
+   narrower than the page) and focus goes where that click puts it. */
+function closeIntro(through) {
+  if (!intro) return;
+  const {back, scroll} = intro, root = $('#intro');
+  clearTimeout(intro.timer);
+  intro = null;
+  try { localStorage.setItem(INTRO_KEY, '1'); } catch (e) {}
+  root.classList.add('bye');
+  setTimeout(() => { if (!intro) { root.hidden = true; root.innerHTML = ''; } }, 220);
+  if (through) return;
+  scrollTo(...scroll);
+  if (back?.isConnected && back !== document.body) back.focus({preventScroll: true});
+}
+function wireIntro() {
+  const root = $('#intro');
+  $('#intro-btn').addEventListener('click', () => openIntro());
+  root.addEventListener('click', e => {
+    const b = e.target.closest('[data-in]');
+    if (b) ({tour: () => go(0), next: () => go(intro.step + 1), back: () => go(intro.step - 1), close: () => closeIntro()})[b.dataset.in]();
+    else if (e.target.closest('.in-catch')) closeIntro();
+  });
+  // while it is open the page's own keys wait: Esc closes it, Enter (off its buttons) and the arrows step through
+  // the tour, Tab stays on its card
+  addEventListener('keydown', e => {
+    if (!intro) return;
+    e.stopPropagation();
+    const step = {ArrowRight: 1, ArrowLeft: -1}[e.key];
+    if (e.key === 'Escape') { e.preventDefault(); closeIntro(); }
+    else if (e.key === 'Enter' && !e.target.closest?.('button')) { e.preventDefault(); go(intro.step + 1); }
+    else if (step && intro.step >= 0) { e.preventDefault(); go(intro.step + step); }
+    else if (e.key === 'Tab') {
+      const keys = $$('#intro .in-card button:not([hidden])'), at = keys.indexOf(document.activeElement);
+      if (!keys.length) return;
+      e.preventDefault();
+      keys[(at + (e.shiftKey ? -1 : 1) + keys.length) % keys.length].focus();
+    }
+  }, true);
+  // a click through the hole is the visitor taking over: the tour ends and the click goes on to the page
+  document.addEventListener('pointerdown', e => { if (intro?.step >= 0 && !e.target.closest('#intro')) closeIntro(true); }, true);
+  addEventListener('resize', () => placeIntro(true));
+  document.addEventListener('scroll', e => { if (!e.target.closest?.('#intro')) placeIntro(true); }, true);
+}
+
 /* ---------- wiring ---------- */
 function wire() {
-  wireTip();
+  wireTip(); wireIntro();
   $('.tabs')?.addEventListener('click', e => { const t = e.target.closest('.tab'); if (t) setTab(t.dataset.tab); });
   document.addEventListener('click', e => {
     const b = e.target.closest('.menu-btn');
@@ -1952,6 +2173,7 @@ function wire() {
       return;
     }
     if (e.ctrlKey || e.metaKey || e.altKey || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || !$('#champ-modal').hidden) return;
+    if (e.key === '?') { openIntro(); return; }
     const tab = !RECEIPT && {1:'build', 2:'target', 3:'break', 4:'stats', 5:'saved'}[e.key];
     if (tab) { setTab(tab); return; }
     if (e.key.toLowerCase() === 'c') { e.preventDefault(); openChamps('atk'); }
@@ -2004,6 +2226,8 @@ async function boot() {
   const tab = /[#&]tab=(build|target|break|stats|saved)\b/.exec(location.hash);
   if (tab && !RECEIPT) setTab(tab[1]);
   paintAll(); renderSaved();
+  // a first visit: the welcome comes in over the page once the page is there to be seen behind it
+  if (introDue()) setTimeout(() => openIntro(true), 450);
   await loadKit();
 }
 boot().catch(e => {

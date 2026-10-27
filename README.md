@@ -116,7 +116,8 @@ src/worker/     the same API as a Cloudflare Worker, and the link previews of sh
 src/og/         the preview images: a PNG writer that reuses a champion card's compressed rows, glyphs, the card's layout
 web/            the site, wired to the API: two layouts, one page each (index.html the tabs, receipt.html the receipt), one app.js for both.
                 The tabs page alone has the Crits switch, ranks per build and the shops in the item picker. Both have each item's
-                settings menu (the button on its slot) and the card an ability shows when pointed at
+                settings menu (the button on its slot), the card an ability shows when pointed at, and the introduction
+                a first visit opens: a welcome, then a five-stop tour of the page (the ? in the top bar brings it back)
 scripts/        calc.ts (one calculation from the command line), outliers.ts (sanity scan), bundle.ts (packs the dataset for the Worker),
                 site.ts (prepares web/ for Cloudflare), og.ts (the champions' cards), og-glyphs.ts (the glyphs, with Chrome)
 ```

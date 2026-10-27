@@ -518,9 +518,9 @@ body:not([data-ranks="split"]) .rank-split{display:none!important}
 .legal{display:grid;align-content:center;min-height:2.8rem;padding:.4rem 1.5rem .45rem;border-top:1px solid var(--rule);background:var(--well);font-size:max(.7rem,10px);line-height:1.35;color:var(--dim)}
 /* settings: a gear at the end of the bar and the menu it opens */
 .set{position:relative;display:inline-flex}
-.gear{width:2rem;height:2rem;display:grid;place-items:center;border:1px solid var(--rule);border-radius:3px;background:var(--well);color:var(--dim)}
-.gear svg{width:1.05rem;height:1.05rem}
-.gear:hover,.gear[aria-expanded="true"]{border-color:var(--text);color:var(--text)}
+.gear,.help{width:2rem;height:2rem;display:grid;place-items:center;border:1px solid var(--rule);border-radius:3px;background:var(--well);color:var(--dim)}
+.gear svg,.help svg{width:1.05rem;height:1.05rem}
+.gear:hover,.gear[aria-expanded="true"],.help:hover{border-color:var(--text);color:var(--text)}
 .menu{position:absolute;right:0;top:calc(100% + .5rem);z-index:40;width:19rem;display:grid;gap:.3rem;padding:.7rem;background:var(--well);border:1px solid var(--faint);border-radius:4px;box-shadow:0 1rem 2rem rgba(0,0,0,.5)}
 .menu>.lbl{padding:0 .3rem .15rem}
 .menu a{display:grid;grid-template-columns:.8rem minmax(0,1fr);column-gap:.6rem;padding:.45rem .5rem;border-radius:3px;color:var(--dim);text-decoration:none}
@@ -628,6 +628,85 @@ label.ic{cursor:pointer}
 .tip-p{padding-top:.5rem;border-top:1px solid var(--rule);font-size:.72rem;line-height:1.4;color:var(--faint)}
 [data-ab]{cursor:help}
 .skill[data-ab] .pip{cursor:pointer}
+
+/* ---------- the introduction: a welcome on a first visit, then a short tour of the page ---------- */
+/* app.js draws it into #intro. The veil is the shadow of .in-hole, which is the welcome card itself and then
+   the part of the page the tour is showing; .in-catch takes the clicks outside the hole. */
+.intro{--in-ease:cubic-bezier(.65,0,.35,1);--in-veil:rgba(4,16,15,.8);position:fixed;inset:0;z-index:70;pointer-events:none}
+.in-catch{position:absolute;inset:0;pointer-events:auto}
+.in-hole{position:absolute;border:2px solid transparent;border-radius:6px;pointer-events:none;box-shadow:0 0 0 .35rem transparent,0 0 0 100vmax var(--in-veil);animation:in-fade .35s backwards;
+  transition:top .55s var(--in-ease),left .55s var(--in-ease),width .55s var(--in-ease),height .55s var(--in-ease),border-color .3s,box-shadow .3s,opacity .2s}
+.intro.tour .in-hole{border-color:var(--a);box-shadow:0 0 0 .35rem rgba(238,240,53,.14),0 0 0 100vmax var(--in-veil)}
+.intro.tour .in-hole.ping{animation:in-ping 1.1s ease-out .45s}
+.in-card{position:absolute;pointer-events:auto;max-height:calc(100vh - 1rem);overflow:hidden auto;background:var(--well);border:1px solid var(--faint);border-radius:6px;box-shadow:0 1.6rem 3.2rem rgba(0,0,0,.5);
+  scrollbar-width:thin;scrollbar-color:var(--rule) transparent;transition:opacity .28s,transform .28s cubic-bezier(.2,.8,.2,1)}
+.in-card.out{opacity:0;transform:translateY(.5rem);transition-duration:.14s}
+.intro.still *{transition:none!important}
+.intro.bye .in-hole,.intro.bye .in-card{opacity:0}
+.intro.bye *{pointer-events:none!important}
+@keyframes in-fade{from{opacity:0}}
+@keyframes in-rise{from{opacity:0;transform:translateY(.7rem)}}
+@keyframes in-ping{from{box-shadow:0 0 0 .2rem rgba(238,240,53,.4),0 0 0 100vmax var(--in-veil)}to{box-shadow:0 0 0 1.4rem rgba(238,240,53,0),0 0 0 100vmax var(--in-veil)}}
+.in-go{display:inline-flex;align-items:center;gap:.7rem;padding:.65rem 1.1rem .65rem 1.25rem;border-radius:3px;background:var(--a);color:var(--ink);font-size:.98rem;font-weight:800;white-space:nowrap;transition:filter .15s}
+.in-go:hover{filter:brightness(1.1)}
+.in-go:focus-visible{outline-color:var(--text);outline-offset:3px}
+.in-go .key{opacity:.55}
+
+/* the welcome */
+.in-card.hello{width:min(54rem,calc(100vw - 1rem));display:grid;gap:1.8rem;padding:2.4rem 2.6rem 1.4rem;animation:in-fade .35s backwards}
+.in-art{position:absolute;top:0;right:0;width:64%;height:19rem;object-fit:cover;object-position:50% 22%;opacity:.42;pointer-events:none;transition:opacity .4s;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 70%),linear-gradient(#000 25%,transparent);-webkit-mask-composite:source-in;
+  mask-image:linear-gradient(90deg,transparent,#000 70%),linear-gradient(#000 25%,transparent);mask-composite:intersect}
+.in-top,.in-steps li,.in-acts,.in-foot{position:relative;animation:in-rise .55s cubic-bezier(.2,.8,.2,1) backwards}
+.in-steps li:nth-child(1){animation-delay:.08s} .in-steps li:nth-child(2){animation-delay:.14s} .in-steps li:nth-child(3){animation-delay:.2s}
+.in-acts{animation-delay:.27s} .in-foot{animation-delay:.32s}
+.in-top{display:grid;gap:1rem;justify-items:start}
+.in-eyebrow{font-size:.72rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
+.in-h{margin:0;font-size:3.7rem;font-weight:800;font-stretch:94%;line-height:1.02;letter-spacing:-.025em}
+.in-h mark{color:var(--ink);background:var(--a);border-radius:3px;padding:0 .12em}
+.in-lede{margin:0;max-width:35rem;font-size:1.04rem;line-height:1.5;color:var(--dim)}
+.in-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2rem}
+.in-steps li{display:grid;align-content:start;gap:.3rem}
+.in-steps li+li::before{content:"";position:absolute;left:-1.3rem;top:2.6rem;width:.55rem;height:.55rem;border-top:2px solid var(--faint);border-right:2px solid var(--faint);transform:rotate(45deg)}
+.in-pic{height:5.8rem;display:grid;align-content:center;gap:.5rem;padding:0 .9rem;margin-bottom:.5rem;border:1px solid var(--rule);border-radius:4px;background:var(--bg)}
+.in-steps li>b{display:flex;align-items:baseline;gap:.5rem;font-size:1rem;font-weight:700}
+.in-steps li>b i{font-style:normal;font-family:var(--font-mono);font-size:.74rem;font-weight:700;color:var(--a)}
+.in-steps li>span{font-size:.84rem;color:var(--faint)}
+.in-champ{grid-template-columns:3.9rem minmax(0,1fr);align-items:center;gap:.85rem}
+.in-face{width:3.9rem;height:3.9rem;border:1px solid var(--rule);border-radius:3px;overflow:hidden}
+.in-who{display:grid;gap:.15rem;min-width:0}
+.in-who b{font-size:1.2rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.in-who small{font-family:var(--font-mono);font-size:.74rem;color:var(--dim)}
+.in-row{display:flex;align-items:center;gap:.3rem}
+.in-row .tag{margin-right:.35rem}
+.in-it{flex:none;width:1.8rem;height:1.8rem;border:1px solid var(--rule);border-radius:2px;overflow:hidden;background:var(--well)}
+.in-it.empty{border-style:dashed;border-color:var(--faint);opacity:.6}
+.in-bar{flex:1;height:.5rem;border-radius:1px;background:rgba(236,231,216,.1);overflow:hidden}
+.in-bar i{display:block;height:100%;width:0;background:var(--c);transition:width .9s cubic-bezier(.2,.8,.2,1)}
+#in-res b{min-width:3.6rem;margin-left:.35rem;text-align:right;font-family:var(--font-mono);font-size:.98rem;font-weight:700;font-variant-numeric:tabular-nums}
+#in-res .lose b{color:var(--dim);font-weight:500}
+.in-acts{display:flex;align-items:center;gap:1.5rem}
+.in-skip{display:inline-flex;align-items:center;gap:.6rem;font-size:.9rem;font-weight:600;color:var(--dim)}
+.in-skip:hover{color:var(--text)}
+.in-foot{margin:0;padding-top:1.1rem;border-top:1px solid var(--rule);font-size:.78rem;color:var(--faint)}
+.in-foot b{color:var(--dim)}
+
+/* the tour's card */
+.in-card.stop{width:min(26rem,calc(100vw - 2rem));display:grid;gap:.75rem;padding:.95rem 1.1rem 1rem}
+.st-top{display:flex;align-items:center;gap:.8rem}
+.st-n{font-family:var(--font-mono);font-size:.74rem;font-weight:600;color:var(--dim);font-variant-numeric:tabular-nums}
+.st-segs{flex:1;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:3px}
+.st-segs i{height:3px;border-radius:1px;background:var(--rule);transition:background .3s}
+.st-segs i.on{background:var(--a)}
+.st-body{display:grid;gap:.45rem}
+.in-t{margin:0;font-size:1.35rem;font-weight:800;letter-spacing:-.01em;line-height:1.1}
+.in-p{margin:0;font-size:.9rem;line-height:1.5;color:var(--dim)}
+.in-p b{color:var(--text);font-weight:600}
+.st-acts{display:flex;justify-content:flex-end;align-items:center;gap:.5rem}
+.st-acts .btn{display:inline-flex;align-items:center;gap:.45rem}
+.st-acts .in-go{padding:.42rem .9rem;font-size:.86rem}
+@media (max-width:700px){.in-steps{grid-template-columns:1fr;gap:1rem}.in-steps li+li::before{display:none}.in-h{font-size:2.8rem}.in-acts{flex-wrap:wrap;gap:1rem}}
+@media (prefers-reduced-motion:reduce){.intro *{animation:none!important;transition:none!important}}
 </style>
 <style>
 /* ---------- phones ---------- */
@@ -896,6 +975,9 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
       <span class="wf" id="quality" hidden></span>
       <span class="patch">Patch <b id="patch">…</b></span>
       <button class="btn" id="share">Copy build link</button>
+      <button class="help" id="intro-btn" aria-label="How this page works" title="How this page works (?)">
+        <svg viewBox="5 4.5 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+      </button>
       <div class="set">
         <button class="gear menu-btn" id="set-btn" aria-haspopup="true" aria-expanded="false" aria-controls="set-menu" aria-label="Settings" title="Settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -1188,6 +1270,7 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
 
 <div class="imenu" id="item-menu" role="dialog" aria-label="Item settings" hidden></div>
 <div class="tip" id="tip" role="tooltip" hidden></div>
+<div class="intro" id="intro" hidden></div>
 
 <script src="/app.js" defer></script>
 </body>
