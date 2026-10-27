@@ -131,6 +131,13 @@ const concat = (parts: Uint8Array[]) => {
   return out;
 };
 
+/** A piece holding `d` as it is: a stored block, which ends on a byte boundary by itself. A compressor for writeCard that needs no zlib. */
+export function storedPiece(d: Uint8Array): Uint8Array {
+  const out = new Uint8Array(5 + d.length), len = d.length;
+  out[1] = len; out[2] = len >> 8; out[3] = ~len; out[4] = ~len >> 8;
+  out.set(d, 5);
+  return out;
+}
 /** Writes a card from each row's filtered bytes, split in two, compressed by `compress` (which must end each piece with a sync flush and reference nothing before it). Used at build time. */
 export function writeCard(rows: (y: number) => [left: Uint8Array, right: Uint8Array], compress: (b: Uint8Array) => Uint8Array): Uint8Array {
   const index = new Uint8Array(2 + 8 * H), iv = new DataView(index.buffer);
@@ -164,6 +171,8 @@ class Writer {
   // the piece being written: its Adler-32 sums, the run of one byte value not yet written, the last byte written
   private s1 = 1;
   private s2 = 0;
+  /** bytes summed since the sums were last reduced */
+  private since = 0;
   private runV = -1;
   private runN = 0;
   private prev = -1;
@@ -183,7 +192,7 @@ class Writer {
   open(size: number) {
     this.room(size * 2 + 64);
     this.chunkAt = this.n; this.n += 8;
-    this.s1 = 1; this.s2 = 0; this.runV = -1; this.runN = 0; this.prev = -1;
+    this.s1 = 1; this.s2 = 0; this.since = 0; this.runV = -1; this.runN = 0; this.prev = -1;
     this.put(0b010, 3);                                       // a block of fixed codes, not the last
   }
   /** Ends the piece with a sync flush and the chunk with its CRC; returns the piece's Adler-32. */
@@ -221,8 +230,10 @@ class Writer {
     let v = this.runV, n = this.runN;
     if (n <= 0) return;
     // the sums over n bytes of value v, at once
-    this.s2 = (this.s2 + n * this.s1 + v * n * (n + 1) / 2) % BASE;
-    this.s1 = (this.s1 + n * v) % BASE;
+    // reduced only now and then: they stay whole numbers well below 2^53 until then, and % is slow
+    this.s2 += n * this.s1 + v * n * (n + 1) / 2;
+    this.s1 += n * v;
+    if ((this.since += n) > 4000) { this.s1 %= BASE; this.s2 %= BASE; this.since = 0; }
     this.runN = 0;
     if (this.prev !== v) { this.put(LIT_CODE[v]!, LIT_LEN[v]!); this.prev = v; n--; }
     while (n >= 3) {

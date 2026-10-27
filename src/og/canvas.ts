@@ -71,7 +71,13 @@ export class Canvas {
   mask(bits: Uint8Array, at: number, w: number, h: number, x: number, y: number, color: number) {
     const r = color >> 16, g = (color >> 8) & 255, b = color & 255, p = this.px;
     for (let j = 0; j < h; j++) {
-      const t = this.touch(y + j, x, x + w);
+      // only the part of the row the glyph covers counts as drawn: the encoder reads no more than that
+      const row = at + j * w;
+      let l = 0, e = w;
+      while (l < w && !bits[row + l]) l++;
+      while (e > l && !bits[row + e - 1]) e--;
+      if (l === e) continue;
+      const t = this.touch(y + j, x + l, x + e);
       if (!t) continue;
       let src = at + j * w + (t[0] - x);
       for (let i = ((y + j) * this.w + t[0]) * 3, end = ((y + j) * this.w + t[1]) * 3; i < end; i += 3, src++) {

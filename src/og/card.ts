@@ -11,7 +11,7 @@
 import type { CardFacts } from '../server/preview.ts';
 import { Canvas } from './canvas.ts';
 import { covers, fit, measure, text, type Face, type Fonts } from './font.ts';
-import { H, SPLIT, W, filterRow, readCard, writeCard, writeOver } from './png.ts';
+import { H, SPLIT, W, filterRow, readCard, storedPiece, writeCard, writeOver } from './png.ts';
 
 // the site's colours (web/index.html)
 export const BG = 0x0c2524, TEXT = 0xece7d8, DIM = 0xa3beb7, FAINT = 0x6f948d, INK = 0x141714, RULE = 0x25504d;
@@ -45,13 +45,11 @@ export function championCard(art: Uint8Array, f: Fonts, o: Parameters<typeof dra
   for (let y = NAME_END; y < H; y++) {
     // a build's card redraws these rows' left halves and copies the art beside them: the art must meet the background
     if (c.px.subarray((y * W + SPLIT - 1) * 3, (y * W + SPLIT) * 3).some((v, k) => v !== edge[k])) throw new Error(`card text reaches the art on row ${y}`);
-    // and below the art there must be nothing, for a build's card to draw its verdict on
-    if (y >= ART_END && c.px.subarray((y * W + SPLIT) * 3, (y + 1) * W * 3).some((v, k) => v !== edge[k % 3])) throw new Error(`row ${y} under the art is not empty`);
   }
   return writeCard(y => filterRow(c.px, y), compress);
 }
 
-/** What only the champion's card has, and what every card copies from it: name, mark and patch. */
+/** What a champion's card says: what every card copies from it (name, mark, patch), and what only it has. */
 export function drawChampionCard(c: Canvas, f: Fonts, o: { title: string; sub: string; lead: string; more: string[]; patch: string }) {
   const name = o.title.toUpperCase().replace(/[^A-Z0-9 '.&-]/g, '');
   text(c, title(f, name, 680), name, X, 148, TEXT);
@@ -59,13 +57,21 @@ export function drawChampionCard(c: Canvas, f: Fonts, o: { title: string; sub: s
   text(c, f.lead, o.lead, X, 330, TEXT);
   o.more.forEach((line, i) => text(c, f.caption, line, X, 392 + i * 46, DIM));
   drawFooter(c, f, o.patch);
+  // under the art, where a build's card puts its verdict: the site's two tags, A against B
+  const size = 116, y = 412, right = W - 52, gap = 92;
+  for (const [k, x] of [['A', right - 2 * size - gap], ['B', right - size]] as const) {
+    c.rect(x, y, size, size, COLOR[k === 'A' ? 'a' : 'b']);
+    text(c, f.tagBig, k, Math.round(x + size / 2 - measure(f.tagBig, k) / 2), y + size / 2 + Math.round(f.tagBig.ascent / 2), INK);
+  }
+  text(c, f.caption, 'vs', Math.round(right - size - gap / 2 - measure(f.caption, 'vs') / 2), y + size / 2 + 12, DIM);
+  text(c, f.caption, 'by the damage they deal', right, y + size + 52, TEXT, { align: 'right' });
 }
 function drawFooter(c: Canvas, f: Fonts, patch: string) {
   // the mark as the site's top bar has it: "itemize" on a yellow block, ".lol" after it
   const w = measure(f.mark, 'itemize');
   c.rect(X, 566, Math.round(w) + 20, 46, COLOR.a);
   text(c, f.mark, 'itemize', X + 10, 602, INK);
-  text(c, f.mark, '.lol', X + w + 24, 602, DIM);
+  text(c, f.mark, '.lol', X + w + 22, 602, DIM);
   text(c, f.mono, `Patch ${patch}`, RIGHT, 598, DIM, { align: 'right' });
 }
 
@@ -147,4 +153,19 @@ export function renderCard(champion: Uint8Array, f: Fonts, facts: CardFacts, ico
   const c = canvas = new Canvas(W, H, BG, canvas?.px);
   drawBuilds(c, f, facts, icons);
   return writeOver(card, c, { keepLeft: y => y < NAME_END || y >= FOOT_TOP, keepRight: y => y < ART_END });
+}
+
+/** Draws a few cards over a made-up champion's card, for a Worker to run while it starts. The first cards an
+    isolate draws run before V8 has compiled the loops that do the work, several times slower than the rest;
+    drawn at startup, that cost falls under the startup limit rather than a request's. */
+export function warmUp(f: Fonts) {
+  const art = new Uint8Array(ART_W * H * 3).fill(40);
+  const card = championCard(art, f, { title: 'Warm', sub: 'up', lead: 'Which build hits harder?', more: [], patch: '0' }, storedPiece);
+  const icon = new Uint8Array(ICON * ICON * 3).fill(90), icons = new Map([1, 2, 3, 4, 5, 6].map(id => [id, icon]));
+  const build = (key: 'a' | 'b', total: number) => ({ key, name: 'Build ' + key, fallback: 'Build', items: [1, 2, 3, 4, 5, 6], total, dps: 512, timeToKill: 3.2, kills: false });
+  const facts: CardFacts = { champion: { id: 'Warm', name: 'Warm' }, level: 13, patch: '0', target: ['vs dummy: 2,400 HP, 80 armor, 50 MR'], builds: [build('a', 2345), build('b', 2057)], lead: { key: 'a', percent: 14 } };
+  for (let i = 0; i < 2; i++) {
+    renderCard(card, f, facts, icons);
+    renderCard(card, f, { ...facts, builds: [build('a', 1234)], lead: null }, icons);
+  }
 }

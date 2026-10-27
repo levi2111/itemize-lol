@@ -95,6 +95,7 @@ try {
   console.log(`src/og/glyphs.bin: ${(out.length / 1024).toFixed(0)} KB, ${(packed.length / 1024).toFixed(0)} KB deflated`);
 } finally {
   proc.kill();
-  await new Promise(r => setTimeout(r, 300));
-  rmSync(profile, { recursive: true, force: true, maxRetries: 5 });
+  await new Promise(r => proc.exitCode !== null ? r(null) : proc.once('exit', r));
+  // Chrome's helpers can hold the profile a moment longer; a temporary folder left behind does no harm
+  try { rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch {}
 }

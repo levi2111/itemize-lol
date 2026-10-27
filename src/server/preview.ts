@@ -101,9 +101,9 @@ export function preview(data: ServedData, sb: SharedBuild): Preview {
     const [A] = builds as [CardBuild];
     title = `${champ} · ${A.name}`;
     alt = `${champ} at level ${sb.level}, ${A.name}: ${nf(A.total)} combo damage, ${nf(A.dps)} DPS`;
-    const kill = A.timeToKill !== null && against ? `; autos alone kill it in ${A.timeToKill.toFixed(1)} s` : '';
-    description = A.kills && against ? `The combo kills ${against} at level ${sb.level}; sustained autos deal ${nf(A.dps)} DPS.`
-      : `${nf(A.total)} combo damage and ${nf(A.dps)} DPS ${where}${kill}.`;
+    const said = [`${nf(A.total)} combo damage${A.kills && against ? ' (a kill)' : ''}`, `${nf(A.dps)} DPS`];
+    if (A.timeToKill !== null && against) said.push(`${A.timeToKill.toFixed(1)} s to kill`);
+    description = `${list(said)} ${where}.`;
     description += A.items.length ? ` ${list(A.items.map(item))}.` : ' No items.';
   }
   return {

@@ -30,6 +30,7 @@ export const STYLES = {
   // a build's name, as typed
   name: { font: 'archivo-v25.woff2', weight: 700, stretch: 100, size: 40, chars: LATIN },
   tag: { font: 'archivo-v25.woff2', weight: 900, stretch: 85, size: 32, chars: 'AB' },
+  tagBig: { font: 'archivo-v25.woff2', weight: 900, stretch: 85, size: 96, chars: 'AB' },
   // a build's combo damage, and a smaller size for numbers that do not fit
   num: { font: 'archivo-v25.woff2', weight: 900, stretch: 76, size: 96, chars: DIGITS },
   numSmall: { font: 'archivo-v25.woff2', weight: 900, stretch: 76, size: 76, chars: DIGITS },

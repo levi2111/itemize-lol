@@ -6,7 +6,10 @@ import type { ExecutionContext } from 'hono';
 import { createApp } from '../server/app.ts';
 import type { ChampionIndexEntry, ServedData } from '../server/dataset.ts';
 import type { ChampionData, DatasetManifest, ItemData } from '../shared/types.ts';
-import { readAtlas, type Fonts } from '../og/font.ts';
+import { warmUp } from '../og/card.ts';
+import { readAtlas } from '../og/font.ts';
+import { decodeShare, readShare } from '../server/share.ts';
+import { preview as describe } from '../server/preview.ts';
 import { previews, type PreviewEnv } from './preview.ts';
 import text from '../../.build/data.txt';
 import glyphs from '../../.build/glyphs.bin';
@@ -26,9 +29,12 @@ const data: ServedData = {
   champion: id => bundle.champions[ids.get(String(id).toLowerCase()) ?? ''],
   item: id => itemById.get(id),
 };
-// the glyphs are read when the first image is drawn, so the API's requests never pay for them
-let fonts: Fonts | null = null;
-const preview = previews(data, () => fonts ??= readAtlas(new Uint8Array(glyphs)), version.trim());
+// the glyphs too, and a few cards and a calculation are done for nothing: an isolate's first runs of that code
+// are several times slower than later ones (src/og/card.ts, warmUp), and here the startup limit pays for them
+const fonts = readAtlas(new Uint8Array(glyphs));
+warmUp(fonts);
+describe(data, readShare(data, decodeShare('eyJtIjoxfQ')!, 'tabs'));      // {"m":1}: Kai'Sa, two empty builds
+const preview = previews(data, () => fonts, version.trim());
 
 const app = createApp(data, {
   calcGate: async c => (await (c.env as Env).CALC_LIMIT.limit({ key: c.req.header('cf-connecting-ip') ?? 'unknown' })).success,

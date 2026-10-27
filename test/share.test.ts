@@ -116,6 +116,8 @@ test('preview text names the builds and states the result', () => {
   assert.equal(one.title, 'Kai\'Sa · Kraken Slayer build');
   assert.match(one.description, /^[\d,]+ combo damage and [\d,]+ DPS at level 13, before armor and magic resist\. Kraken Slayer, Berserker's Greaves, Guinsoo's Rageblade and Nashor's Tooth\. Patch /);
   assert.equal(clean('x'.repeat(50)).length, 40);
+  const enemy = preview(data, read({ ...PAGE, m: 0, t: 'champ', e: ['Garen', 16] }));
+  assert.match(enemy.description, /^[\d,]+ combo damage( \(a kill\))?, [\d,]+ DPS and \d+\.\d s to kill at level 13 against a level 16 Garen \([\d,]+ HP, \d+ armor, \d+ MR\)\. Kraken Slayer, /);
 });
 
 test('a hostile link is read without throwing, and what it says is tidied', () => {

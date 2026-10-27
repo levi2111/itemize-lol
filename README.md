@@ -111,12 +111,14 @@ src/pipeline/   fetch -> compile -> bind models -> write data/dist/<patch>/
 src/models/     hand-written models: champions/*.ts, items/*.ts, models.lock.json
 src/shared/     dataset types, formula evaluator
 src/engine/     stats, mitigation, the fight simulation, the calculation
-src/server/     HTTP API, and the Node server that also serves the site
-src/worker/     the same API as a Cloudflare Worker
+src/server/     HTTP API, and the Node server that also serves the site; share links read as the page reads them, and what a preview says
+src/worker/     the same API as a Cloudflare Worker, and the link previews of shared builds
+src/og/         the preview images: a PNG writer that reuses a champion card's compressed rows, glyphs, the card's layout
 web/            the site, wired to the API: two layouts, one page each (index.html the tabs, receipt.html the receipt), one app.js for both.
                 The tabs page alone has the Crits switch, ranks per build and the shops in the item picker. Both have each item's
                 settings menu (the button on its slot) and the card an ability shows when pointed at
-scripts/        calc.ts (one calculation from the command line), outliers.ts (sanity scan), bundle.ts (packs the dataset for the Worker)
+scripts/        calc.ts (one calculation from the command line), outliers.ts (sanity scan), bundle.ts (packs the dataset for the Worker),
+                site.ts (prepares web/ for Cloudflare), og.ts (the champions' cards), og-glyphs.ts (the glyphs, with Chrome)
 ```
 
 Environment: `PORT`, `ITEMIZE_PATCH`, `ITEMIZE_DATA_DIR`, `CALC_PER_MINUTE`, `TRUST_PROXY` (see `src/server/main.ts`); `ITEMIZE_CONTACT` sets the contact in the pipeline's User-Agent.
@@ -131,6 +133,15 @@ npm run deploy          # publish it
 ```
 
 Pushing to `main` runs the tests and then deploys (`.github/workflows/ci.yml`). `npm start` remains the Node server for development; both run the same `src/server/app.ts`.
+
+### Link previews
+
+A shared build is a link to a page with the build in its query: `/?s=…` or `/receipt?s=…`. Pasted into Discord, Slack, X, Reddit, WhatsApp or iMessage it unfurls into the result: a title naming the builds, a sentence with the verdict, and a 1200×630 image of the comparison.
+
+- Those two addresses go through the Worker first (`run_worker_first` in `wrangler.jsonc`). Without `s` it returns the page as Cloudflare serves it. With one, `src/worker/preview.ts` reads the link as the page does (`src/server/share.ts`), runs the engine, and rewrites the head's Open Graph and Twitter tags (`src/server/preview.ts`). A link that cannot be read keeps the site's own tags, which both pages carry.
+- The image is `/og/b/<version>/<layout>/<s>.png`, drawn by the Worker and kept in Cloudflare's cache. The version names the data, the art and the drawing code, so an address never shows stale numbers. Drawing takes a few milliseconds of CPU because almost nothing is drawn per request: `npm run site` draws every champion's card at build time (`scripts/og.ts`, served at `/og/<id>.png`, which is also the image of the champion's own page), and a build's card copies its compressed rows and compresses only the rows it draws on (`src/og/png.ts`). The cards are cached in `.build/og-cache/`, so later builds take seconds.
+- Text is drawn from glyphs rasterised from the site's fonts. After changing the faces or sizes in `src/og/font.ts`, run `node scripts/og-glyphs.ts` (it needs Chrome) and commit `src/og/glyphs.bin`.
+- Changing what a link holds means changing `encodeState`/`applyState` in `web/app.js` and `src/server/share.ts` together; `test/share.test.ts` pins down the pairs.
 
 ## Riot's rules
 
@@ -154,4 +165,4 @@ Checked against Riot's [Legal Jibber Jabber](https://www.riotgames.com/en/legal)
 
 - Runes, summoner spells, and the target's own items (the UI marks that last one "soon").
 - Attack speed that ramps within a fight. Ramping effects count as fully ramped for sustained damage and not at all in a short combo; each affected item says so in its notes.
-- Saved builds. The share link encodes the whole build in the URL, so it needs no storage.
+- Saved builds. The share link encodes the whole build in the URL, so it needs no storage, and it is long: Discord shows all of it above the preview.

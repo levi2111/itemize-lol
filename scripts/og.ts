@@ -21,10 +21,6 @@ const hex = (c: number) => '#' + c.toString(16).padStart(6, '0');
 
 /** The splash art for the top right of a card: darkened, and faded into the background towards the text and, by ART_END, completely. */
 async function artPanel(file: string): Promise<Uint8Array> {
-  const meta = await sharp(file).metadata();
-  const scaled = Math.round(meta.width! * H / meta.height!);
-  // splash art centres its champion a little right of the middle
-  const left = Math.max(0, Math.min(scaled - ART_W, Math.round(scaled * 0.56 - ART_W / 2)));
   const bg = hex(BG);
   const shade = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${ART_W}" height="${H}">
     <defs>
@@ -33,8 +29,10 @@ async function artPanel(file: string): Promise<Uint8Array> {
     </defs>
     <rect width="100%" height="100%" fill="url(#b)"/><rect width="100%" height="100%" fill="url(#l)"/>
   </svg>`);
-  const px = new Uint8Array(await sharp(file).resize({ height: H }).extract({ left, top: 0, width: ART_W, height: H })
-    .modulate({ brightness: 0.8 }).blur(0.6).composite([{ input: shade }]).removeAlpha().raw().toBuffer());
+  // the art fills the panel down to ART_END, cut where sharp finds the most to look at (a face, usually), and background below
+  const top = await sharp(file).resize({ width: ART_W, height: ART_END + 20, fit: 'cover', position: sharp.strategy.attention }).toBuffer();
+  const px = new Uint8Array(await sharp({ create: { width: ART_W, height: H, channels: 3, background: bg } }).composite([{ input: top, top: 0, left: 0 }]).png().toBuffer()
+    .then(b => sharp(b).modulate({ brightness: 0.8 }).blur(0.6).composite([{ input: shade }]).removeAlpha().raw().toBuffer()));
   // six bits a channel, with ordered dither so the fades do not band: a darkened backdrop loses nothing visible and compresses by a third
   const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
   for (let y = 0, i = 0; y < H; y++) for (let x = 0; x < ART_W; x++) {
@@ -61,12 +59,12 @@ export async function buildOg(site: string) {
   const cache = join(ROOT, '.build', 'og-cache'), done = join(cache, key);
 
   if (!existsSync(done)) {
-    const t = Date.now(), tmp = join(cache, `${key}.tmp`);
-    rmSync(tmp, { recursive: true, force: true });
+    // drawn into a folder of this process's own: wrangler dev may start the same build while one runs
+    const t = Date.now(), tmp = join(cache, `${key}.${process.pid}.tmp`);
     mkdirSync(join(tmp, 'items'), { recursive: true });
     const fonts = readAtlas(inflateRawSync(glyphs));
     const patch = data.manifest.displayPatch;
-    const more = ['Compare item builds by the damage', 'they deal: combo, DPS, time to kill.'];
+    const more = ['Combo damage, DPS and time to kill,', 'for any champion and six items.'];
     const splash = (id: string) => join(ROOT, 'web', 'art', art.version, 'splash', `${id}.webp`);
     let bytes = 0;
     for (const c of data.index) {
@@ -86,8 +84,14 @@ export async function buildOg(site: string) {
         .extract({ left: x, top: y, width: info.width / art.items.cols, height: info.height / art.items.rows }).resize(ICON, ICON, { kernel: 'lanczos3' }).raw().toBuffer();
       writeFileSync(join(tmp, 'items', `${id}.bin`), icon);
     }));
-    for (const old of existsSync(cache) ? readdirSync(cache) : []) if (old !== `${key}.tmp`) rmSync(join(cache, old), { recursive: true, force: true });
-    renameSync(tmp, done);
+    // older drawings go, and what builds that were stopped left behind, but not another build's work in progress
+    const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+    for (const old of readdirSync(cache)) {
+      const pid = /\.(\d+)\.tmp$/.exec(old)?.[1];
+      if (old !== key && (!pid || (Number(pid) !== process.pid && !alive(Number(pid))))) rmSync(join(cache, old), { recursive: true, force: true });
+    }
+    try { renameSync(tmp, done); } catch { rmSync(tmp, { recursive: true, force: true }); }   // another build finished first
+    if (!existsSync(done)) throw new Error('og cache: nothing drawn');
     console.log(`og -> ${data.index.length} champion cards (${(bytes / data.index.length / 1024).toFixed(0)} KB each), ${art.items.ids.length} icons, in ${((Date.now() - t) / 1000).toFixed(0)} s`);
   }
   cpSync(done, join(site, 'og'), { recursive: true });
