@@ -115,7 +115,8 @@ src/server/     HTTP API, and the Node server that also serves the site
 src/worker/     the same API as a Cloudflare Worker
 web/            the site, wired to the API: two layouts, one page each (index.html the tabs, receipt.html the receipt), one app.js for both.
                 The tabs page alone has the Crits switch, ranks per build and the shops in the item picker. Both have each item's
-                settings menu (the button on its slot) and the card an ability shows when pointed at
+                settings menu (the button on its slot), the card an ability shows when pointed at, and the introduction
+                a first visit opens: a welcome, then a five-stop tour of the page (the ? in the top bar brings it back)
 scripts/        calc.ts (one calculation from the command line), outliers.ts (sanity scan), bundle.ts (packs the dataset for the Worker)
 ```
 
