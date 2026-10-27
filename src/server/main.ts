@@ -7,10 +7,12 @@
 import { serve } from '@hono/node-server';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { serveStatic } from '@hono/node-server/serve-static';
+import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { ROOT } from '../pipeline/paths.ts';
 import { createApp } from './app.ts';
 import { Dataset } from './dataset.ts';
+import { championPage, championSite, robots, sitemap, SOURCE } from './pages.ts';
 
 const data = new Dataset(process.env.ITEMIZE_PATCH);
 const trustProxy = process.env.TRUST_PROXY === '1';
@@ -18,9 +20,22 @@ const app = createApp(data, {
   calcPerMinute: Number(process.env.CALC_PER_MINUTE ?? 240),
   clientAddress: c => (trustProxy && c.req.header('x-forwarded-for')?.split(',')[0]?.trim()) || getConnInfo(c).remote.address,
 });
-// everything that is not the API is the static site in web/; a page answers without its .html, as on Cloudflare
+const web = join(ROOT, 'web');
+// the champion pages (/vayne, /receipt/vayne), the sitemap, robots.txt and the other names' redirects: what
+// scripts/site.ts writes as files for Cloudflare, made here by the same functions from web/'s pages as they are
+const site = championSite(data.index), pageAt = new Map(site.pages.map(p => [p.path, p]));
+app.get('/sitemap.xml', c => c.body(sitemap(site.slugs, data.manifest.builtAt), 200, { 'Content-Type': 'application/xml; charset=utf-8' }));
+app.get('/robots.txt', c => c.text(robots()));
+app.get('/*', async (c, next) => {
+  const to = site.redirects.get(c.req.path);
+  if (to) return c.redirect(to, 301);
+  const p = pageAt.get(c.req.path);
+  if (!p) return next();
+  return c.html(championPage(readFileSync(join(web, SOURCE[p.layout]), 'utf8'), data.champion(p.id)!, p.slug, p.layout));
+});
+// everything else that is not the API is the static site in web/; a page answers without its .html, as on Cloudflare
 app.use('/*', serveStatic({
-  root: relative(process.cwd(), join(ROOT, 'web')) || '.',
+  root: relative(process.cwd(), web) || '.',
   rewriteRequestPath: path => path === '/receipt' ? '/receipt.html' : path,
 }));
 const port = Number(process.env.PORT ?? 8787);

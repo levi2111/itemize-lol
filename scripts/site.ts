@@ -4,12 +4,17 @@
      - the art index is written into the page, with a preload for the item sheet, so the first
        pictures are on their way before any script has run.
    There is a page per layout, and both get the same treatment.
-   The Node server needs none of this and serves web/ as it is. */
+   Then each champion gets a page of its own in both layouts, made from those (src/server/pages.ts), with the
+   sitemap, robots.txt and the redirects of other names.
+   The Node server needs none of the renaming and serves web/ as it is; it makes the champion pages itself, with the
+   same functions. */
 import { createHash } from 'node:crypto';
 import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT } from '../src/pipeline/paths.ts';
 import type { ArtIndex } from '../src/pipeline/art.ts';
+import { Dataset } from '../src/server/dataset.ts';
+import { championPage, championSite, redirectsFile, robots, sitemap, SOURCE } from '../src/server/pages.ts';
 
 const web = join(ROOT, 'web'), out = join(ROOT, '.build', 'site');
 mkdirSync(out, { recursive: true });
@@ -35,6 +40,7 @@ const named = (file: string) => {
 const app = named('app.js'), layout = named('layout.js');
 
 const art: ArtIndex = JSON.parse(readFileSync(join(web, 'art', 'index.json'), 'utf8'));
+const made: Record<string, string> = {};
 for (const page of PAGES) {
   let html = readFileSync(join(web, page), 'utf8');
   html = swap(page, html, '<script src="/app.js" defer></script>', `<script src="/${app}" defer></script>`);
@@ -45,5 +51,15 @@ for (const page of PAGES) {
     `<script type="application/json" id="art-index">${JSON.stringify(art).replaceAll('<', '\\u003c')}</script>`,
   ].join('\n'));
   writeFileSync(join(out, page), html);
+  made[page] = html;
 }
-console.log(`site -> .build/site/ (${app}, ${layout}, art ${art.version})`);
+
+// the champion pages, from the dataset the Worker is bundled with (scripts/bundle.ts reads the same ITEMIZE_PATCH)
+const data = new Dataset(process.env.ITEMIZE_PATCH);
+const site = championSite(data.index);
+mkdirSync(join(out, 'receipt'), { recursive: true });
+for (const p of site.pages) writeFileSync(join(out, p.file), championPage(made[SOURCE[p.layout]]!, data.champion(p.id)!, p.slug, p.layout));
+writeFileSync(join(out, 'sitemap.xml'), sitemap(site.slugs, data.manifest.builtAt));
+writeFileSync(join(out, 'robots.txt'), robots());
+writeFileSync(join(out, '_redirects'), redirectsFile(site.redirects));
+console.log(`site -> .build/site/ (${app}, ${layout}, art ${art.version}; ${site.pages.length} champion pages, ${site.redirects.size} redirects)`);
