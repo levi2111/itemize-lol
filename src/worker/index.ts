@@ -1,7 +1,7 @@
-/* The Cloudflare Worker. It answers /api/v1, and the link previews of shared builds (preview.ts): the
-   two pages when their address carries a build, and the images of builds. The rest of the site in
-   web/ is served by Cloudflare's static assets before a request ever reaches this code, with the
-   headers in web/_headers. */
+/* The Cloudflare Worker. It answers /api/v1, the short links of shared builds with their link previews
+   (preview.ts, links.ts), and the images of builds. The rest of the site in web/, the pages included, is
+   served by Cloudflare's static assets before a request ever reaches this code, with the headers in
+   web/_headers. */
 import type { ExecutionContext } from 'hono';
 import { createApp } from '../server/app.ts';
 import type { ChampionIndexEntry, ServedData } from '../server/dataset.ts';
@@ -11,13 +11,18 @@ import { readAtlas } from '../og/font.ts';
 import { decodeShare, readShare } from '../server/share.ts';
 import { preview as describe } from '../server/preview.ts';
 import { previews, type PreviewEnv } from './preview.ts';
+import { d1Links, type D1 } from './links.ts';
 import text from '../../.build/data.txt';
 import glyphs from '../../.build/glyphs.bin';
 import version from '../../.build/og-version.txt';
 
+interface RateLimit { limit(o: { key: string }): Promise<{ success: boolean }> }
 interface Env extends PreviewEnv {
-  /** the rate limit declared in wrangler.jsonc */
-  CALC_LIMIT: { limit(o: { key: string }): Promise<{ success: boolean }> };
+  /** the rate limits declared in wrangler.jsonc */
+  CALC_LIMIT: RateLimit;
+  LINK_LIMIT: RateLimit;
+  /** the short links' database */
+  LINKS: D1;
 }
 
 // parsed once per isolate, as it starts, so no request pays for it
@@ -34,10 +39,13 @@ const data: ServedData = {
 const fonts = readAtlas(new Uint8Array(glyphs));
 warmUp(fonts);
 describe(data, readShare(data, decodeShare('eyJtIjoxfQ')!, 'tabs'));      // {"m":1}: Kai'Sa, two empty builds
-const preview = previews(data, () => fonts, version.trim());
+const preview = previews(data, () => fonts, version.trim(), env => d1Links((env as Env).LINKS));
 
+const client = (c: { req: { header(name: string): string | undefined } }) => ({ key: c.req.header('cf-connecting-ip') ?? 'unknown' });
 const app = createApp(data, {
-  calcGate: async c => (await (c.env as Env).CALC_LIMIT.limit({ key: c.req.header('cf-connecting-ip') ?? 'unknown' })).success,
+  calcGate: async c => (await (c.env as Env).CALC_LIMIT.limit(client(c))).success,
+  linkGate: async c => (await (c.env as Env).LINK_LIMIT.limit(client(c))).success,
+  links: c => d1Links((c.env as Env).LINKS),
 });
 
 export default {

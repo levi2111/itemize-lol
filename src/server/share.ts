@@ -14,7 +14,7 @@ export type Layout = 'tabs' | 'receipt';
 export const LAYOUT_PATH: Record<Layout, string> = { tabs: '/', receipt: '/receipt' };
 
 /** Longer than any link the page writes (about 600 characters with every setting used); a longer one is refused unread. */
-const MAX_LINK = 4096;
+export const MAX_LINK = 4096;
 const SLOTS = ['q', 'w', 'e', 'r'] as const;
 const ACTIONS = ['aa', ...SLOTS] as const;
 type Ranks = Record<(typeof SLOTS)[number], number>;

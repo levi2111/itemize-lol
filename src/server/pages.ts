@@ -20,7 +20,7 @@ export const slugOf = (name: string) => name.normalize('NFKD').replace(/\p{M}/gu
   .replace(/['’.]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 /** Addresses the site has other uses for, which no champion or other name may take. */
-const RESERVED = new Set(['receipt', 'api', 'art', 'assets', 'fonts', 'og', 'index', 'sitemap', 'robots', 'favicon']);
+const RESERVED = new Set(['receipt', 'api', 'art', 'assets', 'fonts', 'og', 'b', 'index', 'sitemap', 'robots', 'favicon']);
 
 export const pagePath = (slug: string, layout: Layout = 'tabs') => layout === 'receipt' ? `/receipt/${slug}` : `/${slug}`;
 /** The file that answers a page's address on Cloudflare. Its static assets serve /vayne from vayne.html with a 200

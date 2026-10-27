@@ -7,14 +7,22 @@
   // the workers.dev address stays up next to the domain, and each uploaded version gets a preview address
   "workers_dev": true,
   "preview_urls": true,
-  // the site: served straight from Cloudflare's edge, the Worker only sees what is not a file here,
-  // and the two pages, which it passes through unless their address carries a shared build (src/worker/preview.ts)
-  "assets": { "directory": ".build/site", "binding": "ASSETS", "run_worker_first": ["/", "/receipt"] },
+  // the site: served straight from Cloudflare's edge, the Worker only sees what is not a file here, and the
+  // short links, /b/<id>, which it answers with the build's page and preview (src/worker/preview.ts). The pages
+  // themselves stay plain files: past the Free plan's daily requests Cloudflare answers whatever runs the Worker
+  // first with a 429, and that must never be the home page
+  "assets": { "directory": ".build/site", "binding": "ASSETS", "run_worker_first": ["/b/*"] },
   // packs data/dist into .build/data.txt and prepares web/ in .build/site/, the preview images included
   "build": { "command": "node scripts/bundle.ts && node scripts/site.ts", "watch_dir": ["src", "web", "scripts"] },
-  // POST /api/v1/calc, per client address
+  // POST /api/v1/calc and POST /api/v1/links, per client address
   "ratelimits": [
-    { "name": "CALC_LIMIT", "namespace_id": "1001", "simple": { "limit": 240, "period": 60 } }
+    { "name": "CALC_LIMIT", "namespace_id": "1001", "simple": { "limit": 240, "period": 60 } },
+    { "name": "LINK_LIMIT", "namespace_id": "1002", "simple": { "limit": 20, "period": 60 } }
+  ],
+  // the short links (src/server/links.ts, migrations/). Made once with `npx wrangler d1 create itemize-links`,
+  // whose database_id goes here (README, Short links); `wrangler dev` keeps a local copy in .wrangler/ whatever it says
+  "d1_databases": [
+    { "binding": "LINKS", "database_name": "itemize-links", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }
   ],
   "observability": { "enabled": true }
 }
