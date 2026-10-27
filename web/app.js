@@ -149,7 +149,7 @@ async function recalc() {
     const out = await api('/calc', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)});
     if (mine !== seq) return;
     S.res = {a: out.results[0], b: out.results[1] || null};
-    paintResults();
+    paintResults(); paintSaved();
     remember();
   } catch (e) {
     if (mine !== seq) return;
@@ -167,6 +167,7 @@ function setTab(t) {
   $$('.tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
   $$('.pane').forEach(p => p.hidden = p.dataset.pane !== t);
   if (t !== 'build') closePicker();
+  if (t === 'saved') renderSaved();
 }
 function paintTabs() {
   if (RECEIPT) return;
@@ -1386,6 +1387,237 @@ function notice(html) {
   if (html) $('.pn-t', el).title = $('.pn-t', el).textContent;
 }
 
+/* ---------- saved builds ---------- */
+/* Builds kept in this browser, to come back to and switch between. The tabs page lists them in its Saved
+   tab, the receipt page in a menu under Saved builds in the top bar, and both read one list in localStorage.
+   An entry keeps encodeState()'s string, which is all that loading it needs, and a summary for the list (the
+   champion, level and items) so that drawing the list never has to read that string. Loading one is what a
+   shared link does at boot: applyState, then paintAll. */
+const SAVED = 'saved', SAVED_V = 1, SAVED_MAX = 50;
+const SAVED_NONE = {
+  '': 'Nothing saved yet. Save this setup and it waits here, a click away.',
+  blocked: "This browser isn't keeping data for this site, so builds can't be saved here. Copy build link keeps one in a link.",
+  newer: 'These were saved by a newer version of this page. Reload it to see them.',
+};
+let savedErr = '';                  // why the list can't be kept: 'blocked' (no storage) or 'newer' (see readSaved)
+let savedShown = new Map();         // id -> state of each entry on screen, to mark the one that is loaded
+let savedEdit = null;               // the id of the entry being renamed
+let savedUndo = null;               // the entry deleted last, until something else happens to the list
+let savedTyped = false;             // the name field holds a name the visitor typed, not the suggestion
+const slots6 = v => Array.from({length: 6}, (_, i) => Number.isInteger(v?.[i]) ? v[i] : null);
+/* The list, newest first. What storage holds is checked: unreadable JSON counts as no list, and an entry that
+   isn't whole is left out. */
+function readSaved() {
+  let j = null;
+  savedErr = '';
+  try { j = localStorage.getItem(SAVED); } catch (e) { savedErr = 'blocked'; return []; }
+  try { j = JSON.parse(j); } catch (e) { j = null; }
+  // a later version of the page, open in another window after a deploy, may have written it: left alone
+  if (j?.v > SAVED_V) { savedErr = 'newer'; return []; }
+  return (Array.isArray(j?.builds) ? j.builds : [])
+    .filter(e => typeof e?.id === 'string' && /^[\w-]{1,32}$/.test(e.id) && typeof e.s === 'string' && e.s)
+    .map(e => ({id: e.id, name: String(e.name || 'Saved build').slice(0, 80), at: Number.isFinite(e.at) && Math.abs(e.at) < 8.64e15 ? e.at : 0,
+      patch: String(e.patch || ''), s: e.s, c: String(e.c || ''), l: Number.isFinite(e.l) ? Math.max(1, Math.min(18, Math.round(e.l))) : 1,
+      a: slots6(e.a), b: Array.isArray(e.b) ? slots6(e.b) : null}))
+    .sort((x, y) => y.at - x.at).slice(0, SAVED_MAX);
+}
+function writeSaved(list) {
+  if (savedErr === 'newer') return false;
+  try { localStorage.setItem(SAVED, JSON.stringify({v: SAVED_V, builds: list})); return true; } catch (e) {
+    savedSay(/quota/i.test(e?.name) ? "Not saved: this browser's storage for the site is full" : "Not saved: this browser isn't keeping data for this site");
+    return false;
+  }
+}
+function savedSay(text, undo) {
+  const el = $('#saved-status');
+  if (el) el.innerHTML = esc(text || '') + (undo ? ' <button class="act" data-act="undo">Undo</button>' : '');
+}
+/* A name that says what the setup is: the champion, then each build's own name if the visitor gave it one,
+   else its dearest item (in a comparison, the dearest one the other build lacks). */
+function suggestName() {
+  const about = k => {
+    const named = $(`#name-${k}`), its = buildItems(k).sort((x, y) => y.gold - x.gold);
+    if (named.value.trim() && named.value !== named.defaultValue) return named.value.trim();
+    if (!its.length) return 'no items';
+    if (!S.compare) return its.slice(0, 2).map(it => it.name).join(' and ');
+    const other = new Set(S.builds[k === 'a' ? 'b' : 'a']);
+    return (its.find(it => !other.has(it.id)) || its[0]).name;
+  };
+  return `${S.champ.name}, ${(S.compare ? ['a', 'b'] : ['a']).map(about).join(' vs ')}`.slice(0, 80);
+}
+function ago(t) {
+  const now = new Date(), m = Math.floor((now - t) / 6e4), day = x => new Date(x).setHours(0, 0, 0, 0);
+  const days = Math.round((day(now) - day(t)) / 864e5);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m} min ago`;
+  if (days < 1) return `${Math.floor(m / 60)} h ago`;
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days} days ago`;
+  return new Date(t).toLocaleDateString('en-US', {month: 'short', day: 'numeric', ...(new Date(t).getFullYear() !== now.getFullYear() && {year: 'numeric'})});
+}
+/* One entry: a button that loads it, and its Rename and Delete. While renamed, its name is a field instead.
+   Items that have left the game since it was saved are empty slots, as loading will leave them. */
+function savedRow(e) {
+  const here = id => id && S.items.has(id), when = new Date(e.at), champ = S.champs.find(c => c.id === e.c)?.name || e.c;
+  const face = `<span class="sv-face" aria-hidden="true" title="${esc(champ)}">${champIco(e.c)}</span>`;
+  if (savedEdit === e.id) return `<li class="sv editing" data-id="${e.id}">${face}<input class="search" data-act="name" value="${esc(e.name)}" maxlength="80" autocomplete="off" spellcheck="false" aria-label="New name for ${esc(e.name)}">
+    <span class="sv-acts"><button class="act" data-act="keep">Save</button><button class="act" data-act="cancel">Cancel</button></span></li>`;
+  const gone = [...e.a, ...(e.b || [])].filter(id => id && !here(id)).length, patch = $('#patch').textContent, said = ago(e.at);
+  const also = [e.patch && e.patch !== patch && `patch ${e.patch}`, gone && `${gone} item${gone === 1 ? '' : 's'} no longer in the game`].filter(Boolean);
+  const meta = [`Level ${e.l}`, `<time datetime="${when.toISOString()}" title="Saved ${esc(when.toLocaleString('en-US', {dateStyle: 'medium', timeStyle: 'short'}))}">${said}</time>`, ...also.map(esc)].join(' · ');
+  const build = k => !e[k] ? '<span class="sv-b"></span>' : `<span class="sv-b ${k}">${e.b ? `<span class="tag ${k} xs">${k.toUpperCase()}</span>` : '<span></span>'}`
+    + e[k].map(id => `<span class="sv-it${here(id) ? '' : ' empty'}">${here(id) ? itemIco(id) : ''}</span>`).join('') + '</span>';
+  // read out as one line; the pictures are for the eye
+  const label = [e.name, `${champ}, level ${e.l}`, `saved ${said}`, ...also].join(', ');
+  return `<li class="sv" data-id="${e.id}"><button class="sv-load" data-act="load" aria-label="${esc(label)}" title="Load this build">${face}<span class="sv-txt"><b>${esc(e.name)}</b><span class="sv-meta">${meta}</span></span>
+    <span class="sv-bs" aria-hidden="true">${build('a')}${build('b')}</span></button>
+    <span class="sv-acts"><button class="act" data-act="rename" aria-label="Rename ${esc(e.name)}">Rename</button><button class="act" data-act="delete" aria-label="Delete ${esc(e.name)}">Delete</button></span></li>`;
+}
+function renderSaved() {
+  const ul = $('#saved-list');
+  if (!ul || !S.items.size) return;
+  const list = readSaved(), n = list.length, badge = $('#saved-n'), sum = $('#ts-saved');
+  if (badge) { badge.textContent = n; badge.hidden = !n; badge.parentElement.setAttribute('aria-label', `Saved builds${n ? `, ${n}` : ''}`); }
+  if (sum) sum.textContent = n ? `${n} build${n === 1 ? '' : 's'}` : 'None yet';
+  $('#saved-save').disabled = $('#saved-name').disabled = !!savedErr;
+  // redrawing keeps the focus on the same button of the same entry
+  const f = document.activeElement, back = ul.contains(f) && `[data-id="${f.closest('[data-id]')?.dataset.id}"] [data-act="${f.dataset.act}"]`;
+  savedShown = new Map(list.map(e => [e.id, e.s]));
+  ul.innerHTML = list.map(savedRow).join('') || `<li class="sv-none">${SAVED_NONE[savedErr]}</li>`;
+  if (back) $(back, ul)?.focus();
+  paintSaved();
+}
+/* After each result: which entry is the setup on screen, and the name field's suggestion, unless the visitor
+   has typed a name of their own. */
+function paintSaved() {
+  const input = $('#saved-name');
+  if (!input || !S.items.size) return;
+  // the receipt page has no crits switch and one set of ranks (see applyState), so a build saved with either
+  // is on screen there once it matches without them
+  const now = encodeState(), bare = s => { const {k, rb, ob, ...rest} = decodeState(s) || {}; return JSON.stringify(rest); }, nowBare = RECEIPT && bare(now);
+  for (const b of $$('#saved-list .sv-load')) {
+    const s = savedShown.get(b.parentElement.dataset.id);
+    b.setAttribute('aria-current', s === now || !!nowBare && bare(s) === nowBare);
+  }
+  input.placeholder = suggestName();
+  if (!savedTyped && document.activeElement !== input) input.value = input.placeholder;
+}
+function saveBuild() {
+  const list = readSaved();
+  if (savedErr) return renderSaved();
+  const s = encodeState(), was = list.findIndex(e => e.s === s);
+  const e = {id: was > -1 ? list[was].id : Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    name: $('#saved-name').value.trim().slice(0, 80) || suggestName(), at: Date.now(), patch: $('#patch').textContent,
+    s, c: S.champ.id, l: S.level, a: [...S.builds.a], b: S.compare ? [...S.builds.b] : null};
+  // the same setup saved again replaces the older entry, under the new name
+  if (was > -1) list.splice(was, 1);
+  list.unshift(e);
+  const out = list.splice(SAVED_MAX);
+  if (!writeSaved(list)) return;
+  savedTyped = false; savedEdit = null; savedUndo = null;
+  renderSaved();
+  savedSay(was > -1 ? `Saved "${e.name}" in place of the same setup` : out.length ? `Saved. ${SAVED_MAX} are kept, so "${out[0].name}", the oldest, made room` : `Saved "${e.name}"`);
+}
+function loadSaved(id) {
+  const e = readSaved().find(x => x.id === id), s = e && decodeState(e.s);
+  if (!s) { renderSaved(); return savedSay(e ? "That build can't be read" : 'That build is no longer saved'); }
+  closePicker(); closeItemMenu(); hideTip();
+  const was = S.champ, gone = [...e.a, ...(e.b || [])].filter(x => x && !S.items.has(x)).length;
+  // a state leaves out what is at its default (see encodeState), so that goes back to its default first
+  S.options = {}; S.itemOpts = {a: {}, b: {}}; S.split = false; S.crits = 'average'; S.shops = {aram: false, arena: false};
+  applyState(s);
+  if (S.champ !== was) S.view = null;
+  comboFresh = false; savedEdit = null; savedUndo = null;
+  paintAll(); renderSaved(); followChamp(); loadKit();
+  // what a patch took away since: applyState leaves a champion it can't find as it was, and empties an item's slot
+  savedSay(`Loaded "${e.name}"` + (S.champ.id !== s.c ? `, but its champion is no longer in the game` : '')
+    + (gone ? `. ${gone} of its items ${gone === 1 ? 'is' : 'are'} no longer in the game, so ${gone === 1 ? 'its slot is' : 'their slots are'} empty` : ''));
+}
+/* Renaming happens in place: the entry's line becomes a field. Only that line is redrawn, so a click that
+   ends a rename by landing on another entry still reaches its button. */
+function redrawSaved(id) {
+  const li = id && $(`#saved-list [data-id="${id}"]`), e = li && readSaved().find(x => x.id === id);
+  if (e) { li.outerHTML = savedRow(e); paintSaved(); } else if (li) renderSaved();
+}
+/* `back` is the entry whose Rename gets the focus back. */
+function editSaved(id, back) {
+  const was = savedEdit;
+  savedEdit = id;
+  redrawSaved(was); redrawSaved(id);
+  const input = id && $(`#saved-list [data-id="${id}"] input`);
+  if (input) { input.focus(); input.select(); } else if (back) $(`#saved-list [data-id="${back}"] [data-act="rename"]`)?.focus();
+}
+function renameSaved(id, name, refocus) {
+  const list = readSaved(), e = list.find(x => x.id === id);
+  name = name.trim().slice(0, 80);
+  savedEdit = null;
+  if (e && name && name !== e.name) { e.name = name; if (writeSaved(list)) savedSay(`Renamed "${name}"`); }
+  redrawSaved(id);
+  if (refocus) $(`#saved-list [data-id="${id}"] [data-act="rename"]`)?.focus();
+}
+function deleteSaved(id) {
+  const list = readSaved(), at = list.findIndex(e => e.id === id);
+  if (at < 0) return renderSaved();
+  const [e] = list.splice(at, 1);
+  if (!writeSaved(list)) return;
+  savedUndo = e; savedEdit = null;
+  renderSaved();
+  // the focus goes to the entry that took its place, else the one above it, else the name field
+  const rows = $$('#saved-list .sv[data-id]'), next = rows[Math.min(at, rows.length - 1)];
+  (next ? $('[data-act="load"]', next) : $('#saved-name')).focus();
+  savedSay(`Deleted "${e.name}"`, true);
+}
+function undoDelete() {
+  const e = savedUndo, list = readSaved();
+  if (!e) return;
+  savedUndo = null;
+  if (!list.some(x => x.id === e.id)) list.push(e);
+  if (!writeSaved(list.sort((x, y) => y.at - x.at).slice(0, SAVED_MAX))) return;
+  renderSaved();
+  $(`#saved-list [data-id="${e.id}"] [data-act="load"]`)?.focus();
+  savedSay(`Restored "${e.name}"`);
+}
+function wireSaved() {
+  const box = $('.saved'), input = $('#saved-name');
+  if (!box) return;
+  input.addEventListener('input', () => { savedTyped = !!input.value.trim(); });
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); saveBuild(); } });
+  $('#saved-save').addEventListener('click', saveBuild);
+  const acts = {load: loadSaved, rename: editSaved, delete: deleteSaved, undo: undoDelete, cancel: id => editSaved(null, id),
+    keep: id => renameSaved(id, $(`#saved-list [data-id="${id}"] input`).value, true)};
+  box.addEventListener('click', e => {
+    const b = e.target.closest('button[data-act]');
+    if (!b || !acts[b.dataset.act]) return;
+    // a click here redraws the list under the pointer. In the receipt page's menu it stops here, or wire()'s
+    // handler would take the vanished button for a click outside the menu and close it.
+    if (box.matches('.menu')) e.stopPropagation();
+    acts[b.dataset.act](b.closest('[data-id]')?.dataset.id);
+  });
+  // the field of an entry being renamed: Enter keeps the name, Esc goes back to the old one, and so does
+  // leaving it empty; leaving it otherwise keeps what was typed. Its own buttons take a click without the focus.
+  box.addEventListener('keydown', e => {
+    const field = e.target.closest('input[data-act="name"]'), id = field?.closest('[data-id]').dataset.id;
+    if (!field) return;
+    if (e.key === 'Enter') { e.preventDefault(); renameSaved(id, field.value, true); }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); editSaved(null, id); }
+  });
+  box.addEventListener('mousedown', e => { if (e.target.closest('.editing .act')) e.preventDefault(); });
+  box.addEventListener('focusout', e => {
+    const li = e.target.closest('.sv.editing');
+    if (li && savedEdit === li.dataset.id && !li.contains(e.relatedTarget)) renameSaved(li.dataset.id, $('input', li).value);
+  });
+  // Saved builds in the top bar: on the tabs page it opens the tab; on the receipt page it is the menu's
+  // button (see setMenu), and the menu opens freshly drawn with the focus in its name field
+  $('#saved-link')?.addEventListener('click', e => {
+    e.preventDefault();
+    if (!RECEIPT) { setTab('saved'); $('.tab[data-tab="saved"]')?.focus(); return; }
+    savedSay(''); savedUndo = null; savedEdit = null; renderSaved();
+    setTimeout(() => { if (!$('#saved-menu').hidden) input.focus(); });
+  });
+  // another window of the site changed the list
+  addEventListener('storage', e => { if (e.key === SAVED || e.key === null) renderSaved(); });
+}
+
 /* ---------- share link ---------- */
 /* The link carries the build in its query, `?s=`, on the layout's own page, so a server sees it:
    Cloudflare answers those two addresses through the Worker, which describes the build in the page's
@@ -1623,7 +1855,7 @@ function wire() {
       return;
     }
     if (e.ctrlKey || e.metaKey || e.altKey || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || !$('#champ-modal').hidden) return;
-    const tab = !RECEIPT && {1:'build', 2:'target', 3:'break', 4:'stats'}[e.key];
+    const tab = !RECEIPT && {1:'build', 2:'target', 3:'break', 4:'stats', 5:'saved'}[e.key];
     if (tab) { setTab(tab); return; }
     if (e.key.toLowerCase() === 'c') { e.preventDefault(); openChamps('atk'); }
   });
@@ -1635,6 +1867,23 @@ function wire() {
     e.target.classList.remove('wait');
   }, true);
   wireRemember();
+  wireSaved();
+}
+
+/* Every control painted from S: at boot, once a link's build is in, and when a saved build is loaded. */
+function paintAll() {
+  $('#order').value = S.order;
+  paintNames();
+  document.body.dataset.compare = S.compare ? 'on' : 'off';
+  $$('#cmp-seg button').forEach(b => b.setAttribute('aria-checked', (b.dataset.cmp === 'on') === S.compare));
+  document.body.dataset.target = S.target;
+  $$('#tseg button').forEach(b => b.setAttribute('aria-checked', b.dataset.t === S.target));
+  writeDials(S.dummy);
+
+  $$('#crit-seg button').forEach(b => b.setAttribute('aria-checked', b.dataset.crit === S.crits));
+  $$('#shop .chip[data-shop]').forEach(c => c.setAttribute('aria-pressed', !!S.shops[c.dataset.shop]));
+  paintLevel(); paintSkills(); paintChamp(); renderBuilds(); renderLines(); renderSteps(); paintTarget();
+  if (S.target === 'champ') enemyStats();
 }
 
 async function boot() {
@@ -1655,20 +1904,9 @@ async function boot() {
 
   restore();
   followChamp();
-  const tab = /[#&]tab=(build|target|break|stats)\b/.exec(location.hash);
+  const tab = /[#&]tab=(build|target|break|stats|saved)\b/.exec(location.hash);
   if (tab && !RECEIPT) setTab(tab[1]);
-  $('#order').value = S.order;
-  paintNames();
-  document.body.dataset.compare = S.compare ? 'on' : 'off';
-  $$('#cmp-seg button').forEach(b => b.setAttribute('aria-checked', (b.dataset.cmp === 'on') === S.compare));
-  document.body.dataset.target = S.target;
-  $$('#tseg button').forEach(b => b.setAttribute('aria-checked', b.dataset.t === S.target));
-  writeDials(S.dummy);
-
-  $$('#crit-seg button').forEach(b => b.setAttribute('aria-checked', b.dataset.crit === S.crits));
-  $$('#shop .chip[data-shop]').forEach(c => c.setAttribute('aria-pressed', !!S.shops[c.dataset.shop]));
-  paintLevel(); paintSkills(); paintChamp(); renderBuilds(); renderLines(); renderSteps(); paintTarget();
-  if (S.target === 'champ') enemyStats();
+  paintAll(); renderSaved();
   await loadKit();
 }
 boot().catch(e => {

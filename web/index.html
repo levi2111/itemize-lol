@@ -33,7 +33,7 @@
 </style>
 <style>
 /* Layout: the damage totals are a full-width display at the top and never leave the screen.
-   Everything else is one tab at a time underneath: Build, Target, Breakdown, More stats.
+   Everything else is one tab at a time underneath: Build, Target, Breakdown, More stats, Saved.
    This is the first layout of the site; receipt.html is the second, and web/app.js runs both. */
 :root{
   --bg:#0c2524;
@@ -380,6 +380,35 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 5rem 10rem}
 .ah-same{margin:0;font-size:.8rem;color:var(--faint)}
 .ah-same b{color:var(--dim);font-weight:600}
 
+/* ---------- saved tab: builds kept in this browser, the save on the left and the list on the right ---------- */
+/* app.js draws the list (savedRow); the receipt page shows the same list in a menu. A build's six slots are
+   one column, so the items of every entry line up; the entry on screen is marked like the selected tab. */
+.pane-saved{display:grid;grid-template-columns:26rem minmax(0,1fr);gap:3.5rem;min-height:0}
+.sv-save{display:grid;gap:.75rem;align-content:start;align-self:start;padding:1.1rem 1.2rem 1.2rem;border:1px solid var(--rule);border-radius:4px;background:var(--well)}
+.sv-save p{margin:0}
+.sv-form{display:flex;gap:.5rem}
+.sv-form .btn:disabled,.sv-form .search:disabled{opacity:.4;cursor:default}
+.sv-side{display:grid;grid-template-rows:auto minmax(0,1fr);gap:.55rem;min-height:0}
+.sv-side>.sec-head{align-items:center;min-height:1.6rem}
+.sv-status{display:flex;align-items:center;gap:.6rem;min-width:0;font-size:.8rem;color:var(--dim);text-align:right}
+.sv-list{margin:0;padding:0;list-style:none;min-height:0;overflow:auto;border-top:1px solid var(--rule);scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.sv{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:1rem;padding-right:.3rem;border-bottom:1px solid rgba(37,80,77,.6)}
+.sv-load{display:grid;grid-template-columns:2.6rem minmax(0,1fr) 14.4rem 14.4rem;column-gap:1.4rem;align-items:center;padding:.5rem .7rem;border-left:2px solid transparent}
+.sv-load:hover{background:rgba(236,231,216,.05)}
+.sv-load[aria-current="true"]{border-left-color:var(--text);background:linear-gradient(90deg,rgba(236,231,216,.07),transparent)}
+.sv-load[aria-current="true"] .sv-meta::before{content:"On screen · ";color:var(--dim)}
+.sv-face{width:2.6rem;height:2.6rem;border:1px solid var(--rule);border-radius:3px;overflow:hidden;background:var(--bg)}
+.sv-txt{display:grid;gap:.15rem;min-width:0}
+.sv-txt b{font-size:.95rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sv-meta{font-size:.78rem;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sv-bs{display:contents}
+.sv-b{display:grid;grid-template-columns:1.1rem repeat(6,1.9rem);gap:.25rem;align-items:center}
+.sv-it{height:1.9rem;border:1px solid var(--rule);border-radius:2px;overflow:hidden;background:var(--bg)}
+.sv-it.empty{border-style:dashed;border-color:var(--faint);opacity:.5}
+.sv-acts{display:flex;gap:.3rem}
+.sv.editing{grid-template-columns:2.6rem minmax(0,1fr) auto;column-gap:1.4rem;padding:.5rem .3rem .5rem calc(.7rem + 2px)}
+.sv-none{margin-top:.9rem;padding:.8rem 1rem;border:1px dashed var(--faint);border-radius:4px;color:var(--dim)}
+
 /* ---------- the combo: one line in the band, edited in a dropdown ---------- */
 .ibtn{width:1.65rem;height:1.65rem;display:inline-grid;place-items:center;flex:none;border:1px solid var(--rule);border-radius:3px;background:var(--well);color:var(--dim)}
 .ibtn svg{width:.95rem;height:.95rem}
@@ -701,6 +730,7 @@ label.ic{cursor:pointer}
     <button class="tab" role="tab" data-tab="target" aria-selected="false"><b>Target</b><span class="sum" id="ts-target"></span><span class="key">2</span></button>
     <button class="tab" role="tab" data-tab="break" aria-selected="false"><b>Breakdown</b><span class="sum">Damage by source, crits split out</span><span class="key">3</span></button>
     <button class="tab" role="tab" data-tab="stats" aria-selected="false"><b>More stats</b><span class="sum" id="ts-stats"></span><span class="key">4</span></button>
+    <button class="tab" role="tab" data-tab="saved" aria-selected="false"><b>Saved</b><span class="sum" id="ts-saved">None yet</span><span class="key">5</span></button>
   </nav>
 
   <main class="panes">
@@ -877,6 +907,20 @@ label.ic{cursor:pointer}
     <section class="pane pane-more" data-pane="stats" role="tabpanel" aria-label="More stats" hidden>
       <div class="more-grid" id="more-grid"></div>
       <div class="ahead" id="ahead"></div>
+    </section>
+
+    <!-- 5. saved builds -->
+    <section class="pane pane-saved saved" data-pane="saved" role="tabpanel" aria-label="Saved builds" hidden>
+      <div class="sv-save">
+        <label class="lbl" for="saved-name">Save this setup</label>
+        <div class="sv-form"><input class="search" id="saved-name" maxlength="80" autocomplete="off" spellcheck="false"><button class="btn" id="saved-save">Save</button></div>
+        <p class="hint">Everything on the page goes in: the champion, level and ranks, both builds and their item settings, the target and the combo.</p>
+        <p class="hint">Kept in this browser only, up to 50. Copy build link keeps one anywhere.</p>
+      </div>
+      <div class="sv-side">
+        <div class="sec-head"><span class="lbl" id="saved-h">Saved in this browser</span><span class="sv-status" id="saved-status" role="status"></span></div>
+        <ul class="sv-list" id="saved-list" aria-labelledby="saved-h"></ul>
+      </div>
     </section>
   </main>
   <footer class="legal" id="legal"></footer>
