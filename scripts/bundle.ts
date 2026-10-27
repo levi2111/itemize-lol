@@ -1,8 +1,10 @@
 /* npm run bundle. Packs the compiled dataset into one file for the Cloudflare Worker, which
-   has no file system to read it from. Wrangler runs this before every dev session and deploy.
+   has no file system to read it from, and the preview images' glyphs next to it. Wrangler runs
+   this before every dev session and deploy.
      ITEMIZE_PATCH        bundle this compiled patch instead of the latest */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { inflateRawSync } from 'node:zlib';
 import { DATA_DIR, ROOT, distDir } from '../src/pipeline/paths.ts';
 import type { ChampionIndexEntry } from '../src/server/dataset.ts';
 
@@ -22,3 +24,5 @@ mkdirSync(join(ROOT, '.build'), { recursive: true });
 const text = JSON.stringify(bundle);
 writeFileSync(out, text);
 console.log(`bundled patch ${patch}: ${index.length} champions, ${(text.length / 1e6).toFixed(1)} MB`);
+// the glyphs the preview images draw text with, inflated so the Worker reads them as they are
+writeFileSync(join(ROOT, '.build', 'glyphs.bin'), inflateRawSync(readFileSync(join(ROOT, 'src', 'og', 'glyphs.bin'))));

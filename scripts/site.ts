@@ -4,12 +4,15 @@
      - the art index is written into the page, with a preload for the item sheet, so the first
        pictures are on their way before any script has run.
    There is a page per layout, and both get the same treatment.
+   It also draws the preview images made ahead of time (scripts/og.ts) into og/, and writes the
+   version that names the images the Worker draws (.build/og-version.txt).
    The Node server needs none of this and serves web/ as it is. */
 import { createHash } from 'node:crypto';
 import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT } from '../src/pipeline/paths.ts';
 import type { ArtIndex } from '../src/pipeline/art.ts';
+import { buildOg } from './og.ts';
 
 const web = join(ROOT, 'web'), out = join(ROOT, '.build', 'site');
 mkdirSync(out, { recursive: true });
@@ -46,4 +49,8 @@ for (const page of PAGES) {
   ].join('\n'));
   writeFileSync(join(out, page), html);
 }
+// a build's image follows from the cards and glyphs (the key buildOg returns), the data, and the code that reads a link and does the sums
+const og = await buildOg(out), version = createHash('sha256').update(og);
+for (const dir of ['src/engine', 'src/server', 'src/og']) for (const f of readdirSync(join(ROOT, dir)).sort()) version.update(readFileSync(join(ROOT, dir, f)));
+writeFileSync(join(ROOT, '.build', 'og-version.txt'), version.digest('hex').slice(0, 12));
 console.log(`site -> .build/site/ (${app}, ${layout}, art ${art.version})`);
