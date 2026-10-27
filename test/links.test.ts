@@ -85,7 +85,7 @@ test('POST /links answers with the link, and refuses what it cannot keep', async
 test('a short link\'s page carries the build ahead of layout.js, and the build\'s preview', () => {
   const page = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
   const link = { layout: 'tabs' as const, s: S };
-  const tags = { ...siteMeta('/'), title: 'Vayne · <Kraken> build', url: 'https://itemize.lol/b/abcdefg' };
+  const tags = { ...siteMeta('/'), description: undefined, title: 'Vayne · <Kraken> build', url: 'https://itemize.lol/b/abcdefg' };
   const html = sharedPage(page, { id: 'abcdefg', link }, tags);
   const at = html.indexOf('<script type="application/json" id="shared-build">');
   assert.ok(at > 0 && at < html.indexOf('<script src="/layout.js">'), 'before layout.js, which reads it');
@@ -94,6 +94,8 @@ test('a short link\'s page carries the build ahead of layout.js, and the build\'
   assert.ok(!html.includes(metaTags(siteMeta('/'))), 'the site\'s own tags are gone');
   assert.equal(html.match(/property="og:title"/g)!.length, 1);
   assert.match(html, /<title>Vayne · &lt;Kraken&gt; build · itemize\.lol<\/title>/);
+  // just the title and the image: no description, not even the page's own, which Discord would show instead
+  assert.ok(!/og:description|name="description"/.test(html));
   // a name in the data cannot close the element
   const hostile = sharedPage(page, { id: 'abcdefg', link: { layout: 'tabs', s: '</script><script>alert(1)' } }, null);
   assert.ok(!hostile.includes('</script><script>alert'));

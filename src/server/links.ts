@@ -77,7 +77,8 @@ export function sharedPage(html: string, shared: { id: string; link: StoredLink 
     html = html.replace(/<meta (?:property|name)="(?:og:[^"]*|twitter:[^"]*|theme-color)"[^>]*>\n?/g, '');
     const attr = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
     one(/<title>[^<]*<\/title>/, `<title>${attr(tags.title)} · itemize.lol</title>`);
-    one(/<meta name="description" content="[^"]*">/, `<meta name="description" content="${attr(tags.description)}">\n${metaTags(tags)}`);
+    // without a description of its own the page's is dropped too, or Discord would show the site's in its place
+    one(/<meta name="description" content="[^"]*">/, (tags.description ? `<meta name="description" content="${attr(tags.description)}">\n` : '') + metaTags(tags));
   }
   if (shared) {
     // "<" is escaped so that nothing in the data can close the element, as with the art index (scripts/site.ts)

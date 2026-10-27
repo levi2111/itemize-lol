@@ -100,12 +100,12 @@ test('a headline is the calculation\'s own numbers', () => {
   }
 });
 
-test('preview text names the builds and states the result', () => {
+test('preview says only what it is: the champion and a comparison or one build; the card names the builds', () => {
   const sb = read({ ...PAGE, c: 'Vayne', a: [6672, 3006, 3124], b: [3153, 3006, 3124], q: [3, 1, 0, 1, 0] });
   const p = preview(data, sb);
-  assert.match(p.title, /^Vayne · Kraken Slayer vs Blade of The Ruined King$/);
-  assert.match(p.description, /^(Kraken Slayer|Blade of The Ruined King) deals \d+% more combo damage.* at level 13 against a 2,400 HP dummy \(80 armor, 50 MR\)[.;].* Patch \d+\.\d+\.$/);
+  assert.equal(p.title, 'Vayne · Build comparison');
   const [a, b] = p.card.builds;
+  assert.deepEqual([a!.name, b!.name], ['Kraken Slayer', 'Blade of The Ruined King']);
   assert.equal(p.card.lead!.key, a!.total > b!.total ? 'a' : 'b');
   // typed names win, and are tidied
   const typed = preview(data, read({ ...PAGE, n: ['  Burst‮  build ', 'AP burst'] }));
@@ -113,11 +113,9 @@ test('preview text names the builds and states the result', () => {
   // the page's default name is not taken for one written by hand: B is named by the first item only it has
   assert.equal(typed.card.builds[1]!.name, 'Luden\'s Echo');
   const one = preview(data, read({ ...PAGE, m: 0, t: 'raw' }));
-  assert.equal(one.title, 'Kai\'Sa · Kraken Slayer build');
-  assert.match(one.description, /^[\d,]+ combo damage and [\d,]+ DPS at level 13, before armor and magic resist\. Kraken Slayer, Berserker's Greaves, Guinsoo's Rageblade and Nashor's Tooth\. Patch /);
+  assert.equal(one.title, 'Kai\'Sa · Build damage');
+  assert.equal(one.card.builds[0]!.name, 'Kraken Slayer build');
   assert.equal(clean('x'.repeat(50)).length, 40);
-  const enemy = preview(data, read({ ...PAGE, m: 0, t: 'champ', e: ['Garen', 16] }));
-  assert.match(enemy.description, /^[\d,]+ combo damage( \(a kill\))?, [\d,]+ DPS and \d+\.\d s to kill at level 13 against a level 16 Garen \([\d,]+ HP, \d+ armor, \d+ MR\)\. Kraken Slayer, /);
 });
 
 test('a hostile link is read without throwing, and what it says is tidied', () => {
@@ -128,7 +126,7 @@ test('a hostile link is read without throwing, and what it says is tidied', () =
   ];
   for (const s of odd) {
     const p = preview(data, read(s));
-    assert.ok(p.title.length < 200 && !/[\u0000-\u001f‮]/.test(p.title + p.description), p.title);
+    assert.ok(p.title.length < 200 && !/[\u0000-\u001f‮]/.test(p.title + p.card.builds.map(b => b.name).join('')), p.title);
   }
   assert.equal(preview(data, read(odd[2])).card.builds[0]!.name, '<script>alert(1)</script>');
 });

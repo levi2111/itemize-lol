@@ -51,7 +51,7 @@ export function previews(data: ServedData, fonts: () => Fonts, version: string, 
     const res = await env.ASSETS.fetch(new URL(LAYOUT_PATH[layout], url));
     if (res.status !== 200) return res;
     const p = link && describe(data, link.s, layout);
-    const tags: Meta | null = p && { title: p.title, description: p.description, url: `${url.origin}/b/${id}`,
+    const tags: Meta | null = p && { title: p.title, url: `${url.origin}/b/${id}`,
       image: `${url.origin}/og/b/${version}/${layout[0]}/${link!.s}.png`, imageAlt: p.imageAlt, color: p.color };
     let html = await res.text();
     try { html = sharedPage(html, link && { id, link }, tags); } catch (err) { console.error('page', err); }

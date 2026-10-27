@@ -37,7 +37,7 @@ app.get('/b/:id', async c => {
   const html = readFileSync(join(web, SOURCE[link?.layout ?? 'tabs']), 'utf8');
   if (!link) return c.html(html, 404);
   const state = decodeShare(link.s), p = state && preview(data, readShare(data, state, link.layout));
-  const tags = p && { ...siteMeta('/'), title: p.title, description: p.description, url: `${new URL(c.req.url).origin}/b/${id}`, color: p.color };
+  const tags = p && { ...siteMeta('/'), description: undefined, title: p.title, url: `${new URL(c.req.url).origin}/b/${id}`, color: p.color };
   return c.html(sharedPage(html, { id, link }, tags));
 });
 // the champion pages (/vayne, /receipt/vayne), the sitemap, robots.txt and the other names' redirects: what

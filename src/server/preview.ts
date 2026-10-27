@@ -1,6 +1,6 @@
 /* What a link preview says about a shared build: the numbers the page would show (from the engine, for
-   the request share.ts mirrors), the words of the preview's title and description, and the facts the
-   preview image draws. Sentences follow the page's verdicts: the same percentages, rounded the same way. */
+   the request share.ts mirrors), the preview's title, and the facts the preview image draws, which follows
+   the page's verdicts: the same percentages, rounded the same way. */
 import { headline, type Headline } from '../engine/calc.ts';
 import type { ServedData } from './dataset.ts';
 import type { SharedBuild } from './share.ts';
@@ -35,7 +35,6 @@ export interface CardFacts {
 }
 export interface Preview {
   title: string;
-  description: string;
   imageAlt: string;
   color: string;
   card: CardFacts;
@@ -44,8 +43,6 @@ export interface Preview {
 export const nf = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 /** The page's percentage: how much more x is than y, rounded; null when y is nothing. */
 const pc = (x: number, y: number) => y > 0 ? Math.round((x / y - 1) * 100) : null;
-const more = (p: number | null, what: string) => p === null ? `more ${what}` : p === 0 ? `slightly more ${what}` : `${p}% more ${what}`;
-const list = (xs: string[]) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`;
 /** One line of text: no control characters, runs of space as one, and at most `max` characters. */
 export function clean(s: string, max = NAME_MAX): string {
   const flat = [...s.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, ' ').replace(/\s+/g, ' ').trim()];
@@ -71,43 +68,24 @@ export function preview(data: ServedData, sb: SharedBuild): Preview {
 
   const t = sb.target;
   const stats = t.kind === 'raw' ? null : `${nf(t.hp)} HP, ${nf(t.armor)} armor, ${nf(t.mr)} MR`;
-  const against = t.kind === 'dummy' ? `a ${nf(t.hp)} HP dummy (${nf(t.armor)} armor, ${nf(t.mr)} MR)`
-    : t.kind === 'champ' ? `a level ${t.level} ${t.champion.name} (${stats})` : null;
-  const where = against ? `at level ${sb.level} against ${against}` : `at level ${sb.level}, before armor and magic resist`;
-  const patch = ` Patch ${data.manifest.displayPatch}.`;
 
-  let title: string, description: string, alt: string, lead: CardFacts['lead'] = null;
+  // the image says it all, so the words stay short: a preview with a title, a sentence and the image read as clutter
+  let title: string, alt: string, lead: CardFacts['lead'] = null;
   if (two) {
     const [A, B] = builds as [CardBuild, CardBuild];
-    title = `${champ} · ${A.name} vs ${B.name}`;
+    title = `${champ} · Build comparison`;
     alt = `${champ} at level ${sb.level}: ${A.name} ${nf(A.total)} combo damage, ${B.name} ${nf(B.total)}`;
-    // DPS: who has more, said only where the page's verdict would say it
-    const dw = Math.round(A.dps) === Math.round(B.dps) ? null : A.dps > B.dps ? A : B;
-    const dp = dw && pc(Math.max(A.dps, B.dps), Math.min(A.dps, B.dps));
     if (Math.round(A.total) !== Math.round(B.total)) {
       const [w, l] = A.total > B.total ? [A, B] : [B, A];
-      const p = pc(w.total, l.total);
-      lead = { key: w.key, percent: p };
-      description = dw === w ? `${w.name} deals ${more(p, 'combo damage')} and ${more(dp, 'DPS')} ${where}.`
-        : dw ? `${w.name} deals ${more(p, 'combo damage')} ${where}; ${dw.name} has ${more(dp, 'DPS')}.`
-        : `${w.name} deals ${more(p, 'combo damage')} ${where}.`;
-    } else {
-      const then = dw ? `; ${dw.name} has ${more(dp, 'DPS')}` : '';
-      description = A.kills && B.kills && against
-        ? `Both builds kill ${against} with the combo at level ${sb.level}${then}.`
-        : `Both builds deal ${nf(A.total)} combo damage ${where}${then}.`;
+      lead = { key: w.key, percent: pc(w.total, l.total) };
     }
   } else {
     const [A] = builds as [CardBuild];
-    title = `${champ} · ${A.name}`;
+    title = `${champ} · Build damage`;
     alt = `${champ} at level ${sb.level}, ${A.name}: ${nf(A.total)} combo damage, ${nf(A.dps)} DPS`;
-    const said = [`${nf(A.total)} combo damage${A.kills && against ? ' (a kill)' : ''}`, `${nf(A.dps)} DPS`];
-    if (A.timeToKill !== null && against) said.push(`${A.timeToKill.toFixed(1)} s to kill`);
-    description = `${list(said)} ${where}.`;
-    description += A.items.length ? ` ${list(A.items.map(item))}.` : ' No items.';
   }
   return {
-    title, description: description + patch, imageAlt: alt,
+    title, imageAlt: alt,
     color: COLORS[lead?.key ?? 'a'],
     card: {
       champion: { id: sb.champion.id, name: champ }, level: sb.level, patch: data.manifest.displayPatch,
@@ -132,14 +110,15 @@ export const SITE = {
   origin: 'https://itemize.lol',
 } as const;
 
-export interface Meta { title: string; description: string; url: string; image: string; imageAlt: string; color: string }
+/** without a description a preview is its title and image (a shared build's) */
+export interface Meta { title: string; description?: string; url: string; image: string; imageAlt: string; color: string }
 const attr = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 /** The link-preview tags of a page, one per line, every value escaped. Open Graph for Discord, Slack, WhatsApp,
     iMessage, Reddit and the rest; X reads those too once it is told to show a large image. */
 export function metaTags(m: Meta): string {
   return [
     ['property', 'og:site_name', SITE.name], ['property', 'og:type', 'website'],
-    ['property', 'og:title', m.title], ['property', 'og:description', m.description], ['property', 'og:url', m.url],
+    ['property', 'og:title', m.title], ...m.description ? [['property', 'og:description', m.description]] : [], ['property', 'og:url', m.url],
     ['property', 'og:image', m.image], ['property', 'og:image:type', 'image/png'],
     ['property', 'og:image:width', '1200'], ['property', 'og:image:height', '630'], ['property', 'og:image:alt', m.imageAlt],
     ['name', 'twitter:card', 'summary_large_image'], ['name', 'theme-color', m.color],
