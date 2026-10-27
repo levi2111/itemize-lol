@@ -1394,6 +1394,7 @@ function remembered() {
    before a patch removed an item, a setting or an option comes back without just that. */
 function restore() {
   const given = brought();
+  cameWith = !!given;
   if (given) return applyState(given);
   const r = remembered(), s = r && decodeState(r.s);
   // a champion's page (/vayne) opens on that champion: the visitor's own build only if it is for them
@@ -1823,60 +1824,75 @@ function followChamp() {
    the tour it is the part being shown, and it glides from one stop to the next. A click inside the hole goes
    through to the page and ends the tour, and so does a click outside it. Once closed it stays closed in this
    browser; the ? in the top bar, or the ? key, brings it back. Inside a frame (the promo video's stage) it
-   never opens by itself. */
+   never opens by itself.
+   On a phone's layout (PHONE) the welcome and the tour's card are sheets along the bottom edge, as the
+   pickers are there, and the tour shows the parts that layout has where the desktop's are taken apart or
+   too tall for the screen. On a touch screen the words say tap, and no key is offered. */
 const INTRO_KEY = 'intro';
-let intro = null;                   // {step: -1 on the welcome, else the tour's stop; auto: a first visit opened it; back, scroll: where focus and the page return to; shown; timer}
+let intro = null;                   // {step: -1 on the welcome, else the tour's stop; auto: a first visit opened it; back, scroll: where focus and the page return to; shown; timer; sheet: the card's height on a phone}
+let cameWith = false;               // the visit brought a build (a link, short or long), set by restore(): the welcome says it was shared
 const remPx = () => parseFloat(getComputedStyle(document.documentElement).fontSize);
 const val = x => typeof x === 'function' ? x() : x;
+const tap = () => touched() ? 'Tap' : 'Click';
+const kb = s => touched() ? '' : s;
 const allChamps = () => S.champs.length ? `all ${S.champs.length}` : 'every champion';
 const comboNow = () => ACTIONS.some(k => S.combo[k]) ? `<b>${esc(comboText())}</b>` : '<b>empty</b>';
 const buildsText = () => (S.compare
-  ? 'Click a slot to choose an item. A and B share the champion and level, so the items are the only difference; the ones that differ are underlined.'
-  : 'Click a slot to choose an item. Add a second build to compare the two side by side.')
+  ? `${tap()} a slot to choose an item. A and B share the champion and level, so the items are the only difference; the ones that differ are underlined.`
+  : `${tap()} a slot to choose an item. Add a second build to compare the two side by side.`)
   + ($('.slot .cfg:not(.info)') ? ' The round button on an item sets its stacks or active.' : '');
+const ranksText = () => `ability ranks follow the <b>max order</b>, or ${tap().toLowerCase()} a pip to set one yourself.`;
 /* Where the tour stops: the parts of the page it shows (one hole around all of them), and the side of the
-   hole its card goes on when there is room. */
+   hole its card goes on when there is room. `ph` is what changes on a phone. */
 const STOPS = RECEIPT ? [
   {at: ['#champ-btn', '.lvl', '.skills'], title: 'Your champion',
-    text: () => `Click the name, or press <span class="key">C</span>, to choose from ${allChamps()}. Set the level on the ruler; ability ranks follow the <b>max order</b>, or click a pip to set one yourself.`},
+    text: () => `${tap()} the name${kb(', or press <span class="key">C</span>,')} to choose from ${allChamps()}. Set the level on the ruler; ${ranksText()}`,
+    ph: {at: ['#champ-btn'], text: () => `${tap()} the name to choose from ${allChamps()}. Further down, under the builds, set the level on the ruler; ${ranksText()}`}},
   {at: ['#builds'], side: 'above', title: () => S.compare ? 'Two builds, A and B' : 'Your build', text: buildsText},
   {at: ['.tgt'], side: 'left', title: "Who you're hitting",
-    text: 'A <b>target dummy</b> with the health, armor and magic resist you set, or a real <b>enemy champion</b> at its level. The bars show the health each build leaves it.'},
+    text: 'A <b>target dummy</b> with the health, armor and magic resist you set, or a real <b>enemy champion</b> at its level. The bars show the health each build leaves it.',
+    ph: {at: ['.tgt-mode', '.stage', '.hits']}},
   {at: ['.till'], side: 'right', title: 'The receipt',
-    text: 'Every ability, auto attack and item effect in the combo, itemized, with the bigger number highlighted. <b>DPS</b> and <b>time to kill</b> say who wins a longer fight. Type in the <b>Qty</b> column to change the combo.'},
+    text: 'Every ability, auto attack and item effect in the combo, itemized, with the bigger number highlighted. <b>DPS</b> and <b>time to kill</b> say who wins a longer fight. Type in the <b>Qty</b> column to change the combo.',
+    ph: {at: ['.r-cols', '#lines', '.r-total', '#more'],
+      text: 'Every ability, auto attack and item effect in the combo, itemized, with the bigger number highlighted. Type in the <b>Qty</b> column to change the combo. Under the total, <b>DPS</b> and <b>time to kill</b> say who wins a longer fight.'}},
   {at: ['.ledger'], side: 'above', title: 'Every stat',
-    text: () => `${S.compare ? "Both builds' stats, side by side" : "Your build's stats"}. When you're done, <b>Copy build link</b> at the top shares the whole setup.`},
+    text: () => `${S.compare ? "Both builds' stats, side by side" : "Your build's stats"}. When you're done, <b>Copy build link</b> at the top shares the whole setup, and <b>Saved builds</b> keeps it in this browser.`},
 ] : [
   {at: ['.setup'], title: 'Your champion',
-    text: () => `Click the champion, or press <span class="key">C</span>, to choose from ${allChamps()}. Set the level on the ruler; ability ranks follow the <b>max order</b>, or click a pip to set one yourself.`},
+    text: () => `${tap()} the champion${kb(', or press <span class="key">C</span>,')} to choose from ${allChamps()}. Set the level on the ruler; ${ranksText()}`,
+    ph: {at: ['#champ-btn', '.lvl'], text: () => `${tap()} the champion to choose from ${allChamps()}, and set the level on the ruler. Further down, ${ranksText()}`}},
   {at: ['#builds > .sec-head', '#builds .build', '#add-b'], side: 'above', title: () => S.compare ? 'Two builds, A and B' : 'Your build', text: buildsText},
   {at: ['#tseg'], title: "Who you're hitting",
     text: 'A <b>target dummy</b> with the health, armor and magic resist you set, or a real <b>enemy champion</b> at its level. <b>Raw output</b> is the damage before either. The numbers are in the <b>Target</b> tab.'},
   {at: ['.totals', '.hero-side'], title: 'Who hits harder',
-    text: () => `What the combo deals to the target, and the share of its health that is. <b>DPS</b> and <b>time to kill</b> say who wins a longer fight. The combo, top left, is ${comboNow()}; its pencil changes it.`},
+    text: () => `What the combo deals to the target, and the share of its health that is. <b>DPS</b> and <b>time to kill</b> say who wins a longer fight. The combo, top left, is ${comboNow()}; its pencil changes it.`,
+    // on a phone the totals are the strip pinned at the top, and the rest of the band comes after the builds
+    ph: {at: ['.tot.a', '.tot.b'], text: () => `What the combo deals to the target, and the share of its health that is. This strip stays in view as you scroll. Under the builds, <b>DPS</b> and <b>time to kill</b> say who wins a longer fight, and the combo is ${comboNow()}; its pencil changes it.`}},
   {at: ['.tab'], title: 'Every number, explained',
-    text: '<b>Breakdown</b> splits the damage by source and <b>More stats</b> lists every stat; keys <span class="key">1</span> to <span class="key">4</span> switch tabs. <b>Copy build link</b>, top right, shares the whole setup.'},
+    text: () => `<b>Breakdown</b> splits the damage by source, <b>More stats</b> lists every stat and <b>Saved</b> keeps builds in this browser${kb('; keys <span class="key">1</span> to <span class="key">5</span> switch tabs')}. <b>Copy build link</b>, top right, shares the whole setup.`},
 ];
+const stopAt = i => PHONE.matches && STOPS[i].ph ? {...STOPS[i], ...STOPS[i].ph} : STOPS[i];
 function introDue() {
   if (self !== top) return false;
   try { return !localStorage.getItem(INTRO_KEY); } catch (e) { return false; }
 }
 function helloHtml() {
-  const shared = intro.auto && /[#&]s=/.test(location.hash), ks = S.compare ? ['a', 'b'] : ['a'];
+  const shared = intro.auto && cameWith, ks = S.compare ? ['a', 'b'] : ['a'];
   const items = k => [...S.builds[k].filter(Boolean), null, null, null, null].slice(0, 4)
     .map(id => `<span class="in-it${id ? '' : ' empty'}">${id ? itemIco(id) : ''}</span>`).join('');
   const tag = k => `<span class="tag ${k} xs">${k.toUpperCase()}</span>`;
   return `<img class="in-art wait" alt="">
     <div class="in-top">
       <span class="in-eyebrow">${shared ? 'Someone shared a build with you' : 'Welcome to itemize.lol'}</span>
-      <h2 class="in-h" id="in-h">Which build<br><mark>hits harder?</mark></h2>
+      <h2 class="in-h" id="in-h">Which build <br><mark>hits harder?</mark></h2>
       <p class="in-lede" id="in-lede">Put two League of Legends item builds side by side and see the damage each one really deals: every ability, auto attack and item effect, after the target's armor and magic resist.</p>
     </div>
     <ol class="in-steps">
       <li><div class="in-pic in-champ"><span class="in-face">${champIco(S.champ.id)}</span><span class="in-who"><b>${esc(S.champ.name)}</b><small>Level ${S.level}</small></span></div>
         <b><i>1</i>Pick a champion</b><span>Any of ${S.champs.length || 'them'}, at any level</span></li>
       <li><div class="in-pic">${ks.map(k => `<div class="in-row">${tag(k)}${items(k)}</div>`).join('')}</div>
-        <b><i>2</i>${S.compare ? 'Fill two builds' : 'Fill a build'}</b><span>Click a slot, choose an item</span></li>
+        <b><i>2</i>${S.compare ? 'Fill two builds' : 'Fill a build'}</b><span>${tap()} a slot, choose an item</span></li>
       <li><div class="in-pic" id="in-res">${ks.map(k => `<div class="in-row ${k}" data-k="${k}">${tag(k)}<span class="in-bar"><i></i></span><b>–</b></div>`).join('')}</div>
         <b><i>3</i>Read the damage</b><span>On a dummy or a real champion</span></li>
     </ol>
@@ -1889,9 +1905,9 @@ function helloHtml() {
 function openIntro(auto) {
   if (intro) return;
   closePicker(); closeItemMenu(); closeChamps(); setMenu(null); hideTip();
-  const me = intro = {step: -1, auto: !!auto, back: document.activeElement, scroll: [scrollX, scrollY], shown: false};
+  const me = intro = {step: -1, auto: !!auto, back: document.activeElement, scroll: [scrollX, scrollY], shown: false, sheet: remPx() * 12};
   const root = $('#intro');
-  root.className = 'intro hello';
+  root.className = `intro hello${touched() ? ' touch' : ''}`;
   root.innerHTML = `<div class="in-catch"></div><div class="in-hole"></div>
     <div class="in-card hello" role="dialog" aria-modal="true" aria-labelledby="in-h" aria-describedby="in-lede">${helloHtml()}</div>`;
   root.hidden = false;
@@ -1918,10 +1934,11 @@ function paintIntro() {
   }
   box.dataset.done = 1;
 }
-/* A stop's hole: around everything it shows, with a little room, and kept inside the window. */
+/* A stop's hole: around everything it shows, with a little room, and kept inside the window. Around a part
+   pinned over the page (a phone's strip and tab bar) the room would show the page scrolling under it. */
 function holeAt(s) {
-  const boxes = s.at.flatMap(q => $$(q)).filter(el => el.getClientRects().length).map(el => el.getBoundingClientRect());
-  const m = 4, pad = remPx() * .55;
+  const els = s.at.flatMap(q => $$(q)).filter(el => el.getClientRects().length), boxes = els.map(el => el.getBoundingClientRect());
+  const m = 4, pad = remPx() * (PHONE.matches && els.every(pinned) ? .1 : .55);
   if (!boxes.length) return {l: m, t: m, r: innerWidth - m, b: innerHeight - m};
   return {l: Math.max(m, Math.min(...boxes.map(b => b.left)) - pad), t: Math.max(m, Math.min(...boxes.map(b => b.top)) - pad),
     r: Math.min(innerWidth - m, Math.max(...boxes.map(b => b.right)) + pad), b: Math.min(innerHeight - m, Math.max(...boxes.map(b => b.bottom)) + pad)};
@@ -1937,24 +1954,55 @@ function placeCard(card, h, s) {
     : side === 'right' ? [h.r + gap, cy(h.t)] : side === 'left' ? [h.l - gap - w, cy(h.t)] : [cx((W - w) / 2), H - ht - m];
   card.style.left = `${x}px`; card.style.top = `${y}px`;
 }
+/* On a phone the card is a sheet at the bottom of the window, or right above a hole that is down there (the
+   tab bar). Where it would cover the hole anyway (a part taller than the room left), the hole stops short
+   of it, so that what it frames is what can be seen. */
+function sheetY(h, ht) {
+  const m = remPx() / 2, gap = remPx() * .6, low = innerHeight - ht - m;
+  return h.b + gap <= low || h.t - gap - ht < m ? low : h.t - gap - ht;
+}
+const pinned = el => { for (; el && el !== document.body; el = el.parentElement) if (/fixed|sticky/.test(getComputedStyle(el).position)) return true; return false; };
+/* Scrolls the stop into view. On a phone it goes between what stays pinned at the top (the tabs page's
+   strip) and the card's sheet, its top first if it is taller than that; a part pinned itself (the strip, the
+   tab bar) is in view already. Says whether the page moved. */
+function reveal(s) {
+  if (!PHONE.matches) { $(s.at[0])?.scrollIntoView({block: 'nearest', inline: 'nearest'}); return false; }
+  const els = s.at.flatMap(q => $$(q)).filter(el => el.getClientRects().length);
+  if (!els.length || els.some(pinned)) return false;
+  const pad = remPx() * .55, rs = els.map(el => el.getBoundingClientRect());
+  const t = Math.min(...rs.map(r => r.top)) - pad, b = Math.max(...rs.map(r => r.bottom)) + pad;
+  const top = Math.max(0, ...(RECEIPT ? [] : $$('.tot')).filter(el => el.getClientRects().length && pinned(el)).map(el => el.offsetHeight)) + remPx() * .5;
+  const bottom = innerHeight - intro.sheet - remPx() * 1.3;
+  const d = t < top || b - t > bottom - top ? t - top : b > bottom ? b - bottom : 0, y = scrollY;
+  if (Math.abs(d) > 1) scrollBy(0, d);
+  // the scroll's own event would only redraw what placeIntro is about to (and cut the card's fade short)
+  return scrollY !== y && (intro.quiet = true);
+}
 /* Puts the hole and the card where they belong now. `still` is for the window moving under them (a resize, a
    scroll): they jump there instead of gliding. */
 function placeIntro(still) {
   const root = $('#intro');
   if (!intro || !root) return;
-  const card = $('.in-card', root), hole = $('.in-hole', root), m = remPx() / 2;
+  const card = $('.in-card', root), hole = $('.in-hole', root), m = remPx() / 2, out = card.classList.contains('out');
   if (still) root.classList.add('still');
   let h;
   if (intro.step < 0) {
-    const w = card.offsetWidth, ht = card.offsetHeight, x = Math.max(m, (innerWidth - w) / 2), y = Math.max(m, (innerHeight - ht) / 2);
+    // on a phone the welcome is a sheet at the bottom too, where the thumb is
+    const w = card.offsetWidth, ht = card.offsetHeight, x = Math.max(m, (innerWidth - w) / 2), y = Math.max(m, PHONE.matches ? innerHeight - ht - m : (innerHeight - ht) / 2);
     card.style.left = `${x}px`; card.style.top = `${y}px`;
     h = {l: x, t: y, r: x + w, b: y + ht};
     $('.in-catch', root).style.clipPath = '';
   } else {
-    h = holeAt(STOPS[intro.step]);
+    const s = stopAt(intro.step);
+    h = holeAt(s);
+    if (PHONE.matches) {
+      if (!out) intro.sheet = card.offsetHeight;
+      const y = sheetY(h, intro.sheet);
+      if (y > h.t) h.b = Math.min(h.b, Math.max(h.t + remPx() * 2, y - remPx() * .3));
+      if (!out) { card.style.left = `${Math.max(0, (innerWidth - card.offsetWidth) / 2)}px`; card.style.top = `${y}px`; }
+    } else if (!out) placeCard(card, h, s);
     // the clicks outside the hole are caught; the ones inside reach the page
     $('.in-catch', root).style.clipPath = `polygon(evenodd,0 0,100% 0,100% 100%,0 100%,0 0,${h.l}px ${h.t}px,${h.l}px ${h.b}px,${h.r}px ${h.b}px,${h.r}px ${h.t}px,${h.l}px ${h.t}px)`;
-    if (!card.classList.contains('out')) placeCard(card, h, STOPS[intro.step]);
   }
   Object.assign(hole.style, {left: `${h.l}px`, top: `${h.t}px`, width: `${h.r - h.l}px`, height: `${h.b - h.t}px`});
   if (still) { void root.offsetWidth; root.classList.remove('still'); }
@@ -1966,9 +2014,9 @@ function go(i) {
   const from = intro.step, root = $('#intro'), card = $('.in-card', root), hole = $('.in-hole', root);
   intro.step = i;
   if (!RECEIPT) setTab('build');
-  root.className = 'intro tour';
+  root.className = `intro tour${touched() ? ' touch' : ''}`;
   card.classList.add('out');
-  $(STOPS[i].at[0])?.scrollIntoView({block: 'nearest', inline: 'nearest'});
+  reveal(stopAt(i));
   placeIntro();
   hole.classList.remove('ping'); void hole.offsetWidth; hole.classList.add('ping');
   clearTimeout(intro.timer);
@@ -1981,15 +2029,17 @@ function go(i) {
         <div class="st-body" aria-live="polite"><h3 class="in-t" id="in-t"></h3><p class="in-p" id="in-p"></p></div>
         <div class="st-acts"><button class="btn" data-in="back"><span class="key">←</span> Back</button><button class="in-go" data-in="next"></button></div>`;
     }
-    const s = STOPS[i], last = i === STOPS.length - 1, next = $('[data-in="next"]', card);
+    const s = stopAt(i), last = i === STOPS.length - 1, next = $('[data-in="next"]', card);
     $('.st-n', card).textContent = `${i + 1} / ${STOPS.length}`;
     $$('.st-segs i', card).forEach((el, j) => el.classList.toggle('on', j <= i));
     $('#in-t').textContent = val(s.title);
     $('#in-p').innerHTML = val(s.text);
     $('[data-in="back"]', card).hidden = !i;
     next.innerHTML = last ? 'Start building' : 'Next <span class="key">→</span>';
-    placeCard(card, holeAt(s), s);
     card.classList.remove('out');
+    // on a phone the page was scrolled for the card's height before this one's text was in: once more, now it is
+    if (PHONE.matches) { intro.sheet = card.offsetHeight; reveal(s); }
+    placeIntro();
     if (!card.contains(document.activeElement) || document.activeElement.hidden) next.focus({preventScroll: true});
   }, from < 0 ? 240 : 150);
 }
@@ -2034,7 +2084,9 @@ function wireIntro() {
   // a click through the hole is the visitor taking over: the tour ends and the click goes on to the page
   document.addEventListener('pointerdown', e => { if (intro?.step >= 0 && !e.target.closest('#intro')) closeIntro(true); }, true);
   addEventListener('resize', () => placeIntro(true));
-  document.addEventListener('scroll', e => { if (!e.target.closest?.('#intro')) placeIntro(true); }, true);
+  document.addEventListener('scroll', e => { if (intro?.quiet) intro.quiet = false; else if (!e.target.closest?.('#intro')) placeIntro(true); }, true);
+  // turning a phone can swap layouts under the tour: the stop is shown again as the new one has it
+  PHONE.addEventListener('change', () => { if (intro?.step >= 0) go(intro.step); });
 }
 
 /* ---------- wiring ---------- */
