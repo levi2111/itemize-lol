@@ -150,6 +150,7 @@ async function recalc() {
     if (mine !== seq) return;
     S.res = {a: out.results[0], b: out.results[1] || null};
     paintResults();
+    remember();
   } catch (e) {
     if (mine !== seq) return;
     $('#quality').hidden = false;
@@ -1272,6 +1273,54 @@ function setLayout(link) {
   location.assign(link.getAttribute('href') + hash);
 }
 
+/* ---------- the remembered build ---------- */
+/* The build a visitor last worked on comes back on their next visit, on either layout. It is kept in this
+   browser (localStorage `build`, the share link's encoding) whenever a change settles, that is when its
+   calculation is in, so a state the API turns down is never kept. A build that came in a link is someone
+   else's until it is edited: looking at it leaves the visitor's own in place. Until the visitor presses
+   something the page is still settling on what it opened with (the kit trims the ranks, an enemy's stats
+   arrive), so no settle before that counts as an edit. */
+const KEEP = 'build';
+let opened = null;                  // the state the page settled on before the visitor did anything
+let owned = false;                  // the page has been edited since, so what it shows is the visitor's build
+let kept = null;                    // the state last written
+let touched = false;                // the visitor has pressed a key or a pointer
+function remembered() {
+  try {
+    const r = JSON.parse(localStorage.getItem(KEEP));
+    return r && typeof r.s === 'string' ? r : null;
+  } catch (e) { return null; }
+}
+/* What the page opens on: the build the visit brought, else the visitor's own from last time, else the
+   default. applyState checks every field and loadKit checks the options against the kit, so a build kept
+   before a patch removed an item, a setting or an option comes back without just that. */
+function restore() {
+  const given = brought();
+  if (given) return applyState(given);
+  const r = remembered(), s = r && decodeState(r.s);
+  if (!s) return;
+  kept = r.s;
+  try { applyState(s); } catch (e) {}
+}
+function remember() {
+  const now = encodeState();
+  if (!owned) {
+    if (!touched || opened === null) { opened = now; return; }
+    if (now === opened) return;
+    owned = true;
+  }
+  if (now === kept) return;
+  try { localStorage.setItem(KEEP, JSON.stringify({s: now})); kept = now; dropLink(); } catch (e) {}
+}
+function wireRemember() {
+  const touch = () => { touched = true; };
+  document.addEventListener('pointerdown', touch, {capture: true, once: true});
+  document.addEventListener('keydown', touch, {capture: true, once: true});
+  // a build's name changes no number, so nothing recalculates: it is kept on its own once typing pauses
+  let wait = 0;
+  for (const k of ['a', 'b']) $(`#name-${k}`).addEventListener('input', () => { clearTimeout(wait); wait = setTimeout(remember, 400); });
+}
+
 /* ---------- share link ---------- */
 function encodeState() {
   const s = {c: S.champ.id, l: S.level, r: SLOTS.map(k => S.ranks[k]), o: S.order, a: S.builds.a, b: S.builds.b, n: [$('#name-a').value, $('#name-b').value],
@@ -1284,13 +1333,25 @@ function encodeState() {
   if (Object.keys(io.a).length || Object.keys(io.b).length) s.io = io;
   return btoa(unescape(encodeURIComponent(JSON.stringify(s)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-/* A build arrives in the link, or from the other layout's page when the visitor has just swapped. */
-function decodeState() {
+/* The build this visit brought, if it brought one: from the other layout's page when the visitor has just
+   swapped, else in the link. Read once, at boot; the hand-over is used up. */
+function brought() {
   let text = null;
   try { text = sessionStorage.getItem('carry'); sessionStorage.removeItem('carry'); } catch (e) {}
   text ||= /[#&]s=([\w-]+)/.exec(location.hash)?.[1];
-  if (!text) return null;
-  try { return JSON.parse(decodeURIComponent(escape(atob(text.replace(/-/g, '+').replace(/_/g, '/'))))); } catch (e) { return null; }
+  return text ? decodeState(text) : null;
+}
+/* Takes the build out of the address once the page has moved on from it, so a reload shows the build kept
+   since (see remember) rather than the link's. */
+function dropLink() {
+  const h = location.hash.replace(/([#&])s=[\w-]+&?/, '$1').replace(/^#$|&$/, '');
+  if (h !== location.hash) history.replaceState(history.state, '', location.pathname + location.search + h);
+}
+function decodeState(text) {
+  try {
+    const s = JSON.parse(decodeURIComponent(escape(atob(text.replace(/-/g, '+').replace(/_/g, '/')))));
+    return s && typeof s === 'object' && !Array.isArray(s) ? s : null;
+  } catch (e) { return null; }
 }
 function applyState(s) {
   const int = (v, lo, hi, d) => Number.isFinite(+v) ? Math.max(lo, Math.min(hi, Math.round(+v))) : d;
@@ -1476,6 +1537,7 @@ function wire() {
     e.target.style.visibility = '';
     e.target.classList.remove('wait');
   }, true);
+  wireRemember();
 }
 
 async function boot() {
@@ -1492,8 +1554,7 @@ async function boot() {
   S.items = new Map(items.map(i => [i.id, i]));
   S.champ = S.champs.find(c => c.id === S.champ.id) || S.champs[0];
 
-  const saved = decodeState();
-  if (saved) applyState(saved);
+  restore();
   const tab = /[#&]tab=(build|target|break|stats)\b/.exec(location.hash);
   if (tab && !RECEIPT) setTab(tab[1]);
   $('#order').value = S.order;
