@@ -123,7 +123,7 @@ Environment: `PORT`, `ITEMIZE_PATCH`, `ITEMIZE_DATA_DIR`, `CALC_PER_MINUTE`, `TR
 
 ## Deploying
 
-Production is a Cloudflare Worker (`wrangler.jsonc`). Cloudflare serves the site as static files, with the headers in `web/_headers`, and the Worker answers `/api/v1` from the dataset packed into it at build time. Before each deploy `scripts/site.ts` copies `web/` to `.build/site/` and renames the scripts after their contents, so everything but the pages themselves is cached forever. The tabs are at `/` and the receipt layout at `/receipt`; the gear in the top bar swaps between them and remembers the choice in the browser.
+Production is a Cloudflare Worker (`wrangler.jsonc`). Cloudflare serves the site as static files, with the headers in `web/_headers`, and the Worker answers `/api/v1` from the dataset packed into it at build time. Before each deploy `scripts/site.ts` copies `web/` to `.build/site/` and renames the scripts after their contents, so everything but the pages themselves is cached forever. The tabs are at `/` and the receipt layout at `/receipt`; the gear in the top bar swaps between them and remembers the choice in the browser. Saved builds stay in the browser too (the tabs page's Saved tab, the receipt's Saved builds menu, one list under `saved` in localStorage): the server never sees them.
 
 ```
 npm run dev:worker      # the Worker, locally
@@ -154,4 +154,3 @@ Checked against Riot's [Legal Jibber Jabber](https://www.riotgames.com/en/legal)
 
 - Runes, summoner spells, and the target's own items (the UI marks that last one "soon").
 - Attack speed that ramps within a fight. Ramping effects count as fully ramped for sustained damage and not at all in a short combo; each affected item says so in its notes.
-- Saved builds. The share link encodes the whole build in the URL, so it needs no storage.

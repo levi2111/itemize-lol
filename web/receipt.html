@@ -148,6 +148,41 @@ body[data-target="raw"] .needs-target{opacity:.26;pointer-events:none}
 .opt input[type="number"]:focus{outline:0;border-bottom:1px solid var(--chalk)}
 .opt.set span{color:var(--chalk)}
 
+/* ---------- saved builds: the menu under Saved builds in the top bar ---------- */
+/* The tabs page gives these a tab; here the nav's Saved builds opens the same list in a menu (app.js draws
+   it, savedRow). Each entry is two lines: its name and when, then the items of A and B. */
+.nav .set>.menu-btn{color:var(--chalk-dim);padding:.25rem 0;border-bottom:2px solid transparent}
+.nav .set>.menu-btn:hover{color:var(--chalk)}
+.nav .set>.menu-btn[aria-expanded="true"]{color:var(--chalk);border-color:var(--chalk)}
+.menu.saved{left:0;right:auto;width:31rem;gap:.55rem;padding:.8rem .9rem .85rem;font-size:.8rem;font-weight:400}
+.saved p{margin:0}
+.sv-form{display:flex;gap:.5rem}
+.sv-form .btn:disabled,.sv-form .search:disabled{opacity:.4;cursor:default}
+.saved .row-head{align-items:center;padding-top:.55rem;border-top:1px solid var(--rule)}
+.sv-status{display:flex;align-items:center;gap:.6rem;font-size:.74rem;color:var(--chalk-dim)}
+.sv-status:empty{display:none}
+.sv-list{margin:0;padding:0;list-style:none;max-height:min(25rem,calc(100vh - 15rem));overflow:auto;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.sv{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:.6rem;border-bottom:1px solid rgba(214,240,226,.08)}
+.sv-load{display:grid;grid-template-columns:2.3rem minmax(0,1fr);grid-template-areas:"face txt" "face items";column-gap:.65rem;row-gap:.35rem;padding:.45rem .4rem;border-left:2px solid transparent}
+.sv-load:hover{background:rgba(239,233,216,.06)}
+.sv-load[aria-current="true"]{border-left-color:var(--chalk);background:rgba(239,233,216,.07)}
+.sv-load[aria-current="true"] .sv-meta::before{content:"on screen · ";color:var(--chalk-dim)}
+.sv-face{width:2.3rem;height:2.3rem;border:1px solid var(--rule);border-radius:2px;overflow:hidden;background:#061918}
+.sv-load>.sv-face{grid-area:face}
+.sv-txt{grid-area:txt;display:grid;gap:.1rem;min-width:0}
+.sv-txt b{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sv-meta{font-family:var(--font-mono);font-size:.64rem;color:var(--chalk-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sv-bs{grid-area:items;display:flex;gap:.8rem}
+.sv-b{display:flex;align-items:center;gap:.15rem}
+.sv-b .tag{margin-right:.25rem}
+.sv-it{width:1.3rem;height:1.3rem;border:1px solid var(--rule);border-radius:1px;overflow:hidden;background:#061918}
+.sv-it.empty{border-style:dashed;border-color:var(--chalk-faint);opacity:.5}
+.sv-acts{display:flex;gap:.2rem;padding-top:.5rem}
+.sv .act{text-transform:lowercase}
+.sv.editing{grid-template-columns:2.3rem minmax(0,1fr) auto;column-gap:.65rem;align-items:center;padding:.45rem 0 .45rem calc(.4rem + 2px)}
+.sv.editing .sv-acts{padding:0}
+.sv-none{padding:.7rem .8rem;border:1px dashed var(--chalk-faint);border-radius:2px;color:var(--chalk-dim)}
+
 /* ---------- main ---------- */
 .main{display:grid;grid-template-columns:minmax(35.5rem,1.25fr) 29.5rem minmax(24.5rem,.8fr);gap:1.5rem;padding:0 1.5rem;min-height:0}
 .main>*{min-width:0;min-height:0}
@@ -484,7 +519,17 @@ label.ic{cursor:pointer}
       <a class="mark" href="#" aria-label="itemize.lol"><b>itemize</b><span>.lol</span></a>
       <nav class="nav" aria-label="Site">
         <a href="#" aria-current="page">Workbench</a>
-        <a href="#" id="saved-link">Saved builds<i id="saved-n" hidden>0</i></a>
+        <div class="set">
+          <button class="menu-btn" id="saved-link" aria-haspopup="dialog" aria-expanded="false" aria-controls="saved-menu">Saved builds<i id="saved-n" hidden>0</i></button>
+          <div class="menu saved" id="saved-menu" role="dialog" aria-label="Saved builds" hidden>
+            <label class="eyebrow" for="saved-name">Save this setup</label>
+            <div class="sv-form"><input class="search" id="saved-name" maxlength="80" autocomplete="off" spellcheck="false"><button class="btn" id="saved-save">Save</button></div>
+            <p class="sv-status" id="saved-status" role="status"></p>
+            <div class="row-head"><span class="eyebrow" id="saved-h">Saved in this browser</span><span class="hint">Click one to load it</span></div>
+            <ul class="sv-list" id="saved-list" aria-labelledby="saved-h"></ul>
+            <p class="hint">Kept in this browser only, up to 50. Copy build link keeps one anywhere.</p>
+          </div>
+        </div>
       </nav>
     </div>
     <div class="seg" id="cmp-seg" role="radiogroup" aria-label="How many builds">
