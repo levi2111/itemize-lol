@@ -399,7 +399,8 @@ function renderBuilds() {
     now.textContent = on.length ? `Summoner's Rift + ${on.map(m => SHOP[m]).join(' + ')}` : "Summoner's Rift items";
     $('#items-hint').textContent = !S.compare ? 'Click a slot to change it'
       : S.split ? 'Both builds use the champion and level above; ranks are per build. Underlined items differ.'
-      : 'Both builds use the champion, level and ranks above. Underlined items differ.';
+      // a phone's layout puts the ranks after the builds
+      : `Both builds use the champion, level and ranks ${PHONE.matches ? 'on this tab' : 'above'}. Underlined items differ.`;
   }
   paintTabs();
 }
@@ -422,13 +423,14 @@ function openPicker(b, i) {
   pick = {b, i};
   $('#picker').hidden = false;
   pickerLabel(); renderBuilds();
-  const q = $('#item-q'); q.value = ''; renderItems(); q.focus();
+  const q = $('#item-q'); q.value = ''; renderItems();
+  if (!touched()) q.focus();
 }
 function closePicker() {
   if (!pick) return;
   pick = null; $('#picker').hidden = true; renderBuilds();
 }
-function footIdle() { $('#item-foot').innerHTML = '<span>Hover an item for details. Enter picks the first result.</span>'; }
+function footIdle() { $('#item-foot').innerHTML = `<span>${touched() ? 'Tap an item for its details, and again to pick it.' : 'Hover an item for details. Enter picks the first result.'}</span>`; }
 function renderItems() {
   const q = $('#item-q').value.trim().toLowerCase(), f = ITEM_FILTERS[itemFilter][1];
   const match = it => (!q || it.name.toLowerCase().includes(q)) && (!f || it.tags.some(t => f.includes(t)));
@@ -456,7 +458,7 @@ function choose(id) {
   if (!pick) return;
   S.builds[pick.b][pick.i] = id;
   const next = S.builds[pick.b].findIndex((v, j) => !v && j > pick.i);
-  if (next > -1) { pick.i = next; pickerLabel(); renderBuilds(); const q = $('#item-q'); q.select(); q.focus(); }
+  if (next > -1) { pick.i = next; pickerLabel(); renderBuilds(); const q = $('#item-q'); if (!touched() || document.activeElement === q) { q.select(); q.focus(); } }
   else closePicker();
   schedule();
 }
@@ -650,6 +652,12 @@ function showTip(el) {
   const r = el.getBoundingClientRect(), m = tip.getBoundingClientRect(), gap = 8;
   // inside a dropdown the card sits beside it, so the rest of the list stays in view
   const menuBox = el.closest('.menu')?.getBoundingClientRect();
+  // a menu as wide as the screen (a phone's sheet) has no side to spare, and the card goes above it
+  if (menuBox && menuBox.width + m.width + 3 * gap > innerWidth) {
+    tip.style.top = `${Math.max(gap, menuBox.top - gap - m.height)}px`;
+    tip.style.left = `${Math.max(gap, Math.min(r.left, innerWidth - m.width - gap))}px`;
+    return;
+  }
   if (menuBox) {
     const right = menuBox.right + gap + m.width <= innerWidth - gap;
     tip.style.left = `${right ? menuBox.right + gap : Math.max(gap, menuBox.left - gap - m.width)}px`;
@@ -673,13 +681,101 @@ function wireTip() {
   document.addEventListener('mousedown', e => { if (tipAt && !tipAt.contains(e.target)) hideTip(); });
 }
 
+/* ---------- phones and touch ---------- */
+/* A finger has no hover, so what a mouse finds by pointing is found by tapping: an ability's card, the
+   text a desktop keeps in a tooltip, an item's details in the picker (one tap shows them, a second picks
+   the item). Opening a picker does not raise the keyboard, which would hide the picker. The level ruler
+   can be slid along. On a phone's layout (index.html, receipt.html) the menus are sheets over a dimmed
+   page, and a tap on the dimmed page only closes the sheet. A mouse meets none of this. */
+const PHONE = matchMedia('(max-width:700px),(max-width:1100px) and (max-height:500px)');
+let pointer = matchMedia('(pointer:coarse)').matches ? 'touch' : 'mouse', tipBefore = null, noteAt = null, sheetTap = false, swallow = 0;
+const touched = () => pointer === 'touch';
+/* The text of a tooltip, as a card under or over what was tapped. */
+function showNote(el) {
+  const tip = $('#tip');
+  hideTip(); noteAt = el;
+  tip.innerHTML = `<div class="tip-note">${el.title.split('\n').map(p => `<p>${esc(p)}</p>`).join('')}</div>`;
+  tip.hidden = false;
+  const r = el.getBoundingClientRect(), m = tip.getBoundingClientRect(), gap = 8;
+  const below = r.bottom + gap + m.height <= innerHeight - gap;
+  tip.style.top = `${Math.max(gap, below ? r.bottom + gap : r.top - gap - m.height)}px`;
+  tip.style.left = `${Math.max(gap, Math.min(r.left + r.width / 2 - m.width / 2, innerWidth - m.width - gap))}px`;
+}
+function hideNote() { if (noteAt) { noteAt = null; hideTip(); } }
+/* The sheet open on a phone, if any: a menu's panel or an item's settings. */
+const openSheet = () => PHONE.matches && (itemMenu ? $('#item-menu') : menu ? $('#' + menu.getAttribute('aria-controls')) : null);
+function wireTouch() {
+  document.addEventListener('pointerdown', e => {
+    pointer = e.pointerType;
+    if (!touched()) return;
+    tipBefore = tipAt;
+    if (noteAt && !noteAt.contains(e.target)) hideNote();
+    const sheet = openSheet();
+    sheetTap = !!sheet && !sheet.contains(e.target) && !e.target.closest('.menu-btn, [data-cfg]');
+  }, true);
+  // the sheet closes when the finger lifts (a click may never come over plain text), and the click is dropped
+  document.addEventListener('pointerup', e => {
+    if (e.pointerType !== 'touch' || !sheetTap) return;
+    sheetTap = false; swallow = e.timeStamp;
+    closeItemMenu(); setMenu(null);
+  }, true);
+  document.addEventListener('pointercancel', () => { sheetTap = false; }, true);
+  document.addEventListener('click', e => {
+    if (!touched()) return;
+    if (swallow && e.timeStamp - swallow < 800) { swallow = 0; e.preventDefault(); e.stopPropagation(); return; }
+    const ab = e.target.closest('[data-ab]');
+    if (ab) {
+      // a second tap on the same ability puts its card away; a pip sets a rank, and keeps the card only if
+      // it was open, so that setting ranks does not cover the abilities under it
+      if (e.target.closest('.pip')) { if (tipBefore !== ab) hideTip(); }
+      else if (tipBefore === ab && !e.target.closest('button')) hideTip(); else if (tipAt !== ab) showTip(ab);
+      return;
+    }
+    const titled = e.target.closest('[title]:not([title=""])');
+    if (!titled || titled.closest('button, a, input, select, label, .slot')) return;
+    if (titled === noteAt && !$('#tip').hidden) hideNote(); else showNote(titled);
+  }, true);
+  // the item picker: the first tap on an item shows its details in the footer, a second tap picks it
+  $('#item-grid').addEventListener('click', e => {
+    const p = e.target.closest('.pi');
+    if (!p || !touched() || p.classList.contains('peek')) return;
+    e.stopPropagation();
+    $$('#item-grid .peek').forEach(x => x.classList.remove('peek'));
+    p.classList.add('peek');
+    p.dispatchEvent(new MouseEvent('mouseover', {bubbles: true}));
+    $('#item-foot .g')?.insertAdjacentHTML('afterend', '<em>Tap again to pick</em>');
+  }, true);
+  // the tab bar is at the bottom of a phone's screen: a tab opens at its content, just under the totals
+  $('.tabs')?.addEventListener('click', e => {
+    const t = e.target.closest('.tab');
+    if (!t || !PHONE.matches) return;
+    const first = t.dataset.tab === 'build' ? null : [...$(`.pane[data-pane="${t.dataset.tab}"]`).children].find(x => x.getClientRects().length);
+    scrollTo({top: first ? first.getBoundingClientRect().top + scrollY - $('.tot').offsetHeight - 12 : 0});
+  });
+  // a slot tapped on a phone is kept in view above the picker's sheet
+  $('#builds').addEventListener('click', () => { if (PHONE.matches && pick) $('.slot.sel')?.scrollIntoView({block: 'nearest', behavior: 'smooth'}); });
+  // a finger sliding along the level ruler sets the level under it
+  const ruler = $('#ruler');
+  let slide = null;
+  ruler.addEventListener('pointerdown', e => { if (e.pointerType === 'touch') slide = e.pointerId; });
+  ruler.addEventListener('pointermove', e => {
+    if (e.pointerId !== slide) return;
+    const r = ruler.getBoundingClientRect(), l = Math.max(1, Math.min(18, Math.ceil((e.clientX - r.left) / r.width * 18)));
+    if (l !== S.level) setLevel(l);
+  });
+  for (const t of ['pointerup', 'pointercancel']) ruler.addEventListener(t, () => { slide = null; });
+  // turning the phone can cross into or out of its layout, and the builds' hint says where the ranks are
+  PHONE.addEventListener('change', renderBuilds);
+}
+
 /* ---------- champion picker ---------- */
 let champFor = 'atk', role = 0;
 function openChamps(who) {
   champFor = who; closePicker(); setMenu(null);
   $('#cm-title').textContent = who === 'atk' ? 'Choose a champion' : 'Choose the target';
   $('#champ-modal').hidden = false;
-  const q = $('#champ-q'); q.value = ''; renderChamps(); q.focus();
+  const q = $('#champ-q'); q.value = ''; renderChamps();
+  if (!touched()) q.focus();
 }
 function closeChamps() { $('#champ-modal').hidden = true; }
 const nameOf = k => $(`#name-${k}`).value || `Build ${k.toUpperCase()}`;
@@ -1069,7 +1165,7 @@ function paintReceipt() {
   // a verdict is one line on the slip; the full sentence is its tooltip when it is cut short
   for (const p of $$('#verdict p')) p.title = p.textContent;
   const notes = assumptions(), fine = $('#r-notes');
-  fine.textContent = notes.length ? `${notes.length} assumption${notes.length === 1 ? '' : 's'}, hover to read` : '';
+  fine.textContent = notes.length ? `${notes.length} assumption${notes.length === 1 ? '' : 's'}, ${touched() ? 'tap' : 'hover'} to read` : '';
   fine.title = notes.join('\n');
 }
 /* The receipt feeds a notch out of the till when a new one is printed. Not for a quiet change
@@ -1389,6 +1485,7 @@ function wire() {
     openPicker(b, i);
   });
   wireItemMenu();
+  wireTouch();
   builds.addEventListener('keydown', e => {
     const slot = e.target.closest('.slot');
     if (slot && e.target === slot && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openPicker(slot.dataset.b, +slot.dataset.i); }

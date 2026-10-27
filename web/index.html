@@ -2,7 +2,7 @@
 <html lang="en" data-layout="tabs">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>itemize.lol</title>
 <meta name="description" content="Compare League of Legends item builds by the damage they actually deal: combo damage, DPS and time to kill, broken down by source.">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -570,6 +570,254 @@ label.ic{cursor:pointer}
 .tip-p{padding-top:.5rem;border-top:1px solid var(--rule);font-size:.72rem;line-height:1.4;color:var(--faint)}
 [data-ab]{cursor:help}
 .skill[data-ab] .pip{cursor:pointer}
+</style>
+<style>
+/* ---------- phones ---------- */
+/* Below 700px wide, and on a phone held sideways, the page is one column that scrolls: rearranged for
+   the phone rather than shrunk. The totals are a strip pinned to the top, the tabs a bar at the bottom
+   within reach of a thumb, and the pickers and menus sheets that rise from the bottom edge. Wrappers
+   that only group things side by side on a desktop (the top bar's halves, the display band, the build
+   tab's setup) are dissolved with display:contents, so that their parts can be put in a phone's order:
+   the result first, then the champion, level and builds, then the ranks. No desktop size matches. */
+@media (max-width:700px),(max-width:1100px) and (max-height:500px){
+:root{--pl:max(.75rem,env(safe-area-inset-left));--pr:max(.75rem,env(safe-area-inset-right));--tabbar:calc(3.5rem + env(safe-area-inset-bottom))}
+html{height:auto;font-size:16px}
+body{height:auto;overflow:visible}
+.app{display:flex;flex-wrap:wrap;align-content:flex-start;height:auto;min-width:0;min-height:100vh;padding-bottom:var(--tabbar)}
+.app>*{flex:1 1 100%;min-width:0}
+.key{display:none}
+.chip{min-height:2.5rem;display:inline-flex;align-items:center;padding:0 .8rem}
+.search{min-height:2.75rem;font-size:1rem}
+.act{height:2.5rem;padding:0 .75rem}
+.btn{min-height:2.5rem}
+/* on a phone "Esc" is a Close button; the new word is left out of its accessible name */
+.esc{min-width:3.75rem;min-height:2.5rem;font-size:0}
+.esc::after{content:"Close";content:"Close"/"";font-family:var(--font-ui);font-size:.8rem;font-weight:600}
+
+/* the top bar: the mark and its buttons on one row, the site's links and the patch on a second.
+   Choosing between one build and two is left to the builds' own Add and Remove buttons. */
+.bar{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center;gap:0;padding:.35rem var(--pr) 0 var(--pl)}
+.bar-l,.bar-r{display:contents}
+.mark{grid-area:1/1;font-size:1.3rem}
+.bar-r>*{grid-row:1;margin-left:.5rem}
+#cmp-seg{display:none}
+.bar .nav{grid-area:2/1/3/-1;justify-self:start;gap:1.2rem;font-size:.8rem}
+.nav a{display:inline-flex;align-items:center;min-height:2.5rem}
+.bar .patch{grid-area:2/1/3/-1;justify-self:end;margin:0;font-size:.72rem}
+.bar #quality{grid-area:3/1/4/-1;justify-self:start;margin:0 0 .5rem}
+#share{padding:0 .8rem}
+.gear{width:2.5rem;height:2.5rem}
+
+/* the display band, taken apart: the two totals are a strip that stays at the top of the screen; the
+   DPS and time to kill, the combo and how it is counted, and the stats at a glance are a band of their
+   own, which on the Build tab comes after the builds and on the others before the tab's content */
+.hero,.hero-top,.totals{display:contents}
+.tot,.hero-side,.combo,.hero-mode,.glance{background:var(--band)}
+.hero-side,.combo,.hero-mode,.glance{flex:1 1 100%}
+.tot{order:1;position:sticky;top:0;z-index:15;flex:1 1 0;min-width:0;gap:.25rem;padding:.55rem .75rem .6rem var(--pl);border-bottom:1px solid var(--rule)}
+.tot.b{padding:.55rem var(--pr) .6rem .75rem;border-left:1px solid var(--rule)}
+body[data-compare="off"] .tot{min-width:0;padding-right:var(--pr)}
+.tot-id{min-width:0;font-size:.85rem;white-space:nowrap}
+.tot-id span:last-child{overflow:hidden;text-overflow:ellipsis}
+.tot-n,body[data-compare="off"] .tot-n{font-size:2.35rem}
+.tot-bar{height:.3rem}
+.tot-cap{font-size:.72rem;overflow:hidden;text-overflow:ellipsis}
+.hero-side{order:5;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;padding:.75rem var(--pr) .2rem var(--pl)}
+.metric{grid-template-columns:minmax(0,1fr);row-gap:.3rem}
+.metric .lbl{font-size:.66rem}
+.metric-v{gap:.8rem}
+.mv{font-size:1.05rem;gap:.35rem}
+.combo{order:6;gap:.6rem;padding:.55rem var(--pr) 0 var(--pl)}
+.combo-sum{flex:1;min-width:0;min-height:2.5rem;overflow:hidden;text-overflow:ellipsis}
+.ibtn{width:2.5rem;height:2.5rem}
+.hero-mode{order:7;display:grid;grid-template-columns:auto minmax(0,1fr);gap:.45rem .7rem;padding:.45rem var(--pr) .3rem var(--pl)}
+.hero-mode .seg+.lbl{margin-left:0}
+.hero-mode .seg{grid-auto-columns:minmax(0,1fr)}
+.hero-mode .seg button{min-height:2.5rem;padding:.25rem .35rem;font-size:.78rem;line-height:1.1;white-space:normal;text-align:center}
+.glance{order:8;align-self:auto;grid-template-columns:auto repeat(7,minmax(0,1fr));margin:0;padding:.65rem var(--pr) .85rem var(--pl);border-bottom:1px solid var(--rule)}
+.gl-h{padding:0 .25rem .15rem}
+.gl-h.first{padding:0 .4rem 0 0}
+.gl-v{padding:0 .25rem;font-size:.78rem}
+
+/* the tabs: a bar along the bottom edge */
+.tabs{position:fixed;z-index:30;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);background:var(--well);border-top:1px solid var(--rule);border-bottom:0}
+.tab{min-width:0;max-width:none;height:3.5rem;display:grid;place-content:center;padding:0 .2rem;margin:-1px 0 0;border-bottom:0;border-top:2px solid transparent;text-align:center}
+.tab b{font-size:.86rem}
+.tab span.sum{display:none}
+.tab[aria-selected="true"]{border-top-color:var(--text);background:linear-gradient(180deg,rgba(236,231,216,.07),transparent)}
+/* the tabs' panes are dissolved too, so that the Build tab's parts and the band can be interleaved */
+.panes,.pane,.setup{display:contents}
+.pane>*,.setup>*{order:10;flex:1 1 100%;margin:1.4rem var(--pr) 0 var(--pl)}
+.legal{order:20;margin-top:1.8rem;padding:.8rem var(--pr) 1rem var(--pl)}
+
+/* build: the champion, the level and the builds, then the band, then the ranks */
+.champ{order:2;margin-top:1rem;grid-row:auto;min-height:5.5rem;padding:.8rem .9rem}
+.champ-name{font-size:1.65rem}
+.champ-title{font-size:.8rem}
+.swap{min-height:2.5rem;padding:0 .8rem}
+.lvl{order:3;margin-top:1.1rem}
+.loadout{order:4;margin:0 var(--pr) 1.8rem var(--pl)}
+.skills{order:9}
+/* the ruler is 18 narrow buttons: tall ones, and a finger can also slide along it (app.js) */
+.ruler{margin-bottom:.9rem;touch-action:pan-y}
+.ruler button{height:2.75rem;font-size:.66rem}
+.ruler button span{padding:.12rem .18rem}
+.loadout{grid-template-columns:minmax(0,1fr);row-gap:1rem;padding-top:1.1rem}
+.loadout>.sec-head{flex-wrap:wrap;gap:.4rem .8rem}
+.loadout>.sec-head .hint{margin-left:0;flex-basis:100%}
+.shop-now{min-height:2.5rem}
+.build.a{padding-right:0}
+.build.b{padding:1rem 0 0;border-left:0;border-top:1px solid var(--rule)}
+.b-head{gap:.5rem}
+.b-name{flex:1 1 0;min-width:3rem;font-size:1rem}
+.slots{grid-template-columns:repeat(6,minmax(0,1fr));gap:.45rem}
+.add-b{margin-left:0;min-height:5rem;padding:.8rem}
+/* the slot's small round buttons get a finger-sized area around them */
+.slot .cfg::before,.slot .rm::before{content:"";position:absolute;inset:-.55rem}
+.skills .sec-head{flex-wrap:wrap}
+.skills .sec-head .hint{margin-left:0;flex-basis:100%;font-size:0}
+/* the hint says what a tap does (its desktop words stay for a reader) */
+.skills .sec-head .hint::after{content:"Tap an ability for its numbers, a pip to set its rank";content:"Tap an ability for its numbers, a pip to set its rank"/"";font-size:.8rem}
+/* ranks: a row per ability, its pips wide enough to tap */
+.rank-same{grid-template-columns:minmax(0,1fr);gap:.9rem}
+.skill-row{display:grid;gap:.5rem}
+.skill{grid-template-columns:2.75rem minmax(0,1fr);align-items:center;column-gap:.9rem;width:auto}
+.skill-ico{width:2.75rem;height:2.75rem}
+.pips{grid-auto-columns:minmax(0,3.5rem);gap:.3rem;height:1.1rem}
+.pip::after{inset:-.75rem -.15rem}
+.pips-none{height:auto;font-size:.72rem;line-height:1.2}
+.plan{flex-wrap:wrap;gap:.5rem .9rem;padding-bottom:0}
+.plan select,.rrow .plan select{min-height:2.5rem;font-size:1rem}
+.rank-split{gap:1.1rem;padding-bottom:0}
+.rrow{display:grid;grid-template-columns:auto 2.5rem minmax(0,1fr);gap:.45rem .7rem;align-items:center}
+.rrow>.rs{grid-column:1/-1;display:grid;grid-template-columns:2.5rem minmax(0,1fr) 1rem;gap:.9rem;padding-bottom:.35rem}
+.rrow>.rs:nth-child(2){grid-area:1/2;display:block;padding:0}
+.rrow>.plan{grid-area:1/3;margin:0;padding:0}
+.rrow>.rs.diff::after{right:auto;width:2.5rem}
+.rs .ib{width:2.5rem;height:2.5rem}
+.rs .pips{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,3.5rem);gap:.3rem;height:1.1rem}
+.rs .pip{width:auto}
+
+/* target */
+.pane-target{grid-template-columns:minmax(0,1fr);gap:1.4rem}
+.raw-note{flex-direction:column;align-items:stretch;gap:.8rem}
+.raw-acts{flex-wrap:wrap}
+.raw-acts .btn{flex:1 1 auto}
+.who{padding:.9rem;gap:.9rem}
+.who-ico{width:3.5rem;height:3.5rem}
+/* the dummy's numbers are under it in one column, not to its right */
+.who-sub{font-size:0}
+.who-sub::after{content:"Stands still. Set its numbers below.";content:"Stands still. Set its numbers below."/"";font-size:.86rem}
+.mini button{width:2.5rem;height:2.5rem}
+.tune .sec-head{flex-wrap:wrap;gap:.5rem}
+.dials{grid-template-columns:minmax(0,1fr);gap:1.2rem}
+.dial{grid-template-columns:minmax(0,1fr) 7.5rem;column-gap:1rem;row-gap:.1rem;align-items:end}
+.dial .lbl{grid-row:1;align-self:center}
+.dial input[type=number]{grid-area:1/2;font-size:1.75rem;text-align:right}
+.dial input[type=range],.dial-note{grid-column:1/-1}
+.dial-note{white-space:normal}
+input[type=range]{height:2.5rem}
+input[type=range]::-webkit-slider-thumb{width:1.5rem;height:1.5rem;margin-top:calc(1px - .75rem)}
+input[type=range]::-moz-range-thumb{width:1.5rem;height:1.5rem}
+.t-row2{grid-template-columns:minmax(0,1fr);gap:1.6rem}
+.hp{grid-template-columns:1.35rem minmax(0,1fr) auto}
+.t-slots{gap:.4rem}
+.t-slots span{width:auto;flex:1;aspect-ratio:1;height:auto}
+
+/* breakdown: each source is two lines, its numbers on the first, its type and bars under them */
+.pane-break{grid-template-columns:minmax(0,1fr);gap:2rem}
+.row{grid-template-columns:2.6rem 4.4rem minmax(0,1fr) 3.9rem 3.9rem;grid-template-areas:"q src src na nb" "q ty bars bars g";column-gap:.6rem;row-gap:.2rem}
+body[data-compare="off"] .row{grid-template-columns:2.6rem 4.4rem minmax(0,1fr) 4.4rem 3rem;grid-template-areas:"q src src na sh" "q ty bars bars bars"}
+.row>.q{grid-area:q;align-self:start} .row>.src{grid-area:src} .row>.ty{grid-area:ty} .row>.bars{grid-area:bars}
+.row>.n.a{grid-area:na} .row>.n.b{grid-area:nb} .row>.g{grid-area:g} .row>.sh{grid-area:sh}
+.cols>:nth-child(1){grid-area:q} .cols>:nth-child(2){grid-area:src} .cols>:nth-child(5),.cols>:nth-child(8){grid-area:na}
+.cols>:nth-child(6){grid-area:nb} .cols>:nth-child(9){grid-area:sh} .cols>:nth-child(3),.cols>:nth-child(4),.cols>:nth-child(7){display:none}
+.line{height:auto;min-height:3.4rem;padding:.5rem 0}
+.q input{width:1.9rem;font-size:1rem}
+.src{gap:.45rem}
+.src .est{flex:none}
+.critrow{height:auto;grid-template-columns:2.6rem minmax(0,1fr);column-gap:.6rem;padding:0 0 .55rem}
+.cr,.cr-b{flex-wrap:wrap;gap:.25rem .9rem;white-space:normal;margin:0}
+.total .tl{grid-area:src;grid-column:1/4}
+.bside{max-height:none;overflow:visible;padding-right:0}
+.mixrow{grid-template-columns:1.35rem 6rem minmax(0,1fr)}
+.opt input[type="number"]{font-size:1rem}
+.opt input[type="checkbox"]{width:1.25rem;height:1.25rem}
+.opt{min-height:2.5rem}
+
+/* more stats */
+.pane-more{overflow:visible;gap:1.4rem}
+.more-grid{grid-template-columns:minmax(0,1fr);gap:1.6rem}
+.srow{grid-template-columns:minmax(0,1fr) 4.2rem 4.2rem 3.6rem;padding:.4rem 0}
+body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax(0,8.5rem)}
+.srow .note{overflow:hidden;text-overflow:ellipsis}
+.ah-cols{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:1rem}
+.ah.a{padding-right:1rem}
+.ah-row{grid-template-columns:3.9rem minmax(0,1fr);column-gap:.4rem}
+
+/* sheets: the item picker rises over the lower part of the screen and leaves the builds in view above it,
+   the combo, an item's settings and the champion picker take the screen with the page dimmed behind */
+.picker{position:fixed;z-index:35;left:0;right:0;top:auto;bottom:0;height:min(64vh,36rem);grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;
+  padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);border-width:1px 0 0;border-radius:.75rem .75rem 0 0;box-shadow:0 -1rem 2.5rem rgba(0,0,0,.55)}
+.picker-ctl{gap:.55rem;padding:.6rem .75rem .55rem;border-right:0;border-bottom:1px solid var(--rule)}
+.picker .chips,.cm .chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+.picker .chips{margin:0 -.75rem;padding:0 .75rem}
+.picker-grid{grid-template-columns:repeat(auto-fill,minmax(3.1rem,1fr));gap:.45rem;padding:.75rem;overscroll-behavior:contain}
+.picker-foot{flex-wrap:wrap;align-content:center;row-gap:.1rem;min-height:3.6rem;padding:.5rem .75rem;white-space:normal}
+.picker-foot span:last-child{flex-basis:100%;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.picker-foot em{margin-left:auto;font-style:normal;font-weight:600;color:var(--text)}
+.pi.peek{outline:2px solid var(--text);outline-offset:1px;z-index:1}
+.slot{scroll-margin:7rem 0 calc(min(64vh,36rem) + 1rem)}
+.menu{max-width:calc(100vw - 1.5rem)}
+.menu a{padding:.65rem .5rem}
+.menu.combo-menu,.imenu{position:fixed;z-index:40;left:0!important;right:0;top:auto!important;bottom:0;width:auto;max-width:none;max-height:82vh;overflow:auto;overscroll-behavior:contain;
+  padding:.85rem var(--pr) calc(.9rem + env(safe-area-inset-bottom)) var(--pl);border-width:1px 0 0;border-radius:.75rem .75rem 0 0;box-shadow:0 0 0 100vmax rgba(4,16,15,.6)}
+.imenu{z-index:45}
+.step{grid-template-columns:2.5rem minmax(0,1fr) 2.75rem 2rem 2.75rem;height:3.25rem;column-gap:.6rem}
+.step .sk{width:2.5rem;height:2.5rem}
+.step .nm{font-size:.92rem}
+.step button,.stp button{width:2.75rem;height:2.75rem;font-size:1.1rem}
+.ic{min-height:3rem}
+.ic input[type="checkbox"]{width:1.35rem;height:1.35rem}
+.im-head .esc{align-self:start}
+.veil{place-items:end stretch}
+.cm{width:100%;height:calc(100% - 2.5rem);border-width:1px 0 0;border-radius:.75rem .75rem 0 0;padding-bottom:env(safe-area-inset-bottom)}
+.cm-head{grid-template-columns:minmax(0,1fr) auto;gap:.6rem;padding:.75rem var(--pr) .6rem var(--pl)}
+.cm-head .search{grid-area:2/1/3/-1}
+.cm .chips{padding:0 var(--pr) .7rem var(--pl)}
+.cm-grid{grid-template-columns:repeat(auto-fill,minmax(4.1rem,1fr));gap:.8rem .5rem;padding:.2rem var(--pr) 1rem var(--pl);overscroll-behavior:contain}
+.tip{min-width:0;max-width:min(22rem,calc(100vw - 1rem))}
+.tip-note{display:grid;gap:.35rem;font-size:.8rem;line-height:1.45;color:var(--dim)}
+.tip-note p{margin:0}
+
+/* a phone held sideways is wide and short: the bar is one row, the strip slimmer (each total beside its
+   name), the tab bar lower, and the tab's content a column of a readable width */
+@media (min-width:701px){
+:root{--tabbar:calc(2.75rem + env(safe-area-inset-bottom));--col:max(var(--pl),calc((100% - 46rem)/2))}
+.bar{grid-template-columns:auto minmax(0,1fr);padding-bottom:.35rem}
+.bar .nav{grid-area:1/2;margin-left:1.6rem}
+.bar .patch{grid-area:auto;grid-row:1}
+.bar #quality{grid-area:2/1/3/-1}
+.tot{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;column-gap:1rem;padding-top:.45rem;padding-bottom:.5rem}
+.tot-id{grid-area:1/1}
+.tot-cap{grid-area:2/1}
+.tot-n,body[data-compare="off"] .tot-n{grid-area:1/2/3/3;font-size:2.1rem}
+.tot-bar{grid-area:3/1/4/-1;margin-top:.15rem}
+.hero-side,.combo,.hero-mode,.glance{padding-left:var(--col);padding-right:var(--col)}
+.pane>*,.setup>*,.loadout{margin-left:var(--col);margin-right:var(--col)}
+.tab{height:2.75rem}
+.slots{grid-template-columns:repeat(6,minmax(0,4.5rem))}
+.dials{grid-template-columns:repeat(3,minmax(0,1fr))}
+.dial{grid-template-columns:minmax(0,1fr)}
+.dial input[type=number]{grid-area:auto;text-align:left}
+.more-grid{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:2.5rem}
+}
+}
+/* touch screens: what a desktop shows on hover is shown outright, and a tap can reach every card */
+@media (hover:none){
+.slot .cfg.info,.slot.sel:not(.empty) .rm{display:grid}
+[data-ab],[title]:not(button,a,input,select,label){cursor:pointer}
+}
 </style>
 </head>
 <body data-compare="on" data-target="dummy">
