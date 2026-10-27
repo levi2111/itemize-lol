@@ -1715,11 +1715,35 @@ function wireSaved() {
 }
 
 /* ---------- share link ---------- */
-/* The link carries the build in its query, `?s=`, on the layout's own page, so a server sees it:
-   Cloudflare answers those two addresses through the Worker, which describes the build in the page's
-   link-preview tags (src/worker/preview.ts). src/server/share.ts reads `s` exactly as applyState does
-   and builds the request recalc would send, so keep the two in step. Older links carried it after `#`. */
-const shareUrl = () => `${location.origin}${RECEIPT ? '/receipt' : '/'}?s=${encodeState()}`;
+/* A shared build is a short link, /b/<id>: the share button sends the build (encodeState) to
+   POST /api/v1/links, which keeps it and names it. The Worker answers that address with this layout's page,
+   the build written into it (#shared-build) and link-preview tags that describe it (src/worker/preview.ts).
+   src/server/share.ts reads the state exactly as applyState does and builds the request recalc would send,
+   so keep the two in step. When no short link can be had (offline, the limit, the store down), the link
+   carries the build itself in its query, `?s=`, as all links once did; older ones carried it after `#`.
+   Those still open the build, but show the site's own preview. */
+const shareUrl = (s = encodeState()) => `${location.origin}${RECEIPT ? '/receipt' : '/'}?s=${s}`;
+/* The short link for a state, or the long one if none can be had. Never rejects. */
+async function linkFor(s) {
+  try {
+    const j = await api('/links', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({s, layout: RECEIPT ? 'receipt' : 'tabs'})});
+    // on this page's own origin, whatever address the server was reached at (wrangler dev calls itself itemize.lol)
+    if (/^[0-9A-Za-z]+$/.test(j?.id)) return `${location.origin}/b/${j.id}`;
+  } catch (e) {}
+  return shareUrl(s);
+}
+/* Copies a link that is still on its way. Safari lets a page write to the clipboard only while it is handling
+   the click, so the write starts now with a promise of the text (ClipboardItem), and the link fills it in when
+   it arrives; where that is not supported the text is written once it is there. Resolves to whether it worked. */
+async function copyLater(text) {
+  try {
+    if (window.ClipboardItem && navigator.clipboard?.write) {
+      await navigator.clipboard.write([new ClipboardItem({'text/plain': text.then(t => new Blob([t], {type: 'text/plain'}))})]);
+      return true;
+    }
+  } catch (e) {}
+  try { await navigator.clipboard.writeText(await text); return true; } catch (e) { return false; }
+}
 function encodeState() {
   const s = {c: S.champ.id, l: S.level, r: SLOTS.map(k => S.ranks[k]), o: S.order, a: S.builds.a, b: S.builds.b, n: [$('#name-a').value, $('#name-b').value],
     m: S.compare ? 1 : 0, t: S.target, d: S.target === 'raw' ? S.dummy : readDials(), e: [S.enemy.id, S.enemy.level], q: ACTIONS.map(k => S.combo[k]),
@@ -1732,19 +1756,24 @@ function encodeState() {
   return btoa(unescape(encodeURIComponent(JSON.stringify(s)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 /* The build this visit brought, if it brought one: from the other layout's page when the visitor has just
-   swapped, else in the link. Read once, at boot; the hand-over is used up. */
+   swapped (or layout.js has swapped for them), else written into the page by a short link, else in a long
+   link. Read once, at boot; the hand-over is used up. */
 function brought() {
   let text = null;
   try { text = sessionStorage.getItem('carry'); sessionStorage.removeItem('carry'); } catch (e) {}
+  try { text ||= JSON.parse($('#shared-build')?.textContent || 'null')?.s; } catch (e) {}
   text ||= /[?&]s=([\w-]+)/.exec(location.search)?.[1] || /[#&]s=([\w-]+)/.exec(location.hash)?.[1];
   return text ? decodeState(text) : null;
 }
 /* Takes the build out of the address once the page has moved on from it, so a reload shows the build kept
-   since (see remember) rather than the link's. It is in the query, or after `#` in older links. */
+   since (see remember) rather than the link's. It is in the query, or after `#` in older links; a short link
+   is the whole address, which becomes the layout's own page (the champion's, on a champion page that shared one). */
 function dropLink() {
   const drop = (part, lead) => part.replace(/([?#&])s=[\w-]+&?/, '$1').replace(new RegExp(`^\\${lead}$|&$`), '');
   const q = drop(location.search, '?'), h = drop(location.hash, '#');
-  if (q !== location.search || h !== location.hash) history.replaceState(history.state, '', location.pathname + q + h);
+  const root = (RECEIPT ? '/receipt' : '') + (PAGE_CHAMP && S.champ.slug ? '/' + S.champ.slug : RECEIPT ? '' : '/');
+  const path = location.pathname.startsWith('/b/') ? root : location.pathname;
+  if (q !== location.search || h !== location.hash || path !== location.pathname) history.replaceState(history.state, '', path + q + h);
 }
 function decodeState(text) {
   try {
@@ -2158,10 +2187,11 @@ function wire() {
   });
 
   $('#share').addEventListener('click', async e => {
-    const b = e.currentTarget, url = shareUrl();
-    history.replaceState(null, '', url);
-    let ok = true;
-    try { await navigator.clipboard.writeText(url); } catch (err) { ok = false; }
+    const b = e.currentTarget, s = encodeState(), url = linkFor(s);
+    b.textContent = 'Copying…';
+    const ok = await copyLater(url);
+    // the address becomes the link, as long as the page still shows what it was made from
+    if (encodeState() === s) history.replaceState(null, '', await url);
     b.textContent = ok ? 'Link copied' : 'Link is in the address bar';
     setTimeout(() => b.textContent = 'Copy build link', 1600);
   });
