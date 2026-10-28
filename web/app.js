@@ -167,6 +167,7 @@ function itemOptsOf(k) {
 async function recalc() {
   const mine = ++seq;
   document.body.classList.add('loading');
+  runAuto(true);
   const body = {
     champion: S.champ.id, level: S.level, ranks: S.ranks, options: S.options,
     builds: (S.compare ? ['a', 'b'] : ['a']).map(k => {
@@ -179,7 +180,7 @@ async function recalc() {
     const out = await api('/calc', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)});
     if (mine !== seq) return;
     S.res = {a: out.results[0], b: out.results[1] || null};
-    paintResults(); paintSaved();
+    paintResults(); paintSaved(); paintAutoRes();
     remember();
   } catch (e) {
     if (mine !== seq) return;
@@ -196,7 +197,7 @@ async function recalc() {
 function setTab(t) {
   $$('.tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
   $$('.pane').forEach(p => p.hidden = p.dataset.pane !== t);
-  if (t !== 'build') closePicker();
+  if (t !== 'build') { closePicker(); closeAuto(); }
 }
 function paintTabs() {
   if (RECEIPT) return;
@@ -427,6 +428,7 @@ function renderBuilds() {
     }).join('');
     $('.b-gold b', row).textContent = nf(S.builds[k].reduce((s, id) => s + (S.items.get(id)?.gold || 0), 0));
   }
+  paintAutoKeep();
   const now = $('#shop-now');
   if (now) {
     const on = Object.keys(S.shops).filter(m => S.shops[m]);
@@ -453,7 +455,7 @@ function pickerLabel() {
   $('#picker-for').innerHTML = `<span class="tag ${pick.b} sm">${pick.b.toUpperCase()}</span>Slot ${pick.i + 1}`;
 }
 function openPicker(b, i) {
-  closeItemMenu();
+  closeItemMenu(); closeAuto();
   pick = {b, i};
   $('#picker').hidden = false;
   pickerLabel(); renderBuilds();
@@ -641,6 +643,221 @@ function choose(id) {
   if (next > -1) { pick.i = next; pickerLabel(); renderBuilds(); const q = $('#item-q'); if (!touched() || document.activeElement === q) { q.select(); q.focus(); } }
   else closePicker();
   schedule();
+}
+
+/* ---------- auto-build ---------- */
+/* Each build's Auto-build button opens a panel over the build pane: a goal (combo damage, sustained DPS or
+   effective health), a limit (gold for the whole build, or a number of finished items), items to keep from
+   the build and items never to use. The best three builds it finds can be put in either build, so B against
+   A becomes the page's own comparison. The search runs in a Web Worker on the engine itself (src/autobuild/),
+   from the address the page names in <meta name="engine">; it reads the page as it is (champion, level, ranks,
+   target, combo, crits) and runs again when any of that changes. The worker lives on between searches, with
+   the data it has loaded: one search runs at a time, and what was asked while it ran waits, the latest only. */
+const ENGINE = $('meta[name="engine"]')?.content || '/engine/';
+const SPARK = '<svg class="spark" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M7 2l1.6 4.4L13 8l-4.4 1.6L7 14l-1.6-4.4L1 8l4.4-1.6z"/><path d="M13 0l.6 1.4L15 2l-1.4.6L13 4l-.6-1.4L11 2l1.4-.6z"/></svg>';
+const AB_GOALS = {
+  burst: {label: 'Burst', unit: 'damage', short: 'damage', says: () => S.target === 'raw' ? 'Your combo, before armor and magic resist.' : 'Your combo, against the target.'},
+  dps: {label: 'DPS', unit: 'DPS', short: 'DPS', says: () => 'Auto attacks, sustained. Abilities don’t count toward DPS yet.'},
+  tank: {label: 'Tankiness', unit: 'effective HP', short: 'eff. HP', says: () => S.target === 'champ' ? `Effective health against ${S.enemy.name}’s damage.` : 'Effective health against damage half physical, half magic.'},
+};
+const AB_GOLD = [3000, 6000, 10000, 15000, 20000];
+const AB = {
+  for: null,                        // the build the panel is open for, 'a' or 'b'
+  goal: 'burst', mode: 'gold', gold: 6000, count: 3, fill: true, boots: true,
+  goldSet: false,                   // the visitor set the gold; until then it starts at the build's own
+  keep: new Set(),                  // item ids of the build that stay
+  never: new Set(),                 // item ids never to use
+  res: null, busy: false, err: '', asked: '',
+};
+let abWorker = null, abTimer = 0, abSeq = 0;
+let abFlying = false, abNext = null;  // a search the worker is running; the one asked for since, which waits for it
+let abWarm = '';                    // the champion the worker last loaded ahead of time
+const buildGold = k => S.builds[k].reduce((s, id) => s + (S.items.get(id)?.gold || 0), 0);
+function openAuto(k) {
+  if (AB.for === k) { closeAuto(); return; }
+  closePicker(); closeItemMenu();
+  if (!AB.goldSet) { const g = buildGold(k); AB.gold = g >= 1000 ? Math.ceil(g / 100) * 100 : 6000; }
+  if (AB.for !== k) { AB.keep = new Set(); AB.res = null; AB.err = ''; AB.asked = ''; }
+  AB.for = k;
+  $('#ab').hidden = false;
+  paintAuto(); paintAutoBtns(); runAuto();
+  if (!touched()) $('#ab [data-goal][aria-checked="true"]')?.focus();
+}
+function closeAuto() {
+  if (!AB.for) return;
+  AB.for = null; $('#ab').hidden = true;
+  clearTimeout(abTimer);
+  // what was asked and not answered is of no use now; a search already running finishes unread
+  abNext = null;
+  if (AB.busy) { AB.busy = false; AB.asked = ''; }
+  paintAutoBtns();
+}
+function autoWorker() {
+  if (!abWorker) {
+    abWorker = new Worker(ENGINE + 'autobuild/worker.js', {type: 'module'});
+    abWorker.onmessage = e => autoDone(e.data);
+    abWorker.onerror = e => { e.preventDefault?.(); abWorker = null; abWarm = ''; abFlying = false; abNext = null; autoDone({id: abSeq, error: 'The search could not start.'}); };
+  }
+  return abWorker;
+}
+/* Pointing at an Auto-build button starts the worker and its data loading, so the first search starts at once. */
+function warmAuto() {
+  if (abWarm === S.champ.id) return;
+  abWarm = S.champ.id;
+  autoWorker().postMessage({warm: S.champ.id});
+}
+function paintAutoBtns() { $$('[data-auto]').forEach(b => b.setAttribute('aria-pressed', AB.for === b.dataset.auto)); }
+/* What the worker is asked: the page's build without its items, the kept ones apart. */
+function autoAsk() {
+  const k = AB.for, keep = S.builds[k].filter(id => id && AB.keep.has(id));
+  return {
+    req: {
+      build: {champion: S.champ.id, level: S.level, ranks: k === 'b' && S.split ? S.ranksB : S.ranks, options: S.options, items: [], itemOptions: itemOptsOf(k)},
+      target: targetBody(), combo: {counts: S.combo, crits: S.crits},
+      goal: AB.goal, limit: AB.mode === 'gold' ? {gold: AB.gold} : {items: AB.count},
+      keep, never: [...AB.never], fill: AB.fill, boots: AB.boots,
+    },
+    enemy: S.target === 'champ' ? {id: S.enemy.id, level: S.enemy.level} : null,
+  };
+}
+/* `soon` waits for a moment of quiet first, for a number being typed or the page being changed. */
+function runAuto(soon) {
+  if (!AB.for) return;
+  clearTimeout(abTimer);
+  if (soon) { abTimer = setTimeout(runAuto, 250); return; }
+  const ask = autoAsk(), key = JSON.stringify(ask);
+  if (key === AB.asked) return;
+  AB.asked = key; AB.busy = true;
+  abNext = {id: ++abSeq, ...ask};
+  if (!abFlying) sendAuto();
+  paintAutoRes();
+}
+function sendAuto() {
+  if (!abNext) return;
+  abFlying = true;
+  autoWorker().postMessage(abNext);
+  abNext = null;
+}
+function autoDone(m) {
+  abFlying = false;
+  // something newer was asked while this ran: this answer is out of date
+  if (abNext) { sendAuto(); return; }
+  if (m.id !== abSeq || !AB.for) return;
+  AB.busy = false;
+  if (m.error) { AB.err = m.error; AB.res = null; AB.asked = ''; } else { AB.err = ''; AB.res = m.result; }
+  paintAutoRes();
+}
+/* The build as it is now, by the goal: the page's last calculation has it. */
+function autoNow(k) {
+  const r = S.res?.[k];
+  if (!r) return null;
+  if (AB.goal === 'burst') return r.combo.total.dealt;
+  if (AB.goal === 'dps') return r.dps.dealt;
+  const t = AB.res?.taken || {physical: 0.5, magic: 0.5, true: 0}, m = x => x >= 0 ? 100 / (100 + x) : 2 - 100 / (100 - x);
+  const per = t.physical * m(r.stats.armor.total) + t.magic * m(r.stats.mr.total) + t.true;
+  return per > 0 ? r.stats.hp.total / per : r.stats.hp.total;
+}
+const sameItems = (x, y) => x.filter(Boolean).sort((a, b) => a - b).join() === y.filter(Boolean).sort((a, b) => a - b).join();
+function putAuto(k, n) {
+  const b = AB.res?.builds[n];
+  if (!b) return;
+  if (k === 'b' && !S.compare) setCompare(true);
+  S.builds[k] = slots6(b.items);
+  // named after what it was found for, so the name a build had before does not describe it wrongly
+  $(`#name-${k}`).value = `Best ${AB_GOALS[AB.goal].label.toLowerCase()}, ${AB.mode === 'gold' ? `${nf(AB.gold)}g` : `${AB.count} item${AB.count === 1 ? '' : 's'}`}`;
+  paintNames();
+  closeItemMenu(); renderBuilds(); schedule();
+  paintAutoRes();
+}
+function paintAuto() { paintAutoCtl(); paintAutoKeep(); paintAutoRes(); }
+function paintAutoCtl() {
+  if (!AB.for) return;
+  const K = AB.for.toUpperCase(), g = AB_GOALS[AB.goal];
+  const amount = AB.mode === 'gold'
+    ? `<div class="ab-amt"><input id="ab-gold" type="number" min="0" max="40000" step="500" inputmode="numeric" value="${AB.gold}" aria-label="Gold for the whole build"><span>gold</span></div>
+      <div class="chips ab-presets">${AB_GOLD.map(v => `<button class="chip" data-gold="${v}" aria-pressed="${AB.gold === v}">${v / 1000}k</button>`).join('')}</div>
+      <label class="ab-chk"><input type="checkbox" id="ab-fill"${AB.fill ? ' checked' : ''}>Spend what is left on components</label>`
+    : `<div class="ab-amt"><button class="ab-step" data-count="-1" aria-label="One item fewer"${AB.count <= 1 ? ' disabled' : ''}>−</button><output>${AB.count}</output><button class="ab-step" data-count="1" aria-label="One item more"${AB.count >= 6 ? ' disabled' : ''}>+</button><span>finished item${AB.count === 1 ? '' : 's'}</span></div>
+      <label class="ab-chk"><input type="checkbox" id="ab-boots"${AB.boots ? ' checked' : ''}>Boots can be one of them</label>`;
+  $('#ab-ctl').innerHTML = `<div class="ab-top"><span class="ab-for">${SPARK}Auto-build <span class="tag ${AB.for} sm">${K}</span></span><button class="esc" id="ab-x">Esc</button></div>
+    <span class="lbl">Best at</span>
+    <div class="seg ab-goals" role="radiogroup" aria-label="Best at">${Object.entries(AB_GOALS).map(([k, x]) => `<button role="radio" data-goal="${k}" aria-checked="${AB.goal === k}">${x.label}</button>`).join('')}</div>
+    <p class="ab-says">${esc(g.says())}</p>
+    <span class="lbl">Within</span>
+    <div class="ab-limit"><div class="seg" role="radiogroup" aria-label="Limit">${[['gold', 'Gold'], ['items', 'Items']].map(([k, l]) => `<button role="radio" data-mode="${k}" aria-checked="${AB.mode === k}">${l}</button>`).join('')}</div>${amount}</div>`;
+}
+function paintAutoKeep() {
+  if (!AB.for) return;
+  const K = AB.for.toUpperCase(), held = S.builds[AB.for].filter(Boolean);
+  for (const id of AB.keep) if (!held.includes(id)) AB.keep.delete(id);
+  const tile = id => { const it = S.items.get(id), on = AB.keep.has(id);
+    return `<button class="ab-it" data-keep="${id}" aria-pressed="${on}" title="${esc(it?.name || '')}: ${on ? 'kept' : 'click to keep'}" aria-label="Keep ${esc(it?.name || 'item')}">${itemIco(id)}</button>`; };
+  const never = [...AB.never].map(id => S.items.get(id)).filter(Boolean);
+  $('#ab-keep').innerHTML = `<span class="lbl">Keep from <span class="tag ${AB.for} xs">${K}</span></span>
+    ${held.length ? `<div class="ab-keeps">${held.map(tile).join('')}</div><p class="hint">${AB.keep.size ? 'Kept items stay, and their gold counts toward the limit.' : 'Click an item to keep it. Nothing kept starts from an empty build.'}</p>` : `<p class="hint">Build ${K} is empty, so the search starts from nothing.</p>`}
+    <span class="lbl">Never use</span>
+    ${never.length ? `<div class="chips ab-nevers">${never.map(it => `<button class="chip" data-unnever="${it.id}" title="Use it again">${esc(it.name)}<i aria-hidden="true">×</i></button>`).join('')}</div>`
+      : '<p class="hint">Click an item in a result to leave it out.</p>'}`;
+}
+function paintAutoRes() {
+  if (!AB.for) return;
+  const k = AB.for, K = k.toUpperCase(), r = AB.res, g = AB_GOALS[AB.goal], now = autoNow(k);
+  const el = $('#ab-res');
+  el.classList.toggle('busy', AB.busy);
+  let rows;
+  if (AB.err) rows = `<p class="ab-msg">${esc(AB.err)}</p>`;
+  else if (!r) rows = `<p class="ab-msg">${AB.busy ? 'Searching…' : ''}</p>`;
+  else if (r.problem || !r.builds.length) rows = `<p class="ab-msg">${esc(r.problem || 'Nothing found.')}</p>`;
+  else rows = r.builds.map((b, n) => {
+    const kept = new Set(), tiles = b.items.map(id => {
+      const it = S.items.get(id), name = esc(it?.name || 'Item ' + id);
+      // the kept items lead the build, each once
+      if (AB.keep.has(id) && !kept.has(id) && S.builds[k].includes(id)) { kept.add(id); return `<span class="ab-it kept" title="${name}, kept">${itemIco(id)}</span>`; }
+      return `<button class="ab-it${it?.component ? ' part' : ''}" data-never="${id}" title="${name}, ${nf(it?.gold || 0)} gold${it?.component ? ', a component' : ''}. Click to leave it out." aria-label="Leave out ${name}">${itemIco(id)}</button>`;
+    }).join('');
+    const d = now ? (b.score / now - 1) * 100 : null;
+    const put = x => sameItems(S.builds[x], b.items) ? `<span class="ab-in">In ${x.toUpperCase()}</span>` : `<button class="ab-put ${x}" data-put="${x}" data-n="${n}">Put in ${x.toUpperCase()}</button>`;
+    return `<div class="ab-row${n ? '' : ' top'}"><span class="ab-rk">${n + 1}</span><div class="ab-items">${tiles}</div>
+      <div class="ab-sc"><b>${nf(b.score)}</b><span>${d === null || !isFinite(d) ? `<i class="u">${g.short}</i>`
+        : `<i class="u">${g.short} · </i><em class="${d < 0 ? 'neg' : ''}">${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(0)}%</em>`}</span></div>
+      <span class="ab-g">${nf(b.gold)} g</span><div class="ab-puts">${put('a')}${put('b')}</div></div>`;
+  }).join('');
+  const t = r?.taken, split = AB.goal === 'tank' && t ? ` · against ${Math.round(t.physical * 100)}% physical, ${Math.round(t.magic * 100)}% magic${t.true >= 0.005 ? `, ${Math.round(t.true * 100)}% true` : ''}` : '';
+  const foot = r && !AB.err ? `<span title="Items the shop's rules allow, the ones worth trying, and the builds the engine scored"><b>${r.allowed}</b> allowed <i>→</i> <b>${r.tried}</b> tried <i>→</i> <b>${nf(r.scored)}</b> builds scored${split}</span>
+    <span class="ab-how" title="${r.exact ? 'Every build that could win was scored.' : 'Too many builds to score them all: it built slot by slot and then swapped items while that helped.'}">${r.exact ? 'Exact' : 'Best found'} · ${r.ms < 100 ? '<0.1' : (r.ms / 1000).toFixed(1)} s</span>` : '';
+  el.innerHTML = `<div class="ab-head"><b>Best builds</b>${AB.busy && r ? '<span class="ab-wait">Searching…</span>' : ''}<span class="hint">${K} now: ${now === null ? '–' : `<b>${nf(now)}</b> ${g.unit}`}</span></div>
+    <div class="ab-rows">${rows}</div><div class="ab-foot">${foot}</div>`;
+}
+function wireAuto() {
+  document.addEventListener('click', e => { const b = e.target.closest('[data-auto]'); if (b) openAuto(b.dataset.auto); });
+  for (const t of ['pointerover', 'focusin']) document.addEventListener(t, e => { if (e.target.closest?.('[data-auto]')) warmAuto(); });
+  const el = $('#ab');
+  el.innerHTML = '<div class="ab-ctl" id="ab-ctl"></div><div class="ab-keep" id="ab-keep"></div><div class="ab-res" id="ab-res"></div>';
+  el.addEventListener('click', e => {
+    const t = e.target.closest('button'); if (!t) return;
+    const d = t.dataset;
+    if (t.id === 'ab-x') { const k = AB.for; closeAuto(); $(`[data-auto="${k}"]`)?.focus(); return; }
+    if (d.goal) { AB.goal = d.goal; paintAutoCtl(); paintAutoRes(); runAuto(); $(`#ab [data-goal="${d.goal}"]`)?.focus(); return; }
+    if (d.mode) { AB.mode = d.mode; paintAutoCtl(); runAuto(); $(`#ab [data-mode="${d.mode}"]`)?.focus(); return; }
+    if (d.gold) { AB.gold = +d.gold; AB.goldSet = true; paintAutoCtl(); runAuto(); return; }
+    if (d.count) { AB.count = Math.max(1, Math.min(6, AB.count + +d.count)); paintAutoCtl(); runAuto(); $(`#ab [data-count="${d.count}"]`)?.focus(); return; }
+    if (d.keep) { const id = +d.keep; AB.keep.has(id) ? AB.keep.delete(id) : AB.keep.add(id); paintAutoKeep(); runAuto(); $(`#ab [data-keep="${id}"]`)?.focus(); return; }
+    if (d.never) { AB.never.add(+d.never); paintAutoKeep(); runAuto(); return; }
+    if (d.unnever) { AB.never.delete(+d.unnever); paintAutoKeep(); runAuto(); return; }
+    if (d.put) putAuto(d.put, +d.n);
+  });
+  el.addEventListener('input', e => {
+    if (e.target.id !== 'ab-gold') return;
+    AB.gold = Math.max(0, Math.min(40000, Math.round(+e.target.value || 0))); AB.goldSet = true;
+    $$('#ab [data-gold]').forEach(c => c.setAttribute('aria-pressed', AB.gold === +c.dataset.gold));
+    runAuto(true);
+  });
+  el.addEventListener('change', e => {
+    if (e.target.id === 'ab-fill') { AB.fill = e.target.checked; runAuto(); }
+    if (e.target.id === 'ab-boots') { AB.boots = e.target.checked; runAuto(); }
+  });
+  // a click elsewhere on the page closes it, as it does the item picker; the builds stay in reach
+  document.addEventListener('mousedown', e => { if (AB.for && !e.target.closest('#ab, [data-auto], #builds, #tip')) closeAuto(); });
 }
 
 /* ---------- an item's settings ---------- */
@@ -1042,6 +1259,7 @@ function setCompare(on) {
   $$('#cmp-seg button').forEach(b => b.setAttribute('aria-checked', (b.dataset.cmp === 'on') === on));
   if (!on && pick && pick.b === 'b') closePicker();
   if (!on && itemMenu?.b === 'b') closeItemMenu();
+  if (!on && AB.for === 'b') closeAuto();
   renderBuilds(); schedule();
 }
 
@@ -2352,6 +2570,7 @@ function wire() {
     openPicker(b, i);
   });
   wireItemMenu();
+  wireAuto();
   wireTouch();
   builds.addEventListener('keydown', e => {
     const slot = e.target.closest('.slot');
@@ -2446,6 +2665,7 @@ function wire() {
       else if (!$('#champ-modal').hidden) closeChamps();
       // a search being written is cleared first, and the picker closes on the next press
       else if (pick && searching && $('#item-q').value) { e.preventDefault(); $('#item-q').value = ''; searching = false; renderItems(); }
+      else if (AB.for) { const k = AB.for; closeAuto(); $(`[data-auto="${k}"]`)?.focus(); }
       else closePicker();
       return;
     }

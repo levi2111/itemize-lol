@@ -2,7 +2,9 @@
    revalidated, so everything it points at can be cached forever:
      - its scripts are renamed after their contents and the page is pointed at the new names;
      - the art index is written into the page, with a preload for the item sheet, so the first
-       pictures are on their way before any script has run.
+       pictures are on their way before any script has run;
+     - the engine the auto-build runs in the browser, with its data, goes in a folder named after
+       its contents (src/server/engine-files.ts), and the page's <meta name="engine"> points there.
    There is a page per layout, and both get the same treatment.
    Then each champion gets a page of its own in both layouts, made from those (src/server/pages.ts), with the
    sitemap, robots.txt and the redirects of other names.
@@ -12,11 +14,12 @@
    same functions. */
 import { createHash } from 'node:crypto';
 import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { ROOT } from '../src/pipeline/paths.ts';
 import type { ArtIndex } from '../src/pipeline/art.ts';
 import { buildOg } from './og.ts';
 import { Dataset } from '../src/server/dataset.ts';
+import { ENGINE_BASE, engineModules } from '../src/server/engine-files.ts';
 import { championPage, championSite, redirectsFile, robots, sitemap, SOURCE } from '../src/server/pages.ts';
 
 const web = join(ROOT, 'web'), out = join(ROOT, '.build', 'site');
@@ -42,12 +45,27 @@ const named = (file: string) => {
 };
 const app = named('app.js'), layout = named('layout.js');
 
+// the engine for the auto-build's worker, with the data it reads, in a folder named after all of it
+// (src/server/engine-files.ts); its modules import each other by relative paths, so the folder moves as one
+const dataset = new Dataset(process.env.ITEMIZE_PATCH);
+const engine = new Map<string, string>(engineModules());
+engine.set('data/items.json', JSON.stringify(dataset.items));
+for (const c of dataset.index) engine.set(`data/champions/${c.id}.json`, JSON.stringify(dataset.champion(c.id)));
+const engineHash = createHash('sha256');
+for (const [path, text] of [...engine].sort(([a], [b]) => a.localeCompare(b))) engineHash.update(path).update('\0').update(text).update('\0');
+const engineDir = `assets/engine.${engineHash.digest('hex').slice(0, 10)}/`;
+for (const [path, text] of engine) {
+  mkdirSync(dirname(join(out, engineDir, path)), { recursive: true });
+  writeFileSync(join(out, engineDir, path), text);
+}
+
 const art: ArtIndex = JSON.parse(readFileSync(join(web, 'art', 'index.json'), 'utf8'));
 const made: Record<string, string> = {};
 for (const page of PAGES) {
   let html = readFileSync(join(web, page), 'utf8');
   html = swap(page, html, '<script src="/app.js" defer></script>', `<script src="/${app}" defer></script>`);
   html = swap(page, html, '<script src="/layout.js"></script>', `<script src="/${layout}"></script>`);
+  html = swap(page, html, `<meta name="engine" content="${ENGINE_BASE}">`, `<meta name="engine" content="/${engineDir}">`);
   html = swap(page, html, '<!--art-->', [
     `<link rel="preload" href="/art/${art.version}/items.webp" as="image" type="image/webp">`,
     // "<" is escaped so that nothing in the data can close the element
@@ -58,7 +76,7 @@ for (const page of PAGES) {
 }
 
 // the champion pages, from the dataset the Worker is bundled with (scripts/bundle.ts reads the same ITEMIZE_PATCH)
-const data = new Dataset(process.env.ITEMIZE_PATCH);
+const data = dataset;
 const site = championSite(data.index);
 mkdirSync(join(out, 'receipt'), { recursive: true });
 for (const p of site.pages) writeFileSync(join(out, p.file), championPage(made[SOURCE[p.layout]]!, data.champion(p.id)!, p.slug, p.layout));

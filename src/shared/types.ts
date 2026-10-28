@@ -287,6 +287,9 @@ export interface ItemData {
   popularity?: number;
   /** epicness tier from game data: 5+ is a completed item */
   tier: number;
+  /** the game's "only so many of" groups it belongs to, with how many of the group one build may hold:
+      { LastWhisper: 1, Boots: 1 }. Most items are also alone in a group of their own, so a build holds one */
+  limits: Record<string, number>;
   stats: Partial<Record<StatModTarget, number>>;
   dataValues: Record<string, number>;
   calcs: Record<string, CalcData>;

@@ -104,6 +104,11 @@ export function compileItems(ddItems: Raw, bin: Raw, table: StringTable, log: Co
   const warnings: string[] = [];
   const game = new Map<number, Raw>();
   for (const v of Object.values(bin) as Raw[]) if (v?.__type === 'ItemData' && typeof v.itemID === 'number') game.set(v.itemID, v);
+  // groups that cap how many of their items one build holds; 0 caps nothing
+  const caps = new Map<string, number>();
+  for (const [key, v] of Object.entries(bin) as [string, Raw][]) {
+    if (v?.__type === 'ItemGroup' && typeof v.mMaxGroupOwnable === 'number' && v.mMaxGroupOwnable > 0) caps.set(key.replace(/^Items\/ItemGroups\//, ''), v.mMaxGroupOwnable);
+  }
 
   const buyable = (it: Raw | undefined): boolean => {
     if (!it?.gold?.purchasable || !(it.gold.total > 0)) return false;
@@ -180,6 +185,7 @@ export function compileItems(ddItems: Raw, bin: Raw, table: StringTable, log: Co
       forms: formsOf.get(id) ?? [],
       traits: TRAITS.filter(([, re]) => re.test(tooltip ?? '')).map(([t]) => t),
       tier: typeof g.epicness === 'number' ? g.epicness : 0,
+      limits: Object.fromEntries(groups(g).filter(n => caps.has(n)).map(n => [n, caps.get(n)!])),
       stats, dataValues, calcs,
       damageRefs: tooltip ? findDamageRefs(tooltip, { calc: n => find(calcs, n), dv: n => find(dataValues, n) }) : [],
     };
