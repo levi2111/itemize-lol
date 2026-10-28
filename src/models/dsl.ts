@@ -55,7 +55,8 @@ export interface AmpSrc {
 
 export interface ResistSrc {
   stat: 'armor' | 'mr';
-  kind: 'reducePct' | 'reduceFlat' | 'penPct' | 'penFlat';
+  /** `penBonusPct`: percent penetration of the target's bonus armor or magic resist only */
+  kind: 'reducePct' | 'reduceFlat' | 'penPct' | 'penBonusPct' | 'penFlat';
   value: Formula;
   when?: Formula;
 }

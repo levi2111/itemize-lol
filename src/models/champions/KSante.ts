@@ -16,8 +16,6 @@ export default champion('KSante', {
     allOut: { label: 'All Out active', default: false },
     wall: { label: 'All Out knocks the target through a wall', default: false },
     charged: { label: 'Path Maker fully charged', default: true },
-    // the engine's target has one armor number; the penetration only works on the bonus part
-    targetBonusArmor: { label: 'Target\'s bonus armor (for All Out\'s armor penetration)', kind: 'int', default: 0, min: 0 },
   },
   // mark: Dauntless Instinct's mark on the target; entered: R was cast earlier in this combo
   counters: { mark: { max: 1 }, entered: { max: 1 } },
@@ -66,14 +64,10 @@ export default champion('KSante', {
     ],
     // stats are worked out once per fight, so the attack speed follows the option only
     statMods: [{ stat: 'attackSpeed', value: 'dv("AttackSpeed")', when: 'allOut' }],
-    // half of the target's bonus armor, written as a share of all its armor
-    resists: [{
-      stat: 'armor', kind: 'penPct', when: 'out && hasTarget && targetBonusArmor',
-      value: 'ArmorPenPercent * min(1, targetBonusArmor / max(1, target.armor))',
-    }],
+    resists: [{ stat: 'armor', kind: 'penBonusPct', when: 'out', value: 'ArmorPenPercent' }],
     notes: [
       'All Out\'s attack speed needs "All Out active".',
-      'All Out\'s bonus armor penetration counts only against the amount set as the target\'s bonus armor; left at 0 it adds nothing.',
+      'All Out\'s armor penetration works on the target\'s bonus armor only: none on the dummy\'s base armor, which is 0, or on a champion\'s own.',
     ],
   },
 });

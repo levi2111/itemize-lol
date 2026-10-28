@@ -3,7 +3,7 @@
    what they pin down is how the numbers are combined. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { calculate, championAsTarget } from '../src/engine/calc.ts';
+import { calculate, championAsTarget, resolveTarget } from '../src/engine/calc.ts';
 import { damageMultiplier, defaultSequence, resistAfterPen } from '../src/engine/sim.ts';
 import { CalcError, type CalcRequest } from '../src/engine/types.ts';
 import { Dataset } from '../src/server/dataset.ts';
@@ -24,6 +24,9 @@ test('mitigation: resistances, penetration order and negative armor', () => {
   near(resistAfterPen(100, 0.35, 18), 47, 1e-9);
   assert.equal(resistAfterPen(10, 0, 50), 0);
   assert.equal(resistAfterPen(-12, 0.4, 20), -12);
+  // penetration of bonus resistance cuts only the bonus part: 40 base + 60 bonus at 50% is 70, then the rest as before
+  near(resistAfterPen(100, 0, 0, 60, 0.5), 70, 1e-9);
+  near(resistAfterPen(100, 0.35, 18, 60, 0.5), 70 * 0.65 - 18, 1e-9);
 });
 
 test('level growth matches the published formula', () => {
@@ -225,6 +228,54 @@ test('champion as a target: base stats at level', () => {
   assert.equal(t.armor, Math.round(ornn.stats.armor + ornn.stats.armorPerLevel * growth(13)));
 });
 
+test('the target splits into base and bonus: the dummy, a champion, plain numbers', () => {
+  const split = (t: Parameters<typeof resolveTarget>[1]) => {
+    const r = resolveTarget(data, t);
+    return [r.hp, r.armor, r.mr].map(l => [l.base, l.bonus]);
+  };
+  // the practice tool's dummy: 1000 base health and no base resistances, so the rest is bonus
+  assert.deepEqual(split({ dummy: true, hp: 2400, armor: 80, mr: 50 }), [[1000, 1400], [0, 80], [0, 50]]);
+  // below its base it is all base
+  assert.deepEqual(split({ dummy: true, hp: 600, armor: 0, mr: 0 }), [[600, 0], [0, 0], [0, 0]]);
+  // a champion: its own stats are base, what is set above them bonus, and what is left out its own
+  const own = championAsTarget(data.champion('Ornn')!, 13);
+  assert.deepEqual(split({ champion: 'Ornn', level: 13 }), [[own.hp, 0], [own.armor, 0], [own.mr, 0]]);
+  assert.deepEqual(split({ champion: 'Ornn', level: 13, hp: own.hp + 900, mr: own.mr + 40 }), [[own.hp, 900], [own.armor, 0], [own.mr, 40]]);
+  // plain numbers are all base unless a bonus is given; a given bonus wins over the one that follows from the base
+  assert.deepEqual(split({ hp: 2400, armor: 80, mr: 50, bonusArmor: 30 }), [[2400, 0], [50, 30], [50, 0]]);
+  assert.deepEqual(split({ dummy: true, hp: 2400, armor: 80, mr: 50, bonusHp: 200 }), [[2200, 200], [0, 80], [0, 50]]);
+});
+
+test('Giant Slayer reads the dummy\'s bonus health, as in the practice tool', () => {
+  const ldr = data.item(3036)!, { MaxBonusDamagePercent: pct, MaxBonusHealth: cap } = ldr.dataValues as Record<string, number>;
+  const hit = (target: CalcRequest['target']) => calculate(data, req({ items: [3036] }, { counts: { aa: 1 }, crits: 'never' }, target)).combo.total.dealt;
+  const plain = hit({ hp: 2400, armor: 80, mr: 50 }), dummy = hit({ dummy: true, hp: 2400, armor: 80, mr: 50 });
+  // 1400 bonus health of the 1500 that maxes it
+  near(dummy / plain, 1 + pct! * 1400 / cap!, 1e-4);
+  near(hit({ dummy: true, hp: 5000, armor: 80, mr: 50 }) / hit({ hp: 5000, armor: 80, mr: 50 }), 1 + pct!, 1e-4);
+});
+
+test('Sett R scales with the grabbed target\'s bonus health', () => {
+  const r = (bonusHp: number) => line(calculate(data, {
+    build: { champion: 'Sett', level: 11, ranks: { q: 5, w: 1, e: 2, r: 2 }, items: [] }, target: { hp: 3000, armor: 0, mr: 0, bonusHp }, combo: { counts: { r: 1 } },
+  }), 'r').total.raw;
+  assert.ok(r(1000) > r(0));
+  near(r(1000) - r(0), 2 * (r(500) - r(0)), 0.05);
+});
+
+test('bonus armor penetration works on bonus armor only: K\'Sante\'s All Out', () => {
+  const pen = data.champion('KSante')!.spells.KSanteR!.dataValues.ArmorPenPercent![2]!;
+  const auto = (target: CalcRequest['target']) => {
+    const l = line(calculate(data, {
+      build: { champion: 'KSante', level: 13, ranks: { q: 5, w: 1, e: 1, r: 2 }, items: [], options: { allOut: true } }, target, combo: { counts: { aa: 1 }, crits: 'never' },
+    }), 'aa');
+    return l.total.dealt / l.total.raw;
+  };
+  near(auto({ hp: 3000, armor: 100, mr: 0 }), 100 / 200, 1e-3);
+  near(auto({ hp: 3000, armor: 100, mr: 0, bonusArmor: 100 }), 100 / (100 + 100 * (1 - pen)), 1e-3);
+  near(auto({ hp: 3000, armor: 100, mr: 0, bonusArmor: 40 }), 100 / (100 + 60 + 40 * (1 - pen)), 1e-3);
+});
+
 test('bad requests are rejected with the offending field', () => {
   const bad = (r: unknown, field: string) => assert.throws(() => calculate(data, r as CalcRequest), (e: unknown) => e instanceof CalcError && e.field === field);
   bad(req({ champion: 'Nobody' }, {}), 'build.champion');
@@ -234,6 +285,12 @@ test('bad requests are rejected with the offending field', () => {
   bad(req({}, { counts: { aa: 500 } }), 'combo.counts.aa');
   bad(req({}, { sequence: ['x' as 'aa'] }), 'combo.sequence');
   bad(req({}, {}, { hp: -5, armor: 0, mr: 0 }), 'target.hp');
+  bad(req({}, {}, { dummy: true, armor: 0, mr: 0 }), 'target.hp');
+  bad(req({}, {}, { hp: 2000, armor: 0, mr: 0, bonusHp: 2500 }), 'target.bonusHp');
+  bad(req({}, {}, { hp: 2000, armor: 50, mr: 0, bonusArmor: -1 }), 'target.bonusArmor');
+  bad(req({}, {}, { dummy: true, champion: 'Ornn', level: 3 }), 'target');
+  bad(req({}, {}, { champion: 'Nobody', level: 3 }), 'target.champion');
+  bad(req({}, {}, { champion: 'Ornn', level: 19 }), 'target.level');
   bad(req({ items: [3161], itemOptions: { 3057: { spellblade: 1 } } }, {}), 'build.itemOptions');
   bad(req({ items: [3161], itemOptions: { 3161: { nothing: 1 } } }, {}), 'build.itemOptions');
   bad(req({ items: [3161], itemOptions: { 3161: { stacks: 'four' as unknown as number } } }, {}), 'build.itemOptions');

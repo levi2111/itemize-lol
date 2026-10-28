@@ -148,10 +148,12 @@ let timer = 0, seq = 0, feed = false;
 /* `quiet` is for a control that changes continuously, a dial being dragged or a number being typed:
    the receipt is then redrawn in place instead of being fed out of the till again. */
 function schedule(quiet) { if (!quiet) feed = true; clearTimeout(timer); timer = setTimeout(recalc, 70); }
+/* The dials hold totals; saying what stands there lets the engine split them into base and bonus,
+   which effects such as Giant Slayer read: the dummy's base is the practice tool's, an enemy's its own. */
 function targetBody() {
   if (S.target === 'raw') return null;
-  const v = readDials();
-  return {hp: v.hp, armor: v.ar, mr: v.mr};
+  const v = readDials(), who = S.target === 'champ' ? {champion: S.enemy.id, level: S.enemy.level} : {dummy: true};
+  return {...who, hp: v.hp, armor: v.ar, mr: v.mr};
 }
 /* A build's item settings, kept only for items it holds and settings those items still have. */
 function itemOptsOf(k) {
@@ -984,7 +986,7 @@ function readDials() { return {hp: Math.max(1, +$('#t-hp').value || 1), ar: +$('
 function writeDials(v) { for (const k of ['hp','ar','mr']) dial(k).forEach(el => el.value = v[k]); }
 async function enemyStats() {
   const e = S.enemy;
-  $('#auto-note').textContent = `Base stats at level ${e.level}. Edit to override.`;
+  $('#auto-note').textContent = `Base stats at level ${e.level}. Anything you add counts as bonus.`;
   paintTarget();
   try {
     const t = await api(`/champions/${encodeURIComponent(e.id)}/target?level=${e.level}`);

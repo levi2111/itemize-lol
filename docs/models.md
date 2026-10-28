@@ -92,7 +92,8 @@ And dotted names:
 
 | | |
 | --- | --- |
-| `target.maxHp`, `target.hp`, `target.missingHp`, `target.hpPct`, `target.missingHpPct`, `target.armor`, `target.mr`, `target.bonusHp` | the enemy at that moment of the fight |
+| `target.maxHp`, `target.hp`, `target.missingHp`, `target.hpPct`, `target.missingHpPct`, `target.armor`, `target.mr` | the enemy at that moment of the fight; `armor` and `mr` are its own, before shred and penetration |
+| `target.baseHp`, `target.bonusHp`, `target.baseArmor`, `target.bonusArmor`, `target.baseMr`, `target.bonusMr` | the base and bonus parts of those. The practice tool's dummy has 1000 base health and no base resistances; a champion's base is its own stats at its level; the rest is bonus |
 | `KaisaQ.e6`, `KaisaPassive.PBaseDamage` | a name on another spell of the same champion, at that spell's rank |
 | `rank.q` | another ability's rank |
 | `cast.r` | 1 while R's cast is being played |
@@ -137,7 +138,7 @@ options: { melee: { label: 'Fighting in melee range', default: false } },
 
 **Damage amplification**: `amps: [{ value: 'SpellItemDamageAmp', when: 'hasTarget && target.hpPct < HealthThreshold', types: ['magic', 'true'] }]`. `value` is the bonus: 0.2 means 20% more. `from: ['ability', 'passive']` limits it to damage from those sources (`attack`, `ability`, `passive`, `item`).
 
-**Shred and penetration that builds during a fight**: `resists: [{ stat: 'armor', kind: 'reducePct', value: 'carve * ShredPerStack' }]`. Kinds are `reducePct`, `reduceFlat`, `penPct`, `penFlat`. Permanent penetration is a stat and needs no model.
+**Shred and penetration that builds during a fight**: `resists: [{ stat: 'armor', kind: 'reducePct', value: 'carve * ShredPerStack' }]`. Kinds are `reducePct`, `reduceFlat`, `penPct`, `penBonusPct`, `penFlat`. `penBonusPct` penetrates the bonus part only (Last Breath, All Out). They apply in the game's order: flat reduction, which comes off base and bonus in proportion, then percent reduction, percent penetration of the whole and then of the bonus part, and flat penetration last. Permanent penetration is a stat and needs no model.
 
 ## Damage over time
 

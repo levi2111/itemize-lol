@@ -22,8 +22,12 @@ export const STAT_ALIASES: Record<string, { stat: StatId; kind: StatKind }> = {
   omnivamp: { stat: 'omnivamp', kind: 'total' },
 };
 
-/** `target.<name>`: the enemy as it stands at that point of the combo. */
-export const TARGET_VARS = ['maxHp', 'hp', 'missingHp', 'hpPct', 'missingHpPct', 'armor', 'mr', 'bonusHp'] as const;
+/** `target.<name>`: the enemy as it stands at that point of the combo. Max health, armor and magic resist split into
+    base and bonus as the attacker's do; armor and magic resist are the target's own, before shred and penetration. */
+export const TARGET_VARS = [
+  'maxHp', 'baseHp', 'bonusHp', 'hp', 'missingHp', 'hpPct', 'missingHpPct',
+  'armor', 'baseArmor', 'bonusArmor', 'mr', 'baseMr', 'bonusMr',
+] as const;
 
 /** `hit.<type>`: 1 when the damage instance a `damage` rule is reacting to has that type. */
 export const HIT_VARS = ['physical', 'magic', 'true'] as const;

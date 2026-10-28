@@ -3,7 +3,7 @@
 import type { CastSlot, ChampionData, DamageType, ItemData, Slot } from '../shared/types.ts';
 import { CAST_SLOTS, SLOTS } from '../shared/types.ts';
 import { defaultSequence, Fight, type Hit } from './sim.ts';
-import { CalcError, CRIT_MODES, type AbilityInfo, type Action, type Amount, type BuildInput, type ByType, type CalcRequest, type CalcResult, type CritMode, type DataSource, type ItemInfo, type SourceLine, type TargetInput } from './types.ts';
+import { CalcError, CRIT_MODES, type AbilityInfo, type Action, type Amount, type BuildInput, type ByType, type CalcRequest, type CalcResult, type CritMode, type DataSource, type ItemInfo, type SourceLine, type StatLine, type TargetInput, type TargetStats } from './types.ts';
 
 export const LIMITS = {
   items: 6,
@@ -39,7 +39,7 @@ interface Checked {
   champ: ChampionData;
   items: ItemData[];
   build: BuildInput;
-  target: TargetInput | null;
+  target: TargetStats | null;
   sequence: Action[];
   crits: CritMode;
 }
@@ -83,15 +83,7 @@ function check(data: DataSource, req: CalcRequest): Checked {
     itemOptions[id] = { ...set };
   }
 
-  let target: TargetInput | null = null;
-  if (req.target !== null && req.target !== undefined) {
-    target = {
-      hp: real(req.target.hp, 'target.hp', 1, 1_000_000),
-      armor: real(req.target.armor, 'target.armor', -1000, 10_000),
-      mr: real(req.target.mr, 'target.mr', -1000, 10_000),
-      bonusHp: req.target.bonusHp === undefined ? 0 : real(req.target.bonusHp, 'target.bonusHp', 0, 1_000_000),
-    };
-  }
+  const target = req.target === null || req.target === undefined ? null : resolveTarget(data, req.target);
 
   const c = req.combo ?? {};
   let sequence: Action[];
@@ -253,11 +245,12 @@ export function calculate(data: DataSource, req: CalcRequest): CalcResult {
     if (c.sequence.includes(slot) && c.build.ranks[slot] < 1) caveats.add(`${c.champ.slots[slot].name} is in the combo but has no rank, so it does nothing.`);
   }
 
-  const st = fight.stats;
-  const sl = (l: { total: number; base: number; bonus: number }) => ({ total: r4(l.total), base: r4(l.base), bonus: r4(l.bonus) });
+  const st = fight.stats, t = c.target;
+  const sl = (l: StatLine) => ({ total: r4(l.total), base: r4(l.base), bonus: r4(l.bonus) });
 
   return {
     patch: data.patch,
+    target: t && { hp: sl(t.hp), armor: sl(t.armor), mr: sl(t.mr) },
     stats: {
       level: st.level, hp: sl(st.hp), mana: sl(st.mana), ad: sl(st.ad), ap: sl(st.ap), armor: sl(st.armor), mr: sl(st.mr), moveSpeed: sl(st.moveSpeed),
       attackSpeed: sl(st.attackSpeed), critChance: r4(st.critChance), critDamage: r4(st.critDamage), lethality: r4(st.lethality),
@@ -308,8 +301,34 @@ export function headline(data: DataSource, req: CalcRequest): Headline {
   };
 }
 
-/** A champion's own health and resistances at a level, for using them as the target. */
-export function championAsTarget(champ: ChampionData, level: number): TargetInput {
+type Totals = { hp: number; armor: number; mr: number };
+
+/** The practice tool's target dummy (game data: characters/practicetool_targetdummy): 1000 base health and no
+    base armor or magic resist, so everything the tool adds is bonus. The game counts it as a champion. */
+export const DUMMY_BASE: Readonly<Totals> = { hp: 1000, armor: 0, mr: 0 };
+
+/** A champion's own health and resistances at a level, in whole numbers as the site shows them: its base stats when it is the target. */
+export function championAsTarget(champ: ChampionData, level: number): Totals {
   const f = new Fight(champ, [], { champion: champ.id, level, ranks: { q: 0, w: 0, e: 0, r: 0 }, items: [] }, null);
   return { hp: Math.round(f.stats.hp.total), armor: Math.round(f.stats.armor.total), mr: Math.round(f.stats.mr.total) };
+}
+
+/** The target's health, armor and magic resist, each split into base and bonus (see TargetInput). Throws a CalcError naming the field at fault. */
+export function resolveTarget(data: DataSource, t: TargetInput): TargetStats {
+  if (!t || typeof t !== 'object' || Array.isArray(t)) throw new CalcError('target', 'target must be an object or null');
+  if (t.dummy !== undefined && typeof t.dummy !== 'boolean') throw new CalcError('target.dummy', 'target.dummy must be true or false');
+  let base: Totals | null = t.dummy ? DUMMY_BASE : null;
+  if (t.champion !== undefined) {
+    if (t.dummy) throw new CalcError('target', 'the target is the dummy or a champion, not both');
+    const champ = typeof t.champion === 'string' ? data.champion(t.champion) : undefined;
+    if (!champ) throw new CalcError('target.champion', `unknown champion "${String(t.champion)}"`);
+    base = championAsTarget(champ, int(t.level ?? 1, 'target.level', 1, 18));
+  }
+  const split = (stat: keyof Totals, bonusKey: 'bonusHp' | 'bonusArmor' | 'bonusMr', min: number, max: number): StatLine => {
+    const total = t[stat] === undefined && base && t.champion !== undefined ? base[stat] : real(t[stat], `target.${stat}`, min, max);
+    // what is above the base is bonus; a total below it is all base
+    const bonus = t[bonusKey] === undefined ? Math.max(0, total - (base?.[stat] ?? total)) : real(t[bonusKey], `target.${bonusKey}`, 0, Math.max(0, total));
+    return { total, base: total - bonus, bonus };
+  };
+  return { hp: split('hp', 'bonusHp', 1, 1_000_000), armor: split('armor', 'bonusArmor', -1000, 10_000), mr: split('mr', 'bonusMr', -1000, 10_000) };
 }

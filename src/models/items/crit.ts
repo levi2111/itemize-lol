@@ -16,9 +16,8 @@ const energized = (first: string) => `Energized is taken to be charged when the 
 export default [
   item(3036, "Lord Dominik's Regards", {
     reviewed: P,
-    options: { bonusHealth: { label: "The target's bonus health, in hundreds", default: 'if(hasTarget, target.bonusHp, 0) / 100', max: 'MaxBonusHealth / 100' } },
-    amps: [{ value: 'MaxBonusDamagePercent * min(1, bonusHealth * 100 / MaxBonusHealth)' }],
-    notes: ["Giant Slayer scales with the target's bonus health, which a dummy and a champion without items do not have: set it for a target with items."],
+    amps: [{ value: 'MaxBonusDamagePercent * min(1, target.bonusHp / MaxBonusHealth)', when: 'hasTarget' }],
+    notes: ["Giant Slayer scales with the target's bonus health: on the dummy all of its health above 1000, on a champion what is set above its own."],
   }),
   item(6676, 'The Collector', {
     reviewed: P,

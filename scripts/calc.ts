@@ -5,9 +5,12 @@
      node scripts/calc.ts Kaisa --combo aa,aa,w,aa,aa,aa --raw
      node scripts/calc.ts Ahri --draft          (src/models/champions/Ahri.ts and src/models/items/*.ts as they are now, without a data:build)
      node scripts/calc.ts Garen --items 3078,3161 --settings 3078:spellblade=3,3161:stacks=4
-                                                (an item's settings: the ids `data:report -- --item` lists under "controls") */
+                                                (an item's settings: the ids `data:report -- --item` lists under "controls")
+     node scripts/calc.ts Vayne --enemy Ornn:13 --target 3200,150,90
+                                                (the target: the practice tool's dummy unless --enemy names a champion, whose
+                                                 own stats --target then overrides; --plain makes the numbers all base) */
 import { calculate } from '../src/engine/calc.ts';
-import type { Action, DataSource } from '../src/engine/types.ts';
+import type { Action, DataSource, TargetInput } from '../src/engine/types.ts';
 import { Dataset } from '../src/server/dataset.ts';
 
 const [champion = '', ...rest] = process.argv.slice(2);
@@ -36,12 +39,16 @@ for (const part of (arg('settings') ?? '').split(',').filter(Boolean)) {
 }
 const [q, w, e, r] = nums(arg('ranks'), [5, 5, 5, 3]) as [number, number, number, number];
 const [hp, armor, mr] = nums(arg('target'), [2400, 80, 50]) as [number, number, number];
+const [enemy, enemyLevel = '13'] = (arg('enemy') ?? '').split(':');
+const target: TargetInput | null = rest.includes('--raw') ? null
+  : enemy ? { champion: enemy, level: Number(enemyLevel), ...(arg('target') && { hp, armor, mr }) }
+  : { dummy: !rest.includes('--plain'), hp, armor, mr };
 const combo = arg('combo') ?? 'aa:3,q:1,w:1,e:1,r:1';
 const options = Object.fromEntries((arg('options') ?? '').split(',').filter(Boolean).map(kv => { const [k, v] = kv.split('='); return [k!, Number(v ?? 1)]; }));
 
 const res = calculate(data, {
   build: { champion, level: Number(arg('level') ?? 18), ranks: { q, w, e, r }, items: nums(arg('items'), []), options, itemOptions },
-  target: rest.includes('--raw') ? null : { hp, armor, mr },
+  target,
   combo: combo.includes(':')
     ? { counts: Object.fromEntries(combo.split(',').map(p => { const [a, n] = p.split(':'); return [a!, Number(n)]; })) }
     : { sequence: combo.split(',') as Action[] },
@@ -50,6 +57,8 @@ const res = calculate(data, {
 if (rest.includes('--json')) { console.log(JSON.stringify(res, null, 1)); process.exit(0); }
 const s = res.stats;
 console.log(`${champion} L${s.level}  AD ${s.ad.total.toFixed(1)} (${s.ad.bonus.toFixed(0)} bonus)  AP ${s.ap.total.toFixed(0)}  AS ${s.attackSpeed.total.toFixed(3)}  crit ${(s.critChance * 100).toFixed(0)}% x${s.critDamage}  leth ${s.lethality}  apen ${(s.armorPenPct * 100).toFixed(0)}%  mpen ${s.magicPenFlat}/${(s.magicPenPct * 100).toFixed(0)}%  HP ${s.hp.total.toFixed(0)}`);
+const t = res.target, part = (l: { total: number; bonus: number }, name: string) => `${name} ${l.total.toFixed(0)}${l.bonus ? ` (${l.bonus.toFixed(0)} bonus)` : ''}`;
+console.log(t ? `target: ${enemy || (target?.dummy ? 'dummy' : 'plain numbers')}  ${part(t.hp, 'HP')}  ${part(t.armor, 'armor')}  ${part(t.mr, 'MR')}` : 'target: none (raw output)');
 console.log(`sequence: ${res.sequence.join(' ')}`);
 for (const l of res.combo.lines) {
   if (l.type === 'none' && !l.qty) continue;

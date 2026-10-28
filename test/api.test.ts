@@ -85,8 +85,11 @@ test('items say which shops sell them', async () => {
 
 test('calc accepts an enemy champion as the target, with overrides', async () => {
   const j = await (await calc({ ...KAISA, builds: [{ items: [] }], target: { champion: 'Ornn', level: 13, armor: 200 } })).json() as any;
-  assert.equal(j.target.armor, 200);
-  assert.ok(j.target.hp > 1000);
+  // what is set above the champion's own armor is bonus; its health is its own
+  const own = (await (await get('/champions/Ornn/target?level=13')).json()) as any;
+  assert.deepEqual(j.target.armor, { total: 200, base: own.armor, bonus: 200 - own.armor });
+  assert.deepEqual(j.target.hp, { total: own.hp, base: own.hp, bonus: 0 });
+  assert.deepEqual(j.results[0].target, j.target);
   const raw = await (await calc({ ...KAISA, builds: [{ items: [] }], target: null })).json() as any;
   assert.equal(raw.target, null);
   assert.equal(raw.results[0].combo.total.raw, raw.results[0].combo.total.dealt);

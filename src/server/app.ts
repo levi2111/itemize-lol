@@ -4,7 +4,7 @@ import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
 import { secureHeaders } from 'hono/secure-headers';
-import { calculate, championAsTarget } from '../engine/calc.ts';
+import { calculate, championAsTarget, resolveTarget } from '../engine/calc.ts';
 import { CalcError, type CalcResult, type TargetInput } from '../engine/types.ts';
 import type { ChampionData, ItemData, Slot } from '../shared/types.ts';
 import { SLOTS } from '../shared/types.ts';
@@ -127,26 +127,16 @@ export function createApp(data: ServedData, opts: AppOptions = {}) {
       const builds: unknown = body.builds;
       if (!Array.isArray(builds) || builds.length < 1 || builds.length > MAX_BUILDS) throw new CalcError('builds', `builds must list 1 to ${MAX_BUILDS} builds`);
 
-      let target: TargetInput | null = null;
-      const t = body.target;
-      if (t !== null && t !== undefined) {
-        if (typeof t !== 'object') throw new CalcError('target', 'target must be an object or null');
-        if (typeof t.champion === 'string') {
-          const enemy = data.champion(t.champion);
-          if (!enemy) throw new CalcError('target.champion', `unknown champion "${t.champion}"`);
-          const level = Math.round(Number(t.level ?? 1));
-          if (!(level >= 1 && level <= 18)) throw new CalcError('target.level', 'target.level must be between 1 and 18');
-          // explicit numbers win over the champion's own, so the UI's dials can override them
-          target = { ...championAsTarget(enemy, level), ...(typeof t.hp === 'number' && { hp: t.hp }), ...(typeof t.armor === 'number' && { armor: t.armor }), ...(typeof t.mr === 'number' && { mr: t.mr }), ...(typeof t.bonusHp === 'number' && { bonusHp: t.bonusHp }) };
-        } else target = t as TargetInput;
-      }
+      // the dummy, a champion or plain numbers: the engine works out what of it is base and what bonus
+      const given: TargetInput | null = body.target ?? null;
+      const target = given === null ? null : resolveTarget(data, given);
 
       const results: CalcResult[] = builds.map((b: any, i: number) => {
         if (!b || typeof b !== 'object') throw new CalcError(`builds[${i}]`, 'each build must be an object');
         // a build's own ranks, when it has them, replace the shared ones
         return calculate(data, {
           build: { champion: body.champion, level: body.level, ranks: b.ranks ?? body.ranks ?? {}, options: body.options, items: b.items ?? [], itemOptions: b.itemOptions },
-          target, combo: body.combo ?? {},
+          target: given, combo: body.combo ?? {},
         });
       });
       c.header('Cache-Control', 'no-store');

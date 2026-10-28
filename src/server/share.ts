@@ -149,12 +149,14 @@ export function readShare(data: ServedData, s: Record<string, unknown>, layout: 
   // the target: the dummy's dials as the link set them; an enemy's dials are refilled with its own stats once they arrive
   let targetBody: TargetInput | null = null, shown: SharedBuild['target'] = { kind: 'raw' };
   if (target === 'dummy') {
-    targetBody = { hp: Math.max(1, dummy.hp || 1), armor: dummy.ar || 0, mr: dummy.mr || 0 };
-    shown = { kind: 'dummy', ...targetBody } as SharedBuild['target'];
+    const t = { hp: Math.max(1, dummy.hp || 1), armor: dummy.ar || 0, mr: dummy.mr || 0 };
+    targetBody = { dummy: true, ...t };
+    shown = { kind: 'dummy', ...t };
   } else if (target === 'champ') {
     const t = championAsTarget(data.champion(enemy.champion.id)!, enemy.level);
-    targetBody = { hp: Math.max(1, t.hp || 1), armor: t.armor || 0, mr: t.mr || 0 };
-    shown = { kind: 'champ', champion: enemy.champion, level: enemy.level, hp: targetBody.hp, armor: targetBody.armor, mr: targetBody.mr };
+    const dials = { hp: Math.max(1, t.hp || 1), armor: t.armor || 0, mr: t.mr || 0 };
+    targetBody = { champion: enemy.champion.id, level: enemy.level, ...dials };
+    shown = { kind: 'champ', champion: enemy.champion, level: enemy.level, ...dials };
   }
 
   // recalc, with itemOptsOf: a build's item settings, kept only for items it holds

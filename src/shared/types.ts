@@ -175,8 +175,8 @@ export const DAMAGE_SOURCES: readonly DamageSource[] = ['attack', 'ability', 'pa
 /** Changes the target's resistance for as long as its condition holds, e.g. armor shred that builds with hits. */
 export interface ResistMod {
   stat: 'armor' | 'mr';
-  /** `reduce*` lower the target's resistance; `pen*` add to the attacker's penetration */
-  kind: 'reducePct' | 'reduceFlat' | 'penPct' | 'penFlat';
+  /** `reduce*` lower the target's resistance; `pen*` add to the attacker's penetration. `penBonusPct` penetrates the bonus part only */
+  kind: 'reducePct' | 'reduceFlat' | 'penPct' | 'penBonusPct' | 'penFlat';
   value: Expr;
   when?: Expr;
 }

@@ -93,10 +93,12 @@ All under `/api/v1`. Reads are cacheable and revalidate by ETag.
   "champion": "Kaisa", "level": 13,
   "ranks": { "q": 5, "w": 1, "e": 5, "r": 2 },
   "builds": [{ "items": [6672, 3006, 3124, 3115] }, { "items": [6655, 3020, 3115, 4645], "ranks": { "q": 3, "w": 1, "e": 5, "r": 2 } }],
-  "target": { "hp": 2400, "armor": 80, "mr": 50 },     // or { "champion": "Ornn", "level": 13 }, or null for raw output
+  "target": { "dummy": true, "hp": 2400, "armor": 80, "mr": 50 },     // or { "champion": "Ornn", "level": 13 }, or null for raw output
   "combo": { "counts": { "aa": 3, "q": 1, "w": 1 }, "crits": "average" }   // or { "sequence": ["aa", "q", "aa", "w", "aa"] }
 }
 ```
+
+The target's health, armor and magic resist are totals, and the engine splits each into base and bonus as the game does, because some effects read only one part: Giant Slayer reads bonus health, and Last Breath and All Out penetrate only bonus armor. What the target is sets its base. `"dummy": true` is the practice tool's dummy, with 1000 base health and no base armor or magic resist, so everything above that is bonus. `"champion"` at `"level"` is that champion's own stats. Totals left out are its own; totals given above them count the difference as bonus, as items would add it. Without either, the numbers are plain and all base. `bonusHp`, `bonusArmor` and `bonusMr` set a bonus part outright. The response, and each result, echoes the `target` as it was played: `{ "hp": { "total", "base", "bonus" }, "armor": …, "mr": … }`.
 
 A build's own `ranks` replace the shared ones for that build. `crits` is how the combo counts critical strikes: `average` (at the build's crit chance, the default), `never` or `always`; DPS and time to kill always use the average. A source line that can crit carries `crits`: its total in each of the three, so a page can show a hit with and without one.
 

@@ -16,13 +16,35 @@ export interface BuildInput {
   itemOptions?: Record<string, Record<string, number | boolean>>;
 }
 
-/** The enemy as plain numbers. `null` means raw output: no resistances, no health. */
+/** The enemy. `null` means raw output: no resistances, no health.
+ *
+ * Health, armor and magic resist are totals, and each splits into a base part and a bonus part, as in the
+ * game: a few effects read only one of them (Giant Slayer the bonus health, Last Breath's penetration the
+ * bonus armor). What stands there decides the base:
+ * - `dummy: true`, the practice tool's target dummy: 1000 base health, no base armor or magic resist.
+ * - `champion` at `level`: that champion's own stats at that level. Totals left out are those; totals given
+ *   above them count the difference as bonus, as items would add it.
+ * - neither: plain numbers, all base unless a bonus is given.
+ * A `bonus*` given replaces the one that follows from the base. */
 export interface TargetInput {
-  hp: number;
-  armor: number;
-  mr: number;
-  /** health beyond the champion's own, from items; a few effects scale with it. 0 when unknown */
+  dummy?: boolean;
+  /** a champion id; then `level` is required */
+  champion?: string;
+  level?: number;
+  /** required unless `champion` is given */
+  hp?: number;
+  armor?: number;
+  mr?: number;
   bonusHp?: number;
+  bonusArmor?: number;
+  bonusMr?: number;
+}
+
+/** The enemy as the engine plays it: each stat its total and the base and bonus parts of it. */
+export interface TargetStats {
+  hp: StatLine;
+  armor: StatLine;
+  mr: StatLine;
 }
 
 export interface ComboInput {
@@ -139,6 +161,8 @@ export interface ItemInfo extends ModelInfo {
 export interface CalcResult {
   patch: string;
   stats: StatBlock;
+  /** the target as it was played, null for raw output */
+  target: TargetStats | null;
   /** the order the combo was played in */
   sequence: Action[];
   combo: {

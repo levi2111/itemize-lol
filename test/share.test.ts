@@ -34,7 +34,7 @@ test('the page\'s own link asks for exactly what the page asks for', () => {
   assert.deepEqual(sb.body, {
     champion: 'Kaisa', level: 13, ranks: { q: 5, w: 1, e: 5, r: 2 }, options: {},
     builds: [{ items: [6672, 3006, 3124, 3115] }, { items: [6655, 3020, 3115, 4645] }],
-    target: { hp: 2400, armor: 80, mr: 50 }, combo: { counts: { aa: 3, q: 1, w: 1, e: 0, r: 0 }, crits: 'average' },
+    target: { dummy: true, hp: 2400, armor: 80, mr: 50 }, combo: { counts: { aa: 3, q: 1, w: 1, e: 0, r: 0 }, crits: 'average' },
   });
   assert.equal(sb.requests.length, 2);
   assert.deepEqual(sb.requests[1]!.build, { champion: 'Kaisa', level: 13, ranks: { q: 5, w: 1, e: 5, r: 2 }, options: {}, items: [6655, 3020, 3115, 4645], itemOptions: undefined });
@@ -47,11 +47,11 @@ test('one build, an enemy champion, raw output', () => {
   assert.deepEqual(one.builds.map(b => [b.name, b.typed]), [['Kraken', true]]);
   const enemy = read({ ...PAGE, t: 'champ', e: ['Ornn', 9], d: { hp: 9999, ar: 1, mr: 1 } });
   // the dials are refilled with the enemy's own stats when they arrive, so the link's numbers are not used
-  assert.deepEqual(enemy.body.target, championAsTarget(data.champion('Ornn')!, 9));
+  assert.deepEqual(enemy.body.target, { champion: 'Ornn', level: 9, ...championAsTarget(data.champion('Ornn')!, 9) });
   assert.equal(enemy.target.kind, 'champ');
   assert.equal(read({ ...PAGE, t: 'raw' }).body.target, null);
   // an unknown enemy leaves the page's Ornn at level 13
-  assert.deepEqual(read({ ...PAGE, t: 'champ', e: ['Nobody', 4] }).body.target, championAsTarget(data.champion('Ornn')!, 13));
+  assert.deepEqual(read({ ...PAGE, t: 'champ', e: ['Nobody', 4] }).body.target, { champion: 'Ornn', level: 13, ...championAsTarget(data.champion('Ornn')!, 13) });
 });
 
 test('values are clamped and defaulted as applyState does', () => {
@@ -60,7 +60,7 @@ test('values are clamped and defaulted as applyState does', () => {
   // 9 is cut to 6 by the link's reader and to the kit's 5 once the kit loads; null and "2" count as numbers
   assert.deepEqual(sb.body.ranks, { q: 5, w: 2, e: 0, r: 0 });
   assert.deepEqual(sb.body.builds[0]!.items, [6672, 3031]);
-  assert.deepEqual(sb.body.target, { hp: 1, armor: 0, mr: 50 });
+  assert.deepEqual(sb.body.target, { dummy: true, hp: 1, armor: 0, mr: 50 });
   assert.deepEqual(sb.body.combo.counts, { aa: 30, q: 0, w: 2, e: 0, r: 0 });
   // a link without a champion or builds: Kai'Sa, empty, one build, the page's own names and combo
   const bare = read({});

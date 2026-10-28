@@ -7,7 +7,7 @@ import type {
   Amp, CastSlot, ChampionData, CounterDef, DamageSource, DamageType, Expr, ItemControl, ItemData, ResistMod, Rule, Slot, SpellData, StatId, StatKind, StatMod, StatModTarget, Trigger,
 } from '../shared/types.ts';
 import { CAST_SLOTS, SLOTS } from '../shared/types.ts';
-import type { Action, BuildInput, CritMode, StatBlock, StatLine, TargetInput } from './types.ts';
+import type { Action, BuildInput, CritMode, StatBlock, StatLine, TargetStats } from './types.ts';
 
 /** Attack speed limits. The cap is one attack per 0.333 s. */
 const AS_MIN = 0.2, AS_MAX = 3.003;
@@ -16,10 +16,11 @@ const DEFAULT_CAST_TIME = 0.25;
 /** A rule's repeat count is played hit by hit up to this many, so each can see the health the last one left. */
 const MAX_INSTANCES = 60;
 
-export function resistAfterPen(resist: number, pctPen: number, flatPen: number): number {
+/** `bonus` is the part of `resist` that is bonus, which `bonusPctPen` (penetration of bonus resistance only) also cuts. */
+export function resistAfterPen(resist: number, pctPen: number, flatPen: number, bonus = 0, bonusPctPen = 0): number {
   // penetration does nothing to a target already at or below zero, and cannot push it below zero
   if (resist <= 0) return resist;
-  return Math.max(0, resist * (1 - pctPen) - flatPen);
+  return Math.max(0, (resist - bonus * bonusPctPen) * (1 - pctPen) - flatPen);
 }
 export const damageMultiplier = (resist: number) => resist >= 0 ? 100 / (100 + resist) : 2 - 100 / (100 - resist);
 
@@ -105,7 +106,8 @@ export class Fight {
   private readonly counters = new Map<string, number>();
   private readonly lastFired = new Map<string, number>();
   private readonly owners: Owner[] = [];
-  private readonly target: { maxHp: number; hp: number; armor: number; mr: number; bonusHp: number } | null;
+  /** the target's stats as the fight started, and the health it has left */
+  private readonly target: TargetStats & { left: number } | null;
   private readonly env: EvalEnv;
   private current: Owner | undefined;
   private varDepth = 0;
@@ -118,14 +120,14 @@ export class Fight {
   /** stats are worked out; from here on a formula reading crit chance means the chance that a hit crits */
   private settled = false;
 
-  constructor(champ: ChampionData, items: ItemData[], build: BuildInput, target: TargetInput | null, opts: FightOptions = {}) {
+  constructor(champ: ChampionData, items: ItemData[], build: BuildInput, target: TargetStats | null, opts: FightOptions = {}) {
     this.champ = champ;
     this.items = items;
     this.level = build.level;
     this.ranks = build.ranks;
     this.sustained = !!opts.sustained;
     this.crits = opts.crits ?? 'average';
-    this.target = target ? { maxHp: target.hp, hp: target.hp, armor: target.armor, mr: target.mr, bonusHp: target.bonusHp ?? 0 } : null;
+    this.target = target ? { ...target, left: target.hp.total } : null;
     this.env = {
       level: build.level,
       ranged: champ.ranged,
@@ -193,28 +195,40 @@ export class Fight {
   private targetVar(name: string): number | undefined {
     const t = this.target;
     if (!t) return this.needsTarget();
+    // armor and magic resist are the target's own, before anything in the fight lowers them
     switch (name) {
-      case 'maxHp': return t.maxHp;
-      case 'hp': return t.hp;
-      case 'missingHp': return t.maxHp - t.hp;
-      case 'hpPct': return t.maxHp ? t.hp / t.maxHp : 0;
-      case 'missingHpPct': return t.maxHp ? 1 - t.hp / t.maxHp : 0;
-      case 'armor': return t.armor;
-      case 'mr': return t.mr;
-      case 'bonusHp': return t.bonusHp;
+      case 'maxHp': return t.hp.total;
+      case 'baseHp': return t.hp.base;
+      case 'bonusHp': return t.hp.bonus;
+      case 'hp': return t.left;
+      case 'missingHp': return t.hp.total - t.left;
+      case 'hpPct': return t.hp.total ? t.left / t.hp.total : 0;
+      case 'missingHpPct': return t.hp.total ? 1 - t.left / t.hp.total : 0;
+      case 'armor': return t.armor.total;
+      case 'baseArmor': return t.armor.base;
+      case 'bonusArmor': return t.armor.bonus;
+      case 'mr': return t.mr.total;
+      case 'baseMr': return t.mr.base;
+      case 'bonusMr': return t.mr.bonus;
     }
     return undefined;
   }
 
   private readStat(stat: StatId, kind: StatKind, of?: 'target'): number {
     const s = this.stats;
+    const of3 = (l: StatLine) => kind === 'base' ? l.base : kind === 'bonus' ? l.bonus : l.total;
     if (of === 'target') {
-      const name = ({ maxHealth: 'maxHp', currentHealth: 'hp', missingHealth: 'missingHp', healthPct: 'hpPct', missingHealthPct: 'missingHpPct', armor: 'armor', mr: 'mr' } as Partial<Record<StatId, string>>)[stat];
+      const t = this.target;
+      switch (stat) {
+        case 'maxHealth': return t ? of3(t.hp) : this.needsTarget();
+        case 'armor': return t ? of3(t.armor) : this.needsTarget();
+        case 'mr': return t ? of3(t.mr) : this.needsTarget();
+      }
+      const name = ({ currentHealth: 'hp', missingHealth: 'missingHp', healthPct: 'hpPct', missingHealthPct: 'missingHpPct' } as Partial<Record<StatId, string>>)[stat];
       const v = name ? this.targetVar(name) : undefined;
       if (v === undefined) { this.env.unknown(`the target's ${stat}`); return 0; }
       return v;
     }
-    const of3 = (l: StatLine) => kind === 'base' ? l.base : kind === 'bonus' ? l.bonus : l.total;
     switch (stat) {
       case 'ad': return of3(s.ad);
       case 'ap': return of3(s.ap);
@@ -402,7 +416,7 @@ export class Fight {
 
   // ---------- dealing damage ----------
 
-  get targetHp(): number | null { return this.target ? this.target.hp : null; }
+  get targetHp(): number | null { return this.target ? this.target.left : null; }
 
   /** Every option of the champion as this fight settled it: the caller's value, or the default worked out from the build. */
   get optionValues(): Record<string, number> { return Object.fromEntries(this.options); }
@@ -417,7 +431,7 @@ export class Fight {
   private resistance(type: 'physical' | 'magic'): number {
     const t = this.target!, s = this.stats;
     const stat = type === 'physical' ? 'armor' : 'mr';
-    let reduceFlat = 0, keptByReduce = 1, keptByPen = 1 - (type === 'physical' ? s.armorPenPct : s.magicPenPct);
+    let reduceFlat = 0, keptByReduce = 1, keptByPen = 1 - (type === 'physical' ? s.armorPenPct : s.magicPenPct), keptByBonusPen = 1;
     let flatPen = type === 'physical' ? s.lethality : s.magicPenFlat;
     for (const owner of this.owners) {
       if (!this.active(owner)) continue;
@@ -427,13 +441,16 @@ export class Fight {
         if (r.kind === 'reduceFlat') reduceFlat += v;
         else if (r.kind === 'reducePct') keptByReduce *= 1 - v;
         else if (r.kind === 'penPct') keptByPen *= 1 - v;
+        else if (r.kind === 'penBonusPct') keptByBonusPen *= 1 - v;
         else flatPen += v;
       }
     }
-    // order: flat reduction, percent reduction, percent penetration, flat penetration
-    let resist = (type === 'physical' ? t.armor : t.mr) - reduceFlat;
-    if (resist > 0) resist *= keptByReduce;
-    return resistAfterPen(resist, 1 - keptByPen, flatPen);
+    // order: flat reduction, percent reduction, percent penetration (of all of it, then of the bonus part), flat penetration.
+    // Reductions take from base and bonus alike: flat reduction in proportion to each, as the wiki's worked example has it
+    const own = t[stat];
+    let resist = own.total - reduceFlat, bonus = own.total > 0 ? own.bonus * resist / own.total : 0;
+    if (resist > 0) { resist *= keptByReduce; bonus *= keptByReduce; }
+    return resistAfterPen(resist, 1 - keptByPen, flatPen, bonus, 1 - keptByBonusPen);
   }
 
   /** `from` is whoever deals the damage: an amp can be limited to some sources (abilities only, say). */
@@ -455,7 +472,7 @@ export class Fight {
     if (!(amount > 0)) return false;
     const raw = this.amplify(owner.source, type, amount);
     const dealt = !this.target || type === 'true' ? raw : raw * damageMultiplier(this.resistance(type));
-    if (this.target) this.target.hp = Math.max(0, this.target.hp - dealt);
+    if (this.target) this.target.left = Math.max(0, this.target.left - dealt);
     const last = this.hits.at(-1);
     if (last && last.owner === owner.key && last.rule === rule && last.type === type) { last.raw += raw; last.dealt += dealt; last.instances++; }
     else this.hits.push({ line: owner.line, owner: owner.key, rule, label, type, raw, dealt, instances: 1, crit });
