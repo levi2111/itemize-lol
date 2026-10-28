@@ -649,7 +649,7 @@ function choose(id) {
 
 /* ---------- auto-build ---------- */
 /* Each build's Auto-build button opens a panel over the build pane: a goal (combo damage, sustained DPS or
-   effective health), a limit (gold for the whole build, or a number of finished items), items to keep from
+   effective health), a limit (a number of finished items, or gold for the whole build), items to keep from
    the build and items never to use. The best three builds it finds can be put in either build, so B against
    A becomes the page's own comparison. The search runs in a Web Worker on the engine itself (src/autobuild/),
    from the address the page names in <meta name="engine">; it reads the page as it is (champion, level, ranks,
@@ -665,7 +665,9 @@ const AB_GOALS = {
 const AB_GOLD = [3000, 6000, 10000, 15000, 20000];
 const AB = {
   for: null,                        // the build the panel is open for, 'a' or 'b'
-  goal: 'burst', mode: 'gold', gold: 6000, count: 3, fill: true, boots: true,
+  // the limit starts at a number of items on each visit and is never saved: a gold limit left on unnoticed
+  // looked like poor picks
+  goal: 'burst', mode: 'items', gold: 6000, count: 3, fill: true, boots: true,
   goldSet: false,                   // the visitor set the gold; until then it starts at the build's own
   keep: new Set(),                  // item ids of the build that stay
   never: new Set(),                 // item ids never to use
@@ -786,7 +788,7 @@ function paintAutoCtl() {
     <div class="seg ab-goals" role="radiogroup" aria-label="Best at">${Object.entries(AB_GOALS).map(([k, x]) => `<button role="radio" data-goal="${k}" aria-checked="${AB.goal === k}">${x.label}</button>`).join('')}</div>
     <p class="ab-says">${esc(g.says())}</p>
     <span class="lbl">Within</span>
-    <div class="ab-limit"><div class="seg" role="radiogroup" aria-label="Limit">${[['gold', 'Gold'], ['items', 'Items']].map(([k, l]) => `<button role="radio" data-mode="${k}" aria-checked="${AB.mode === k}">${l}</button>`).join('')}</div>${amount}</div>`;
+    <div class="ab-limit"><div class="seg" role="radiogroup" aria-label="Limit">${[['items', 'Items'], ['gold', 'Gold']].map(([k, l]) => `<button role="radio" data-mode="${k}" aria-checked="${AB.mode === k}">${l}</button>`).join('')}</div>${amount}</div>`;
 }
 function paintAutoKeep() {
   if (!AB.for) return;
