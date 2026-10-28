@@ -1758,6 +1758,8 @@ function setMenu(btn) {
   if (menu) show(menu, false);
   menu = same ? null : btn;
   if (menu) show(menu, true);
+  // a panel that is there to be written in (Feedback) takes the typing at once, except on a touch screen
+  if (menu && !touched()) $(`#${panel(menu)} [data-focus]`)?.focus();
 }
 /* The two layouts are two pages, so choosing the other one is a link. The choice is remembered
    (layout.js sends later visits to that page) and the build is handed over, so nothing but the
@@ -2243,6 +2245,35 @@ function followChamp() {
   for (const a of $$('#set-menu a[data-layout]')) a.setAttribute('href', page(a.dataset.layout));
 }
 
+/* ---------- contact ---------- */
+/* The envelope in the bar lists where the maker can be reached, and Feedback in the footer writes an email.
+   The email opens in the visitor's own mail app (mailto:), with the note, the build's link when the box is
+   ticked, and the patch and layout it was seen on; the page itself sends nothing. */
+const CONTACT_MAIL = 'contact@itemize.lol';
+function wireContact() {
+  document.addEventListener('click', async e => {
+    const b = e.target.closest('button[data-copy]'); if (!b) return;
+    const ok = await copyLater(Promise.resolve(b.dataset.copy));
+    b.textContent = ok ? 'Copied' : 'Copy failed';
+    setTimeout(() => b.textContent = 'Copy', 1600);
+  });
+  $('#fb-send').addEventListener('click', async () => {
+    const b = $('#fb-send'), note = $('#fb-text').value.trim();
+    let link = '';
+    if ($('#fb-build').checked) {
+      // the short link, unless it is slow to come: then the long one, which needs nothing from the server
+      b.disabled = true; b.textContent = 'Getting the link…';
+      const s = encodeState();
+      link = await Promise.race([linkFor(s), new Promise(r => setTimeout(() => r(shareUrl(s)), 2500))]);
+      b.disabled = false; b.textContent = 'Write email';
+    }
+    const about = `Patch ${served?.displayPatch || '?'}, ${RECEIPT ? 'Receipt' : 'Tabs'} layout`;
+    const body = [note, link && `Build: ${link}`, about].filter(Boolean).join('\n\n');
+    location.href = `mailto:${CONTACT_MAIL}?subject=${encodeURIComponent('itemize.lol feedback')}&body=${encodeURIComponent(body)}`;
+    $('#fb-status').textContent = 'Your email app should open now. If it does not, copy the address below.';
+  });
+}
+
 /* ---------- the introduction ---------- */
 /* A first visit opens a welcome: what the site is for, and its three steps drawn from what is on the page
    behind it (the champion, the builds, what each deals). From there a short tour shows the page one part at
@@ -2517,7 +2548,7 @@ function wireIntro() {
 
 /* ---------- wiring ---------- */
 function wire() {
-  wireTip(); wireIntro();
+  wireTip(); wireIntro(); wireContact();
   $('.tabs')?.addEventListener('click', e => { const t = e.target.closest('.tab'); if (t) setTab(t.dataset.tab); });
   document.addEventListener('click', e => {
     const b = e.target.closest('.menu-btn');
@@ -2714,7 +2745,7 @@ async function boot() {
     inline ? JSON.parse(inline.textContent) : fetch('/art/index.json').then(r => r.json())]);
   useArt(art);
   $('#patch').textContent = meta.displayPatch;
-  $('#legal').textContent = meta.legal;
+  $('#legal-text').textContent = meta.legal;
   served = meta;
   S.champs = champs.map(c => ({id: c.id, key: c.key, name: c.name, title: c.title, tags: c.tags || [], ranged: !!c.ranged, critDamage: c.stats?.critDamage, slug: c.slug}))
     .sort((x, y) => x.name.localeCompare(y.name));

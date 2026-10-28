@@ -642,7 +642,33 @@ body:not([data-ranks="split"]) .rank-split{display:none!important}
    first sheet) is what keeps that minimum inside the window: when the two disagree, body's
    overflow:hidden cuts the notice off. */
 .app{grid-template-rows:3.1rem auto auto minmax(0,1fr) auto;min-height:51.4rem}
-.legal{display:grid;align-content:center;min-height:2.8rem;padding:.4rem 1.5rem .45rem;border-top:1px solid var(--rule);background:var(--well);font-size:max(.7rem,10px);line-height:1.35;color:var(--dim)}
+.legal{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:1.5rem;min-height:2.8rem;padding:.4rem 1.5rem .45rem;border-top:1px solid var(--rule);background:var(--well);font-size:max(.7rem,10px);line-height:1.35;color:var(--dim)}
+.legal p{margin:0}
+.legal-acts{display:flex;align-items:center;gap:.5rem}
+.legal .cx-pill{display:none}
+/* contact: an envelope in the bar lists the ways to reach the maker; Feedback, at the end of the notice,
+   writes an email with the build's link in it. Both are menus (setMenu); nothing is sent from the page. */
+.help[aria-expanded="true"]{border-color:var(--text);color:var(--text)}
+.menu.contact{width:21rem;gap:.15rem}
+.menu .cx{text-align:left;display:grid;grid-template-columns:4.2rem minmax(0,1fr) auto;align-items:center;column-gap:.5rem;padding:.4rem .5rem;border-radius:3px;color:var(--text);text-decoration:none;font-size:.84rem}
+.menu .cx::before{content:none}
+.menu a.cx:hover,.menu div.cx:hover{background:rgba(236,231,216,.07)}
+.cx i{font-style:normal}
+.cx-k{font-size:.68rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+.cx-v{font-family:var(--font-mono);font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cx-do{font-size:.76rem;font-weight:600;color:var(--dim)}
+button.cx-do:hover,a.cx:hover .cx-do{color:var(--text)}
+.cx-note{margin:.3rem .5rem 0;padding-top:.5rem;border-top:1px solid var(--rule)}
+.fb-btn{display:inline-flex;align-items:center;gap:.4rem;padding:.28rem .75rem;border:1px solid var(--faint);border-radius:99px;font-size:.78rem;font-weight:600;color:var(--text);white-space:nowrap}
+.fb-btn svg{width:.85rem;height:.85rem}
+.fb-btn:hover,.fb-btn[aria-expanded="true"]{border-color:var(--text);background:rgba(236,231,216,.07)}
+.menu.fb-menu{top:auto;bottom:calc(100% + .5rem);width:23rem;gap:.5rem;padding:.8rem .85rem .6rem;font-size:.84rem;line-height:1.3;color:var(--text)}
+.fb-text{resize:vertical;min-height:5.5rem;max-height:16rem;font-family:var(--font-ui);line-height:1.35}
+.fb-attach{display:flex;align-items:center;gap:.45rem;color:var(--dim);cursor:pointer}
+.fb-attach input{margin:0;width:.95rem;height:.95rem;accent-color:var(--text)}
+.fb-go{display:flex;align-items:center;justify-content:space-between;gap:.8rem}
+.fb-go .btn{flex:none;white-space:nowrap}
+.fb-menu .cx{margin-top:.15rem;border-top:1px solid var(--rule);border-radius:0;padding-top:.55rem}
 /* settings: a gear at the end of the bar and the menu it opens */
 .set{position:relative;display:inline-flex}
 .gear,.help{width:2rem;height:2rem;display:grid;place-items:center;border:1px solid var(--rule);border-radius:3px;background:var(--well);color:var(--dim)}
@@ -902,7 +928,7 @@ body{height:auto;overflow:visible}
 
 /* the top bar: the mark and its buttons on one row, the site's links and the patch on a second.
    Choosing between one build and two is left to the builds' own Add and Remove buttons. */
-.bar{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center;gap:0;padding:.35rem var(--pr) 0 var(--pl)}
+.bar{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto auto;align-items:center;gap:0;padding:.35rem var(--pr) 0 var(--pl)}
 .bar-l,.bar-r{display:contents}
 .mark{grid-area:1/1;font-size:1.3rem}
 .bar-r>*{grid-row:1;margin-left:.5rem}
@@ -954,7 +980,13 @@ body[data-compare="off"] .tot{min-width:0;padding-right:var(--pr)}
 /* the tabs' panes are dissolved too, so that the Build tab's parts and the band can be interleaved */
 .panes,.pane,.setup{display:contents}
 .pane>*,.setup>*{order:10;flex:1 1 100%;margin:1.4rem var(--pr) 0 var(--pl)}
-.legal{order:20;margin-top:1.8rem;padding:.8rem var(--pr) 1rem var(--pl)}
+.legal{order:20;margin-top:1.8rem;padding:.8rem var(--pr) 1rem var(--pl);grid-template-columns:minmax(0,1fr);row-gap:.8rem}
+.legal-acts{order:-1}
+.legal .cx-pill{display:inline-flex}
+.bar #contact-btn{display:none}
+#contact-set{margin-left:0}
+.fb-btn{min-height:2.5rem;padding:0 1rem}
+.menu .cx{min-height:2.75rem}
 
 /* build: the champion, the level and the builds, then the band, then the ranks */
 .champ{order:2;margin-top:1rem;grid-row:auto;min-height:5.5rem;padding:.8rem .9rem}
@@ -1079,7 +1111,7 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
 .slot{scroll-margin:7rem 0 calc(min(64vh,36rem) + 1rem)}
 .menu{max-width:calc(100vw - 1.5rem)}
 .menu a{padding:.65rem .5rem}
-.menu.combo-menu,.menu.saved,.imenu{position:fixed;z-index:40;left:0!important;right:0;top:auto!important;bottom:0;width:auto;max-width:none;max-height:82vh;overflow:auto;overscroll-behavior:contain;
+.menu.combo-menu,.menu.saved,.menu.contact,.menu.fb-menu,.imenu{position:fixed;z-index:40;left:0!important;right:0;top:auto!important;bottom:0;width:auto;max-width:none;max-height:82vh;overflow:auto;overscroll-behavior:contain;
   padding:.85rem var(--pr) calc(.9rem + env(safe-area-inset-bottom)) var(--pl);border-width:1px 0 0;border-radius:.75rem .75rem 0 0;box-shadow:0 0 0 100vmax rgba(4,16,15,.6)}
 .imenu{z-index:45}
 .saved .sv-bs{flex-wrap:wrap;row-gap:.35rem}
@@ -1161,6 +1193,19 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
       <button class="help" id="intro-btn" aria-label="How this page works" title="How this page works (?)">
         <svg viewBox="5 4.5 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
       </button>
+      <div class="set" id="contact-set">
+        <button class="help menu-btn" id="contact-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="contact-menu" aria-label="Contact" title="Contact">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>
+        </button>
+        <div class="menu contact" id="contact-menu" role="dialog" aria-label="Contact" hidden>
+          <span class="lbl">Contact</span>
+          <div class="cx"><i class="cx-k">Email</i><i class="cx-v">contact@itemize.lol</i><button class="cx-do" data-copy="contact@itemize.lol">Copy</button></div>
+          <div class="cx"><i class="cx-k">Discord</i><i class="cx-v">levikzx</i><button class="cx-do" data-copy="levikzx">Copy</button></div>
+          <a class="cx" href="https://github.com/levi2111" target="_blank" rel="noopener"><i class="cx-k">GitHub</i><i class="cx-v">levi2111</i><i class="cx-do">Open</i></a>
+          <a class="cx" href="https://x.com/LeviKZX" target="_blank" rel="noopener"><i class="cx-k">X</i><i class="cx-v">@LeviKZX</i><i class="cx-do">Open</i></a>
+          <p class="hint cx-note">A wrong number? Feedback, at the foot of the page, sends it along with this build.</p>
+        </div>
+      </div>
       <div class="set">
         <button class="gear menu-btn" id="set-btn" aria-haspopup="true" aria-expanded="false" aria-controls="set-menu" aria-label="Settings" title="Settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -1426,7 +1471,24 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
       <div class="ahead" id="ahead"></div>
     </section>
   </main>
-  <footer class="legal" id="legal"></footer>
+  <footer class="legal" id="legal"><p id="legal-text"></p>
+    <div class="legal-acts">
+    <!-- a phone's bar has no room for the envelope, so there it is this pill, which opens the same panel -->
+    <button class="fb-btn menu-btn cx-pill" aria-haspopup="dialog" aria-expanded="false" aria-controls="contact-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>Contact</button>
+    <div class="set">
+      <button class="fb-btn menu-btn" id="fb-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="fb-menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Feedback
+      </button>
+      <div class="menu fb-menu" id="fb-menu" role="dialog" aria-label="Feedback" hidden>
+        <label class="lbl" for="fb-text">What should be fixed or added?</label>
+        <textarea class="search fb-text" id="fb-text" rows="4" maxlength="1500" placeholder="A number that looks wrong, an item that is missing…" data-focus></textarea>
+        <label class="fb-attach"><input type="checkbox" id="fb-build" checked>Attach this build's link</label>
+        <div class="fb-go"><span class="hint" id="fb-status">Opens your email app; nothing is sent from this page</span><button class="btn" id="fb-send">Write email</button></div>
+        <div class="cx"><i class="cx-k">Or</i><i class="cx-v">contact@itemize.lol</i><button class="cx-do" data-copy="contact@itemize.lol">Copy</button></div>
+      </div>
+    </div>
+    </div>
+  </footer>
 </div>
 
 <div class="veil" id="champ-modal" hidden>
