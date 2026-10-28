@@ -1,0 +1,78 @@
+name: patch
+
+# Follows Riot's patches (scripts/patch-update.ts). Every three hours it asks Data Dragon for the newest patch. When
+# there is one, it mirrors and builds it, runs the tests, commits the dataset and the art to main and deploys (ci.yml),
+# and when hand-written models stopped binding or their spell changed, it opens an issue that lists them. With a
+# RIOT_API_KEY secret (a personal key: a development key lasts a day) it also samples item popularity some days into
+# each patch. Where a person has to look first (a format canary failed, a stat icon changed, a test failed), it ships
+# nothing and opens an issue.
+on:
+  schedule:
+    - cron: '23 */3 * * *'
+  workflow_dispatch:
+    inputs:
+      popularity:
+        description: Sample item popularity now (needs the RIOT_API_KEY secret)
+        type: boolean
+        default: false
+
+concurrency:
+  group: patch
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # the commit to main
+  issues: write     # what to look at
+  actions: write    # starting ci.yml, which deploys
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - id: update
+        run: node scripts/patch-update.ts $FLAGS
+        env:
+          FLAGS: ${{ inputs.popularity && '--popularity' || '' }}
+          RIOT_API_KEY: ${{ secrets.RIOT_API_KEY }}
+      - if: steps.update.outputs.changed == 'true'
+        run: npm run typecheck && npm test
+      - if: steps.update.outputs.changed == 'true'
+        name: Commit to main
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A data/dist data/popularity web/art src/pipeline/stat-icons.json
+          git commit -q -F .build/patch/commit.txt
+          git pull -q --rebase --autostash origin main
+          git push -q origin HEAD:main
+      # a push made with this workflow's token starts no workflow, so the deploy is started by hand
+      - if: steps.update.outputs.changed == 'true'
+        name: Deploy
+        run: gh workflow run ci.yml --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - if: steps.update.outputs.review == 'true'
+        name: Open an issue for the models to look at
+        run: |
+          gh issue create --title "$TITLE: models to look at" --body-file .build/patch/summary.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: ${{ steps.update.outputs.title }}
+      # one issue for as long as it keeps failing, not one every three hours
+      - if: failure()
+        name: Open an issue when the update stopped
+        run: |
+          if [ -z "$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[].number')" ]; then
+            gh issue create --title "$TITLE" --body "The scheduled patch update stopped and shipped nothing: $RUN_URL. The log says why; most often a format canary failed or a stat icon changed (README, Each patch). It tries again every three hours; close this once it is fixed."
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: Patch update stopped
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

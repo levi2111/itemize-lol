@@ -49,18 +49,21 @@ The wiki is used only by `npm run data:crosscheck`, a development tool that flag
 
 ## Each patch
 
-```
-npm run data:update      # mirror + compile the new patch, then pack its art into web/art/
-```
+A new patch ships by itself. Every three hours `.github/workflows/patch.yml` runs `npm run patch:update` (`scripts/patch-update.ts`), which asks Data Dragon for the newest patch. When there is one, it mirrors and compiles it, packs its art into `web/art/`, drops the previous patch's dataset, runs the typecheck and the tests, commits to `main` and deploys. Run it by hand the same way, or from the Actions tab (Run workflow).
 
-Read the summary it prints:
+It opens an issue when a person has to look:
 
-- `MODEL DOES NOT BIND …` — a name changed. Fix the model in `src/models/`.
-- `stale models: …` — the spell changed shape. Re-read it with `npm run data:report -- --champion <id>`, fix the model if needed, then `npm run data:accept`.
-- `ANCHOR FAILED …` — the data format itself changed. Fix `src/pipeline/calc.ts` before trusting anything.
-- `stat icons changed on texticons.png …` (from the art step) — the game's sheet of stat icons changed. The site shows seven of them beside the totals, and nothing says where on the sheet each one sits, so `src/pipeline/stat-icons.json` records it by hand. Look at the sheet, fix a position if an icon moved, then `npm run data:art -- --accept`.
+- **Models to look at** (the patch shipped): the issue lists them.
+  - `does not bind` — a name changed, and the ability or item falls back to an estimate. Fix the model in `src/models/`.
+  - `spell changed since it was accepted` — the site marks it "needs review". Re-read it with `npm run data:report -- --champion <id>`, fix the model if needed, then `npm run data:accept`.
+- **Patch update stopped** (nothing shipped; it tries again every three hours, and keeps one issue open until it is closed): the run's log says why.
+  - `ANCHOR FAILED …` — the data format itself changed. Fix `src/pipeline/calc.ts` before trusting anything.
+  - `stat icons changed on texticons.png …` (from the art step) — an icon on the game's sheet of stat icons looks different. The site shows seven of them beside the totals, and nothing says where on the sheet each one sits, so `src/pipeline/stat-icons.json` records it by hand. Look at the sheet, fix a position if an icon moved, then `npm run data:art -- --accept`.
+  - A test failed.
 
-Then `npm test`, commit `data/dist/` and `web/art/`, and push: that deploys. `data/raw/` is a cache and stays out of git.
+Item popularity (`npm run data:popularity`, the picker's order) needs a Riot API key. With a `RIOT_API_KEY` repository secret, the update samples it once a patch has been out for three days; a development key lasts a day, so the secret needs a personal key. Without one, a new patch keeps the last sample, and `npm run patch:update -- --popularity` with a key in the environment samples it by hand.
+
+`data/raw/` is a cache and stays out of git. `npm run data:update` mirrors, compiles and packs the newest patch without the rest.
 
 ## Coverage today (patch 26.20)
 

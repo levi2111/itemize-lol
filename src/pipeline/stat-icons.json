@@ -1,6 +1,6 @@
 {
- "about": "Where the game's stat icons sit on texticons.png, the sheet item tooltips draw them from. The game publishes no map of the sheet, so these were found by hand. `pixels` is a hash of the 20x20 tile's RGBA pixels: `npm run data:art` stops when one no longer matches, and `npm run data:art -- --accept` records the tiles as they are now once they have been looked at.",
- "checked": "16.20.1",
+ "about": "Where the game's stat icons sit on texticons.png, the sheet item tooltips draw them from. The game publishes no map of the sheet, so these were found by hand. `pixels` is a hash of what the 20x20 tile draws (its RGBA pixels, fully transparent ones cleared): `npm run data:art` stops when one no longer matches, and `npm run data:art -- --accept` records the tiles as they are now once they have been looked at.",
+ "checked": "16.21.1",
  "size": 20,
  "icons": {
   "hp": { "x": 97, "y": 49, "pixels": "b8cf0e4289c6094b" },

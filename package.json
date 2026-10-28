@@ -13,6 +13,7 @@
     "data:accept": "node src/pipeline/cli.ts build --accept",
     "data:art": "node src/pipeline/cli.ts art",
     "data:popularity": "node src/pipeline/cli.ts popularity",
+    "patch:update": "node scripts/patch-update.ts",
     "data:update": "node src/pipeline/cli.ts fetch && node src/pipeline/cli.ts build && node src/pipeline/cli.ts art",
     "data:report": "node src/pipeline/cli.ts report",
     "data:crosscheck": "node src/pipeline/cli.ts crosscheck",

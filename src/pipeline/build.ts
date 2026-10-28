@@ -199,7 +199,11 @@ export async function buildDataset(opts: BuildOptions = {}): Promise<BuildReport
   };
   await writeFile(join(out, 'manifest.json'), JSON.stringify(dist, null, 1));
   await writeFile(join(out, 'report.json'), JSON.stringify(report, null, 1));
-  await writeFile(join(DATA_DIR, 'dist', 'latest.json'), JSON.stringify({ patch }));
+  // and the day the patch arrived here, kept through rebuilds: the update samples popularity some days into a patch
+  const latestPath = join(DATA_DIR, 'dist', 'latest.json');
+  const was = existsSync(latestPath) ? await readJson(latestPath) : {};
+  const since = was.patch === patch && was.since ? was.since : new Date().toISOString().slice(0, 10);
+  await writeFile(latestPath, JSON.stringify({ patch, since }));
   if (opts.accept) {
     await writeFile(LOCK_PATH, JSON.stringify(newLock, null, 1) + '\n');
     report.unlocked = [];

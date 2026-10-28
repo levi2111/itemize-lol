@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # the patch workflow starts it after pushing an update: a push made with a workflow's own token starts no workflow
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -26,7 +28,7 @@ jobs:
   # The token needs Workers Scripts Edit and, for the migrations, D1 Edit.
   deploy:
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -109,6 +109,9 @@ export async function buildArt(opts: ArtOptions = {}): Promise<ArtIndex> {
   const statTiles = await Promise.all(statIds.map(async k => {
     const at = icons.icons[k]!;
     const pixels = await sharp(sheetPng).extract({ left: at.x, top: at.y, width: px, height: px }).ensureAlpha().raw().toBuffer();
+    // only what is drawn is compared: a sheet exported again keeps its pictures but not the colours under fully
+    // transparent pixels (16.21 changed every one of those and nothing else), and those are cleared before hashing
+    for (let i = 0; i < pixels.length; i += 4) if (pixels[i + 3] === 0) pixels.fill(0, i, i + 3);
     const h = createHash('sha256').update(pixels).digest('hex').slice(0, 16);
     if (h !== at.pixels) { changed.push(k); at.pixels = h; }
     return sharp(pixels, { raw: { width: px, height: px, channels: 4 } }).png().toBuffer();
@@ -118,7 +121,9 @@ export async function buildArt(opts: ArtOptions = {}): Promise<ArtIndex> {
   }
   if (changed.length || (opts.accept && icons.checked !== patch)) {
     icons.checked = patch;
-    await writeFile(STAT_ICONS_PATH, JSON.stringify(icons, null, 1) + '\n');
+    // laid out as the file is kept by hand, an icon to a line
+    const line = ([k, v]: [string, StatIcons['icons'][string]]) => `  ${JSON.stringify(k)}: { "x": ${v.x}, "y": ${v.y}, "pixels": ${JSON.stringify(v.pixels)} }`;
+    await writeFile(STAT_ICONS_PATH, `{\n "about": ${JSON.stringify(icons.about)},\n "checked": ${JSON.stringify(icons.checked)},\n "size": ${icons.size},\n "icons": {\n${Object.entries(icons.icons).map(line).join(',\n')}\n }\n}\n`);
     log(`  stat icons recorded as of ${patch}${changed.length ? `: ${changed.join(', ')} changed` : ''}`);
   }
   out.set('stats.webp', await sharp({ create: { width: statIds.length * px, height: px, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
