@@ -1,0 +1,22 @@
+{
+ "patch": "16.21.1",
+ "displayPatch": "26.21",
+ "builtAt": "2026-10-28T01:14:06.735Z",
+ "sources": {
+  "ddragon": "16.21.1",
+  "cdragon": {
+   "path": "16.21",
+   "build": "16.21.8298620+branch.releases-16-21.content.release"
+  }
+ },
+ "champions": 173,
+ "items": 386,
+ "coverage": {
+  "verified": 0,
+  "curated": 859,
+  "stale": 0,
+  "auto": 4,
+  "none": 1,
+  "unmodeled": 1
+ }
+}

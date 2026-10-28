@@ -1,12 +1,22 @@
 {
- "patch": "16.20.1",
+ "patch": "16.21.1",
  "anchors": {
   "failed": [],
   "missing": [],
   "passed": 13
  },
- "modelIssues": [],
+ "modelIssues": [
+  {
+   "where": "Varus.vars.chargeAmp",
+   "message": "\"MaxChargeAmp\" is not a calculation, data value or effect of VarusQ"
+  },
+  {
+   "where": "item 6697 Hubris",
+   "message": "unknown name \"ADPerStatue\" (not a calculation, data value or effect of item 6697)"
+  }
+ ],
  "stale": [
+  "item 2520 Bastionbreaker",
   "item 222502 Unending Despair (arena copy of 2502)",
   "item 222503 Blackfire Torch (arena copy of 2503)",
   "item 222522 Actualizer (arena copy of 2522)",
@@ -43,7 +53,6 @@
   "item 226664 Hollow Radiance (arena copy of 6664)",
   "item 226672 Kraken Slayer (arena copy of 6672)",
   "item 226676 The Collector (arena copy of 6676)",
-  "item 226697 Hubris (arena copy of 6697)",
   "item 226698 Profane Hydra (arena copy of 6698)",
   "item 228020 Abyssal Mask (arena copy of 8020)"
  ],
@@ -61,19 +70,19 @@
  "coverage": {
   "abilities": {
    "verified": 0,
-   "curated": 864,
+   "curated": 859,
    "stale": 0,
-   "auto": 0,
-   "none": 0,
+   "auto": 4,
+   "none": 1,
    "unmodeled": 1
   },
   "items": {
    "verified": 0,
-   "curated": 87,
+   "curated": 85,
    "stale": 39,
    "auto": 0,
-   "none": 224,
-   "unmodeled": 36
+   "none": 225,
+   "unmodeled": 37
   }
  }
 }
