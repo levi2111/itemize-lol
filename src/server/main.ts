@@ -17,6 +17,7 @@ import { Dataset } from './dataset.ts';
 import { LINK_ID, sharedPage } from './links.ts';
 import { championPage, championSite, robots, sitemap, SOURCE } from './pages.ts';
 import { preview, siteMeta } from './preview.ts';
+import { ENGINE_BASE, ENGINE_ENTRY, engineData, engineModules } from './engine-files.ts';
 import { decodeShare, readShare } from './share.ts';
 import { sqliteLinks } from './sqlite-links.ts';
 
@@ -51,6 +52,20 @@ app.get('/*', async (c, next) => {
   const p = pageAt.get(c.req.path);
   if (!p) return next();
   return c.html(championPage(readFileSync(join(web, SOURCE[p.layout]), 'utf8'), data.champion(p.id)!, p.slug, p.layout));
+});
+// the engine as the auto-build's worker runs it in the browser (src/server/engine-files.ts), made from src/ as it
+// is now: the published site has a copy written by scripts/site.ts instead
+let modules: Map<string, string> | null = null;
+app.get(`${ENGINE_BASE}*`, c => {
+  const path = c.req.path.slice(ENGINE_BASE.length), want = engineData(path);
+  if (want) {
+    const body = 'items' in want ? data.items : data.champion(want.champion);
+    return body ? c.json(body) : c.notFound();
+  }
+  // made again on each request for the worker, so an edit to src/ shows on reload
+  if (path === ENGINE_ENTRY || !modules) modules = engineModules();
+  const code = modules.get(path);
+  return code === undefined ? c.notFound() : c.body(code, 200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache' });
 });
 // everything else that is not the API is the static site in web/; a page answers without its .html, as on Cloudflare
 app.use('/*', serveStatic({

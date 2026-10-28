@@ -301,6 +301,30 @@ export function headline(data: DataSource, req: CalcRequest): Headline {
   };
 }
 
+/* One number of a calculation each, for a search that compares many builds (src/autobuild/search.ts): the same
+   numbers `calculate` reports, without playing anything the number does not need. */
+
+/** The combo's damage, after resistances when there is a target, with crits counted as the request says. */
+export function comboDamage(data: DataSource, req: CalcRequest): number {
+  const c = check(data, req);
+  const fight = new Fight(c.champ, c.items, c.build, c.target, { crits: c.crits });
+  fight.begin();
+  for (const a of c.sequence) fight.act(a);
+  fight.end();
+  let dealt = 0;
+  for (const h of fight.hits) dealt += h.dealt;
+  return dealt;
+}
+/** Sustained DPS, after resistances when there is a target. */
+export function sustainedDps(data: DataSource, req: CalcRequest): number {
+  return sustain(check(data, req)).dps.dealt;
+}
+/** The build's stats, unrounded. */
+export function buildStats(data: DataSource, req: CalcRequest): Fight['stats'] {
+  const c = check(data, req);
+  return new Fight(c.champ, c.items, c.build, c.target, { crits: c.crits }).stats;
+}
+
 type Totals = { hp: number; armor: number; mr: number };
 
 /** The practice tool's target dummy (game data: characters/practicetool_targetdummy): 1000 base health and no

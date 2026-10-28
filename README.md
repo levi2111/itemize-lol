@@ -108,7 +108,15 @@ A champion's `options` (a form, stacks, seconds spent in an aura; listed by `GET
 
 An item's settings (its `controls` in `GET /items`) belong to a build: `"builds": [{ "items": [3078, 3161], "itemOptions": { "3161": { "stacks": 4 }, "3078": { "spellblade": 3 } } }]`. There are four kinds: `bool` and `int` are a state the fight starts in (stacks already gained, a condition), `uses` is how many times an active is used at the start of the combo, and `procs` is how many times an effect fires in the combo in place of what the combo sets off on its own (left out, the combo decides). Each result's `items` echo the settings used (a proc left to the combo is `null`) and list the item's named `effects`: what one firing deals against the target at full health, and how often it fired. Each result's `abilities` carry one cast of the ability on its own (`cast`, everything it sets off) and its `cooldown` after ability haste; that is what the site shows when an ability is pointed at. Damage that takes time to land (a burn, a channel, a zone) is still dealt in full, and its source line carries `over`: the seconds it runs and its damage per second. The site shows that under the total as `240/s · 15s`.
 
-The engine (`src/engine/`, `src/shared/`) has no Node dependencies and reads plain JSON, so it can also be bundled for the browser later.
+The engine (`src/engine/`, `src/shared/`) has no Node dependencies and reads plain JSON, so the browser runs it too: see Auto-build.
+
+## Auto-build
+
+Each build has an **Auto-build** button. It opens a panel that finds the items making the build best at one thing: **Burst** (the combo's damage against the target), **DPS** (sustained, auto attacks only until abilities count toward DPS) or **Tankiness** (effective health against the target champion's damage split, or half physical, half magic against the dummy; shields, healing and revives don't count). The limit is either **gold** for the whole build (leftover gold can buy components) or a **number of finished items**. Items of the build can be kept, and items can be ruled out. The best three builds come with their score, the change from the build as it is, and buttons that put one in build A or B. Everything else (champion, level, ranks, target, combo, crits) is the page's, and the search runs again when it changes.
+
+- **The search** (`src/autobuild/search.ts`) scores every build with the engine itself. Scoring all ~1.6 billion six-item builds is out of reach, so it leaves out what cannot win first: the game's rules (the Rift's shop, one pair of boots, one item of each "only so many of" group), items that add little on their own, at most 22 of the rest, and with a gold limit only builds with no room left for another item. If that leaves at most 6,000 builds it scores them all and says *Exact*; otherwise it builds slot by slot, keeping the best 8 at each step, then swaps items while that helps, and says *Best found*. Each search scores a few hundred to about 2,000 builds and takes 0.1–0.3 s.
+- **The rules come from the game files**: each item's `limits` (`ItemData`) are its groups with an `mMaxGroupOwnable`, such as `{ "LastWhisper": 1 }` or `{ "Boots": 1 }`.
+- **It runs in the browser**, in a Web Worker (`src/autobuild/worker.ts`), so it costs the Worker nothing and can't run into its CPU limit. `src/server/engine-files.ts` turns the worker and what it imports into JavaScript by stripping the types (Node's `stripTypeScriptTypes`; nothing else changes, so the page scores builds with the very code the API uses), next to `data/items.json` and `data/champions/<id>.json`. The Node server serves that under `/engine/`, made from `src/` on each load. `scripts/site.ts` writes it into `assets/engine.<hash>/`, named after its contents, and points each page's `<meta name="engine">` at it. The worker loads the items (about 520 KB) and the champion once; pointing at an Auto-build button starts that early.
 
 ## Layout
 
@@ -117,6 +125,7 @@ src/pipeline/   fetch -> compile -> bind models -> write data/dist/<patch>/
 src/models/     hand-written models: champions/*.ts, items/*.ts, models.lock.json
 src/shared/     dataset types, formula evaluator
 src/engine/     stats, mitigation, the fight simulation, the calculation
+src/autobuild/  the auto-build's search, and the Web Worker that runs it in the browser
 src/server/     HTTP API, and the Node server that also serves the site; share links read as the page reads them, and what a preview says
 src/worker/     the same API as a Cloudflare Worker, and the short links with their link previews
 migrations/     the short links' table, for D1 (wrangler d1 migrations) and for the Node server's SQLite file alike

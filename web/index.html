@@ -20,6 +20,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0c2524">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta name="engine" content="/engine/">
 <script src="/layout.js"></script>
 <link rel="preload" href="/fonts/archivo-v25.woff2" as="font" type="font/woff2" crossorigin>
 <!--art-->
@@ -291,6 +292,101 @@ body[data-compare="on"] .slot.uniq::after{content:"";position:absolute;left:0;ri
 .pbest kbd{font-family:var(--font-mono);font-size:.66rem;border:1px solid var(--rule);border-radius:3px;padding:.1rem .35rem;color:var(--dim)}
 .grp button{font-weight:600;letter-spacing:0;text-transform:none;color:var(--dim);text-decoration:underline;text-underline-offset:2px}
 .grp button:hover{color:var(--text)}
+
+/* ---------- auto-build: a build's Auto-build button, and the panel it opens over the build pane ---------- */
+/* app.js draws the panel (the auto-build section): the goal and limit, what the build keeps and never uses,
+   and the best builds found with their scores. It rises over the pane as the item picker does, one at a time. */
+.act.auto{display:flex;align-items:center;gap:.3rem;color:var(--a);border-color:rgba(238,240,53,.4)}
+.act.auto:hover{border-color:var(--a);color:var(--a)}
+.act.auto[aria-pressed="true"]{background:var(--a);border-color:var(--a);color:var(--ink)}
+.spark{width:.8rem;height:.8rem;flex:none}
+.ab{position:absolute;left:0;right:0;bottom:calc(100% + .6rem);height:19.5rem;z-index:20;display:grid;grid-template-columns:18rem 12.5rem minmax(0,1fr);background:var(--well);border:1px solid var(--faint);border-radius:4px;box-shadow:0 1rem 2rem rgba(0,0,0,.5)}
+.ab-ctl,.ab-keep{display:flex;flex-direction:column;gap:.45rem;padding:.8rem;border-right:1px solid var(--rule);min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.ab-ctl .lbl,.ab-keep .lbl{display:flex;align-items:center;gap:.35rem;margin-top:.2rem}
+.ab-top{display:flex;align-items:center;justify-content:space-between;gap:.6rem}
+.ab-for{display:flex;align-items:center;gap:.45rem;font-weight:700;font-size:.9rem;white-space:nowrap}
+.ab-for .spark{color:var(--a)}
+.ab-goals,.ab-limit .seg{align-self:start}
+.ab-goals button{padding:.38rem .8rem}
+.ab-says{margin:0;font-size:.76rem;color:var(--dim);min-height:2em}
+.ab-limit{display:flex;flex-wrap:wrap;align-items:center;gap:.45rem .6rem}
+.ab-limit .seg button{padding:.38rem .75rem}
+.ab-amt{display:flex;align-items:center;gap:.4rem;font-size:.8rem;color:var(--dim)}
+.ab-amt input{width:5.6rem;background:var(--bg);border:1px solid var(--faint);border-radius:3px;padding:.35rem .5rem;font-family:var(--font-mono);font-size:.82rem;outline:0}
+.ab-amt input:focus{border-color:var(--text)}
+.ab-amt output{min-width:1.3rem;text-align:center;font:600 1.05rem var(--font-mono);color:var(--text)}
+.ab-step{width:1.9rem;height:1.9rem;display:grid;place-items:center;border:1px solid var(--rule);border-radius:3px;font-weight:700;color:var(--text)}
+.ab-step:hover:not(:disabled){border-color:var(--text)}
+.ab-step:disabled{opacity:.35;cursor:default}
+.ab-presets{flex-basis:100%}
+.ab-chk{flex-basis:100%;display:flex;align-items:center;gap:.45rem;font-size:.78rem;color:var(--dim);cursor:pointer}
+.ab-chk input{margin:0;accent-color:var(--a)}
+.ab-keep .hint{margin:0;font-size:.74rem}
+.ab-keeps{display:grid;grid-template-columns:repeat(4,2.3rem);gap:.35rem}
+.ab-it{position:relative;display:block;width:2.3rem;aspect-ratio:1;border:1px solid var(--rule);border-radius:3px;background:var(--bg)}
+.ab-it .ico{border-radius:2px}
+button.ab-it:hover,button.ab-it:focus-visible{outline:2px solid var(--text);outline-offset:1px;z-index:1}
+.ab-keeps .ab-it[aria-pressed="false"] .ico{opacity:.4}
+.ab-keeps .ab-it[aria-pressed="true"]{border-color:var(--a)}
+.ab-keeps .ab-it[aria-pressed="true"]::after,.ab-it.kept::after{content:"";position:absolute;top:-.28rem;right:-.28rem;width:.6rem;height:.6rem;border-radius:50%;background:var(--a);box-shadow:0 0 0 2px var(--well)}
+.ab-it.part{border-style:dashed;border-color:var(--faint)}
+.ab-items button.ab-it:hover,.ab-items button.ab-it:focus-visible{outline-color:var(--warn)}
+.ab-items button.ab-it:hover::before{content:"×";position:absolute;inset:0;z-index:1;display:grid;place-items:center;background:rgba(8,28,27,.6);color:var(--warn);font-size:1.2rem;font-weight:700}
+.ab-nevers .chip{display:inline-flex;align-items:center;gap:.35rem}
+.ab-nevers .chip i{font-style:normal;color:var(--faint)}
+.ab-nevers .chip:hover i{color:var(--text)}
+.ab-res{display:flex;flex-direction:column;min-width:0;min-height:0}
+.ab-head{display:flex;align-items:baseline;gap:.8rem;padding:.75rem .8rem .45rem}
+.ab-head>b{font-size:.9rem}
+.ab-head .hint{margin-left:auto;font-size:.76rem}
+.ab-head .hint b{font-family:var(--font-mono);color:var(--text);font-weight:600}
+.ab-wait{font-size:.76rem;color:var(--a)}
+.ab-rows{flex:1;min-height:0;overflow:auto;display:grid;gap:.4rem;align-content:start;padding:.1rem .8rem .7rem;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.ab-res.busy .ab-rows{opacity:.45;transition:opacity .2s .15s}
+.ab-row{display:grid;grid-template-columns:1rem minmax(0,1fr) auto auto;grid-template-rows:auto auto;gap:.25rem .7rem;align-items:center;padding:.45rem .6rem;border:1px solid var(--rule);border-radius:4px}
+.ab-rk,.ab-items,.ab-sc{grid-row:1/3}
+.ab-row.top{border-color:var(--faint);background:rgba(236,231,216,.035)}
+.ab-rk{font:700 .8rem var(--font-mono);color:var(--faint)}
+.ab-items{display:flex;flex-wrap:wrap;gap:.3rem}
+.ab-sc{display:grid;justify-items:end;white-space:nowrap}
+.ab-sc b{font:600 1.05rem var(--font-mono)}
+.ab-sc span{font-size:.72rem;color:var(--dim)}
+.ab-sc i{font-style:normal}
+.ab-sc em{font-style:normal;font-family:var(--font-mono);color:var(--text)}
+.ab-sc em.neg{color:var(--warn)}
+.ab-g{grid-area:1/4;justify-self:end;align-self:end;font-family:var(--font-mono);font-size:.76rem;color:var(--dim)}
+.ab-puts{grid-area:2/4;display:flex;gap:.3rem;align-self:start}
+.ab-put{padding:.22rem .5rem;border-radius:3px;font-size:.74rem;font-weight:700;color:var(--ink);white-space:nowrap}
+.ab-put.a{background:var(--a)}
+.ab-put.b{background:var(--b)}
+.ab-put:hover{filter:brightness(1.1)}
+.ab-in{padding:.22rem .5rem;border:1px dashed var(--rule);border-radius:3px;font-size:.74rem;color:var(--faint);white-space:nowrap;text-align:center}
+.ab-msg{margin:.4rem 0;font-size:.85rem;color:var(--dim)}
+.ab-foot{display:flex;align-items:baseline;gap:.8rem;min-height:2.1rem;padding:.45rem .8rem;border-top:1px solid var(--rule);font-size:.74rem;color:var(--faint);white-space:nowrap;overflow:hidden}
+.ab-foot b{font-family:var(--font-mono);font-weight:600;color:var(--dim)}
+.ab-foot i{font-style:normal;color:var(--rule)}
+.ab-foot>span:first-child{overflow:hidden;text-overflow:ellipsis}
+.ab-how{margin-left:auto;flex:none;padding:0 .4rem;border:1px solid var(--rule);border-radius:2px;color:var(--dim);cursor:help}
+/* on a phone it is a sheet along the bottom edge, its parts one under another */
+@media (max-width:700px),(max-width:1100px) and (max-height:500px){
+  .ab{position:fixed;z-index:35;left:0;right:0;top:auto;bottom:0;height:min(82vh,46rem);grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto;overflow:auto;overscroll-behavior:contain;
+    padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);border-width:1px 0 0;border-radius:.75rem .75rem 0 0;box-shadow:0 -1rem 2.5rem rgba(0,0,0,.55)}
+  .ab-ctl,.ab-keep{overflow:visible;border-right:0;border-bottom:1px solid var(--rule);padding:.75rem}
+  .ab-keeps{grid-template-columns:repeat(6,2.6rem)}
+  .ab-it{width:2.6rem}
+  .ab{align-content:start}
+  .ab-ctl,.ab-keep,.ab-res{min-height:auto}
+  .ab-rows{flex:none;overflow:visible;padding:.1rem .75rem .75rem}
+  .ab-row{grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto;gap:.45rem .6rem}
+  .ab-rk{display:none}
+  .ab-items{grid-area:1/1}
+  .ab-sc{grid-area:1/2;align-self:start}
+  .ab-g{grid-area:2/1;justify-self:start;align-self:center}
+  .ab-puts{grid-area:2/2}
+  .ab-put,.ab-in{min-height:2.3rem;display:grid;place-items:center;padding:0 .8rem}
+  .ab-foot{white-space:normal;flex-wrap:wrap;row-gap:.2rem}
+  .ab-head{flex-wrap:wrap}
+}
 
 /* ---------- target tab ---------- */
 .pane-target{display:grid;grid-template-columns:28rem minmax(0,1fr);gap:1.5rem 3.5rem;align-content:start}
@@ -1208,12 +1304,12 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
         </div>
         <div class="build a" data-b="a">
           <div class="b-head"><span class="tag a sm">A</span><input class="b-name" id="name-a" value="On-hit" aria-label="Name of build A" spellcheck="false"><span class="b-gold"><b>0</b> gold</span>
-            <div class="b-acts"><button class="act" id="clear-a" title="Empty all six slots">Clear</button></div></div>
+            <div class="b-acts"><button class="act auto" data-auto="a" aria-pressed="false" title="The best items for a goal, within an amount of gold or a number of items"><svg class="spark" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M7 2l1.6 4.4L13 8l-4.4 1.6L7 14l-1.6-4.4L1 8l4.4-1.6z"/><path d="M13 0l.6 1.4L15 2l-1.4.6L13 4l-.6-1.4L11 2l1.4-.6z"/></svg>Auto-build</button><button class="act" id="clear-a" title="Empty all six slots">Clear</button></div></div>
           <div class="slots"></div>
         </div>
         <div class="build b only-cmp" data-b="b">
           <div class="b-head"><span class="tag b sm">B</span><input class="b-name" id="name-b" value="AP burst" aria-label="Name of build B" spellcheck="false"><span class="b-gold"><b>0</b> gold</span>
-            <div class="b-acts"><button class="act" id="copy-a" title="Start build B from build A's items">Copy A</button><button class="act" id="rm-b" title="Remove build B">Remove</button></div></div>
+            <div class="b-acts"><button class="act auto" data-auto="b" aria-pressed="false" title="The best items for a goal, within an amount of gold or a number of items"><svg class="spark" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M7 2l1.6 4.4L13 8l-4.4 1.6L7 14l-1.6-4.4L1 8l4.4-1.6z"/><path d="M13 0l.6 1.4L15 2l-1.4.6L13 4l-.6-1.4L11 2l1.4-.6z"/></svg>Auto-build</button><button class="act" id="copy-a" title="Start build B from build A's items">Copy A</button><button class="act" id="rm-b" title="Remove build B">Remove</button></div></div>
           <div class="slots"></div>
         </div>
         <button class="add-b only-solo" id="add-b"><span class="tag b sm">B</span>Add a second build to compare<span class="hint">Same champion and level</span></button>
@@ -1237,6 +1333,7 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
           </div>
           <div class="picker-foot" id="item-foot"></div>
         </div>
+        <div class="ab" id="ab" role="dialog" aria-label="Auto-build" hidden></div>
       </div>
     </section>
 

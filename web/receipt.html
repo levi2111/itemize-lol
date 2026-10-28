@@ -20,6 +20,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0c2524">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta name="engine" content="/engine/">
 <script src="/layout.js"></script>
 <link rel="preload" href="/fonts/archivo-v25.woff2" as="font" type="font/woff2" crossorigin>
 <!--art-->
@@ -271,6 +272,104 @@ body[data-compare="on"] .slot.uniq::after{content:"";position:absolute;left:.1re
 .act:hover{border-color:var(--chalk);color:var(--chalk)}
 .add-b{height:3.4rem;display:flex;align-items:center;gap:.7rem;padding:0 .9rem;border:1px dashed var(--chalk-faint);border-radius:2px;font-weight:600;color:var(--chalk-dim)}
 .add-b:hover{border-color:var(--hl-b);color:var(--chalk)}
+
+/* ---------- auto-build: a build's auto button, and the panel it opens over the bench ---------- */
+/* app.js draws the panel (the auto-build section): the goal and limit, what the build keeps and never uses,
+   and the best builds found with their scores. It rises over the bench as the item picker does, one at a time. */
+.act.auto{display:flex;align-items:center;justify-content:center;gap:.2rem;color:var(--hl-a);border-color:rgba(238,240,53,.4)}
+.act.auto:hover{border-color:var(--hl-a);color:var(--hl-a)}
+.act.auto[aria-pressed="true"]{background:var(--hl-a);border-color:var(--hl-a);color:var(--ink)}
+.spark{width:.75rem;height:.75rem;flex:none}
+.act .spark{width:.6rem;height:.6rem}
+.ab{position:absolute;left:0;right:0;bottom:calc(100% + .9rem);height:26rem;z-index:20;display:grid;grid-template-columns:15.2rem minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;background:#081d1c;border:1px solid var(--chalk);border-radius:3px;box-shadow:0 1.2rem 2.5rem rgba(0,0,0,.55)}
+.ab-ctl{grid-area:1/1;display:flex;flex-direction:column;gap:.45rem;padding:.75rem .8rem;border-right:1px solid var(--rule);min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+/* what the build keeps and never uses: a strip along the bottom */
+.ab-keep{grid-area:2/1/3/-1;display:flex;flex-wrap:wrap;align-items:center;gap:.4rem .7rem;padding:.55rem .8rem;border-top:1px solid var(--rule)}
+.ab-keep .lbl{margin:0}
+.ab-keep .hint{max-width:14rem}
+.ab .lbl{display:flex;align-items:center;gap:.35rem;margin-top:.15rem;font-family:var(--font-mono);font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--chalk-dim)}
+.ab .chips{padding:0}
+.ab-top{display:flex;align-items:center;justify-content:space-between;gap:.6rem}
+.ab-for{display:flex;align-items:center;gap:.45rem;font-weight:700;font-size:.84rem;white-space:nowrap}
+.ab-for .spark{color:var(--hl-a)}
+.ab-goals,.ab-limit .seg{align-self:start}
+.ab-goals button,.ab-limit .seg button{padding:.34rem .7rem}
+.ab-says{margin:0;font-size:.72rem;color:var(--chalk-dim);min-height:2em}
+.ab-limit{display:flex;flex-wrap:wrap;align-items:center;gap:.45rem .55rem}
+.ab-amt{display:flex;align-items:center;gap:.4rem;font-size:.76rem;color:var(--chalk-dim)}
+.ab-amt input{width:5.4rem;background:rgba(4,18,17,.6);border:1px solid var(--chalk-faint);border-radius:2px;padding:.32rem .45rem;font-family:var(--font-mono);font-size:.78rem;outline:0}
+.ab-amt input:focus{border-color:var(--chalk)}
+.ab-amt output{min-width:1.3rem;text-align:center;font:600 1rem var(--font-mono);color:var(--chalk)}
+.ab-step{width:1.8rem;height:1.8rem;display:grid;place-items:center;border:1px solid var(--rule);border-radius:2px;font-weight:700;color:var(--chalk)}
+.ab-step:hover:not(:disabled){border-color:var(--chalk)}
+.ab-step:disabled{opacity:.35;cursor:default}
+.ab-presets{flex-basis:100%}
+.ab-chk{flex-basis:100%;display:flex;align-items:center;gap:.45rem;font-size:.74rem;color:var(--chalk-dim);cursor:pointer}
+.ab-chk input{margin:0;accent-color:var(--hl-a)}
+.ab-keep .hint{margin:0}
+.ab-keeps{display:flex;flex-wrap:wrap;gap:.35rem}
+.ab-it{position:relative;display:block;width:2.2rem;aspect-ratio:1;border:1px solid var(--rule);border-radius:2px;background:#061918}
+.ab-it .ico{border-radius:1px}
+button.ab-it:hover,button.ab-it:focus-visible{outline:2px solid var(--chalk);outline-offset:1px;z-index:1}
+.ab-keeps .ab-it[aria-pressed="false"] .ico{opacity:.4}
+.ab-keeps .ab-it[aria-pressed="true"]{border-color:var(--hl-a)}
+.ab-keeps .ab-it[aria-pressed="true"]::after,.ab-it.kept::after{content:"";position:absolute;top:-.28rem;right:-.28rem;width:.58rem;height:.58rem;border-radius:50%;background:var(--hl-a);box-shadow:0 0 0 2px #081d1c}
+.ab-it.part{border-style:dashed;border-color:var(--chalk-faint)}
+.ab-items button.ab-it:hover,.ab-items button.ab-it:focus-visible{outline-color:var(--warn)}
+.ab-items button.ab-it:hover::before{content:"×";position:absolute;inset:0;z-index:1;display:grid;place-items:center;background:rgba(8,29,28,.6);color:var(--warn);font-size:1.15rem;font-weight:700}
+.ab-nevers .chip{display:inline-flex;align-items:center;gap:.35rem}
+.ab-nevers .chip i{font-style:normal;color:var(--chalk-faint)}
+.ab-nevers .chip:hover i{color:var(--chalk)}
+.ab-res{grid-area:1/2;display:flex;flex-direction:column;min-width:0;min-height:0}
+.ab-head{display:flex;align-items:baseline;gap:.7rem;padding:.75rem .8rem .45rem}
+.ab-head>b{font-size:.84rem}
+.ab-head .hint{margin-left:auto}
+.ab-head .hint b{font-family:var(--font-mono);color:var(--chalk);font-weight:600}
+.ab-wait{font-size:.72rem;color:var(--hl-a)}
+.ab-rows{flex:1;min-height:0;overflow:auto;display:grid;gap:.45rem;align-content:start;padding:.1rem .8rem .7rem;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.ab-res.busy .ab-rows{opacity:.45;transition:opacity .2s .15s}
+.ab-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.4rem .6rem;align-items:center;padding:.5rem .6rem;border:1px solid var(--rule);border-radius:2px}
+.ab-row.top{border-color:var(--chalk-faint);background:rgba(239,233,216,.035)}
+.ab-rk{display:none}
+.ab-items{grid-area:1/1;display:flex;flex-wrap:wrap;gap:.3rem}
+.ab-items .ab-it{width:1.85rem}
+/* the second line holds the score and the buttons side by side */
+.ab-sc{grid-area:2/1/3/-1;justify-self:start;display:flex;align-items:baseline;gap:.4rem;white-space:nowrap}
+.ab-sc .u{display:none}
+.ab-sc b{font:600 1rem var(--font-mono)}
+.ab-sc span{font-size:.68rem;color:var(--chalk-dim)}
+.ab-sc i{font-style:normal}
+.ab-sc em{font-style:normal;font-family:var(--font-mono);color:var(--chalk)}
+.ab-sc em.neg{color:var(--warn)}
+.ab-g{grid-area:1/2;justify-self:end;align-self:start;font-family:var(--font-mono);font-size:.72rem;color:var(--chalk-dim)}
+.ab-puts{grid-area:2/1/3/-1;justify-self:end;display:flex;gap:.35rem}
+.ab-put{padding:.2rem .5rem;border-radius:2px;font-size:.72rem;font-weight:700;color:var(--ink);white-space:nowrap}
+.ab-put.a{background:var(--hl-a)}
+.ab-put.b{background:var(--hl-b)}
+.ab-put:hover{filter:brightness(1.1)}
+.ab-in{padding:.2rem .5rem;border:1px dashed var(--rule);border-radius:2px;font-size:.72rem;color:var(--chalk-faint);white-space:nowrap}
+.ab-msg{margin:.4rem 0;font-size:.8rem;color:var(--chalk-dim)}
+.ab-foot{display:flex;align-items:baseline;gap:.7rem;min-height:2.2rem;padding:.5rem .8rem;border-top:1px solid var(--rule);font-size:.7rem;color:var(--chalk-faint);white-space:nowrap;overflow:hidden}
+.ab-foot b{font-family:var(--font-mono);font-weight:600;color:var(--chalk-dim)}
+.ab-foot i{font-style:normal;color:var(--rule)}
+.ab-foot>span:first-child{overflow:hidden;text-overflow:ellipsis}
+.ab-how{margin-left:auto;flex:none;padding:0 .4rem;border:1px solid var(--rule);border-radius:2px;color:var(--chalk-dim);cursor:help}
+/* on a phone it is a sheet along the bottom edge, its parts one under another */
+@media (max-width:700px),(max-width:1100px) and (max-height:500px){
+  .ab{position:fixed;z-index:35;left:0;right:0;top:auto;bottom:0;height:min(82vh,46rem);grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto;overflow:auto;overscroll-behavior:contain;
+    padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);border-width:1px 0 0;border-radius:.75rem .75rem 0 0;box-shadow:0 -1rem 2.5rem rgba(0,0,0,.55)}
+  .ab-ctl,.ab-keep,.ab-res{grid-area:auto}
+  .ab-ctl,.ab-keep{overflow:visible;border-right:0;border-bottom:1px solid var(--rule);padding:.75rem}
+  .ab-keep{border-top:0;display:flex;flex-direction:column;align-items:stretch}
+  .ab-keep .hint{max-width:none}
+  .ab-it{width:2.6rem}
+  .ab{align-content:start}
+  .ab-ctl,.ab-keep,.ab-res{min-height:auto}
+  .ab-rows{flex:none;overflow:visible;padding:.1rem .75rem .75rem}
+  .ab-put,.ab-in{min-height:2.3rem;display:grid;place-items:center;padding:0 .8rem}
+  .ab-foot{white-space:normal;flex-wrap:wrap;row-gap:.2rem}
+  .ab-head{flex-wrap:wrap}
+}
 
 .picker{position:absolute;left:0;right:0;bottom:calc(100% + .9rem);height:26rem;z-index:20;display:grid;grid-template-rows:auto auto auto minmax(0,1fr) auto;background:#081d1c;border:1px solid var(--chalk);border-radius:3px;box-shadow:0 1.2rem 2.5rem rgba(0,0,0,.55)}
 .picker-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:.7rem;align-items:center;padding:.7rem .8rem .55rem}
@@ -991,13 +1090,13 @@ input[type=range]::-moz-range-thumb{width:.8rem;height:1.6rem}
           <span class="tag a lg">A</span>
           <div class="b-meta"><input class="b-name" id="name-a" value="On-hit" aria-label="Name of build A" spellcheck="false"><span class="b-gold"><b>0</b> gold</span></div>
           <div class="slots"></div>
-          <div class="b-acts"><button class="act" id="clear-a" title="Empty all six slots">clear</button></div>
+          <div class="b-acts"><button class="act auto" data-auto="a" aria-pressed="false" title="The best items for a goal, within an amount of gold or a number of items"><svg class="spark" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M7 2l1.6 4.4L13 8l-4.4 1.6L7 14l-1.6-4.4L1 8l4.4-1.6z"/><path d="M13 0l.6 1.4L15 2l-1.4.6L13 4l-.6-1.4L11 2l1.4-.6z"/></svg>auto</button><button class="act" id="clear-a" title="Empty all six slots">clear</button></div>
         </div>
         <div class="build b only-cmp" data-b="b">
           <span class="tag b lg">B</span>
           <div class="b-meta"><input class="b-name" id="name-b" value="AP burst" aria-label="Name of build B" spellcheck="false"><span class="b-gold"><b>0</b> gold</span></div>
           <div class="slots"></div>
-          <div class="b-acts"><button class="act" id="copy-a" title="Start build B from build A's items">= A</button><button class="act" id="rm-b" title="Remove build B">remove</button></div>
+          <div class="b-acts"><button class="act auto" data-auto="b" aria-pressed="false" title="The best items for a goal, within an amount of gold or a number of items"><svg class="spark" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M7 2l1.6 4.4L13 8l-4.4 1.6L7 14l-1.6-4.4L1 8l4.4-1.6z"/><path d="M13 0l.6 1.4L15 2l-1.4.6L13 4l-.6-1.4L11 2l1.4-.6z"/></svg>auto</button><button class="act" id="copy-a" title="Start build B from build A's items">= A</button><button class="act" id="rm-b" title="Remove build B">remove</button></div>
         </div>
         <button class="add-b only-solo" id="add-b"><span class="tag b sm">B</span>Add a second build to compare</button>
 
@@ -1013,6 +1112,7 @@ input[type=range]::-moz-range-thumb{width:.8rem;height:1.6rem}
           <div class="picker-grid" id="item-grid"></div>
           <div class="picker-foot" id="item-foot"></div>
         </div>
+        <div class="ab" id="ab" role="dialog" aria-label="Auto-build" hidden></div>
       </div>
     </section>
 
