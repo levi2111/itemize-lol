@@ -279,6 +279,9 @@ body[data-compare="on"] .slot.uniq::after{content:"";position:absolute;left:.1re
 .act.auto{display:flex;align-items:center;justify-content:center;gap:.2rem;color:var(--hl-a);border-color:rgba(238,240,53,.4)}
 .act.auto:hover{border-color:var(--hl-a);color:var(--hl-a)}
 .act.auto[aria-pressed="true"]{background:var(--hl-a);border-color:var(--hl-a);color:var(--ink)}
+/* Auto-build is new and still being tuned: a small tilted tag on its buttons says so */
+.act.auto{position:relative}
+.beta{position:absolute;top:-.55rem;right:-.5rem;padding:0 .24rem;border-radius:2px;background:var(--hl-a);color:var(--ink);box-shadow:0 0 0 2px var(--mat);font:italic 800 .56rem/1.3 var(--font-ui);letter-spacing:.03em;transform:rotate(-10deg);pointer-events:none}
 .spark{width:.75rem;height:.75rem;flex:none}
 .act .spark{width:.6rem;height:.6rem}
 .ab{position:absolute;left:0;right:0;bottom:calc(100% + .9rem);height:26rem;z-index:20;display:grid;grid-template-columns:15.2rem minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;background:#081d1c;border:1px solid var(--chalk);border-radius:3px;box-shadow:0 1.2rem 2.5rem rgba(0,0,0,.55)}
@@ -1135,13 +1138,13 @@ input[type=range]::-moz-range-thumb{width:.8rem;height:1.6rem}
           <span class="tag a lg">A</span>
           <div class="b-meta"><input class="b-name" id="name-a" value="On-hit" aria-label="Name of build A" spellcheck="false"><span class="b-gold"><b>0</b> gold</span></div>
           <div class="slots"></div>
-          <div class="b-acts"><button class="act auto" data-auto="a" aria-pressed="false" title="The best items for a goal, within an amount of gold or a number of items"><svg class="spark" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M7 2l1.6 4.4L13 8l-4.4 1.6L7 14l-1.6-4.4L1 8l4.4-1.6z"/><path d="M13 0l.6 1.4L15 2l-1.4.6L13 4l-.6-1.4L11 2l1.4-.6z"/></svg>auto</button><button class="act" id="clear-a" title="Empty all six slots">clear</button></div>
+          <div class="b-acts"><button class="act auto" data-auto="a" aria-pressed="false" title="The best items for a goal, within an amount of gold or a number of items"><svg class="spark" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M7 2l1.6 4.4L13 8l-4.4 1.6L7 14l-1.6-4.4L1 8l4.4-1.6z"/><path d="M13 0l.6 1.4L15 2l-1.4.6L13 4l-.6-1.4L11 2l1.4-.6z"/></svg>auto<i class="beta">beta</i></button><button class="act" id="clear-a" title="Empty all six slots">clear</button></div>
         </div>
         <div class="build b only-cmp" data-b="b">
           <span class="tag b lg">B</span>
           <div class="b-meta"><input class="b-name" id="name-b" value="AP burst" aria-label="Name of build B" spellcheck="false"><span class="b-gold"><b>0</b> gold</span></div>
           <div class="slots"></div>
-          <div class="b-acts"><button class="act auto" data-auto="b" aria-pressed="false" title="The best items for a goal, within an amount of gold or a number of items"><svg class="spark" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M7 2l1.6 4.4L13 8l-4.4 1.6L7 14l-1.6-4.4L1 8l4.4-1.6z"/><path d="M13 0l.6 1.4L15 2l-1.4.6L13 4l-.6-1.4L11 2l1.4-.6z"/></svg>auto</button><button class="act" id="copy-a" title="Start build B from build A's items">= A</button><button class="act" id="rm-b" title="Remove build B">remove</button></div>
+          <div class="b-acts"><button class="act auto" data-auto="b" aria-pressed="false" title="The best items for a goal, within an amount of gold or a number of items"><svg class="spark" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M7 2l1.6 4.4L13 8l-4.4 1.6L7 14l-1.6-4.4L1 8l4.4-1.6z"/><path d="M13 0l.6 1.4L15 2l-1.4.6L13 4l-.6-1.4L11 2l1.4-.6z"/></svg>auto<i class="beta">beta</i></button><button class="act" id="copy-a" title="Start build B from build A's items">= A</button><button class="act" id="rm-b" title="Remove build B">remove</button></div>
         </div>
         <button class="add-b only-solo" id="add-b"><span class="tag b sm">B</span>Add a second build to compare</button>
 
