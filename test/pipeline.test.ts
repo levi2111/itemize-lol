@@ -5,6 +5,7 @@ import { checkAnchors } from '../src/pipeline/anchors.ts';
 import { autoAbilityModel } from '../src/pipeline/automodel.ts';
 import { clean, compileCalc, matchNameCase, nameHash, newLog } from '../src/pipeline/calc.ts';
 import { resolveChampion, resolveItem } from '../src/pipeline/models.ts';
+import { countBuilds } from '../src/pipeline/popularity.ts';
 import { findDamageRefs } from '../src/pipeline/tooltip.ts';
 import { Dataset } from '../src/server/dataset.ts';
 import { evaluate, formatExpr, type EvalEnv, type Scope } from '../src/shared/expr.ts';
@@ -126,11 +127,42 @@ test("items carry the shop's roles, what players call them and what the search f
   assert.ok(rift('Blade of The Ruined King').aliases.includes('bork'));
   assert.ok(rift("Berserker's Greaves").aliases.includes('zerks'));
   assert.ok(!rift('Cull').aliases.includes('dblade') && !rift("Lord Dominik's Regards").aliases.includes('lw'));
+  assert.ok(rift('Bloodthirster').aliases.includes('bt') && rift('Void Staff').aliases.includes('vs'));
+  assert.ok(!rift("Seeker's Armguard").aliases.includes('zhg') && rift("Zhonya's Hourglass").aliases.includes('zhg'));
+  // what an item turns into is a name the search finds it by
+  assert.deepEqual(rift('Manamune').forms, ['Muramana']);
+  assert.deepEqual(rift("Archangel's Staff").forms, ["Seraph's Embrace"]);
+  assert.deepEqual(rift('World Atlas').forms, ['Runic Compass', 'Bounty of Worlds']);
   assert.ok(data.items.every(i => !i.aliases.includes('lethality') && i.aliases.every(a => /^[a-z0-9]{2,}$/.test(a))));
   // anti-heal reads "Grievous Wounds" on some items and "40% Wounds" on others
   assert.deepEqual(data.items.filter(i => i.shops.includes('sr') && i.traits.includes('antiheal')).map(i => i.name).sort(),
     ['Bramble Vest', 'Chempunk Chainsword', "Executioner's Calling", 'Morellonomicon', 'Mortal Reminder', 'Oblivion Orb', 'Thornmail']);
   assert.ok(rift("Sterak's Gage").traits.includes('shield'));
+});
+
+test("the built items and champions carry the sampled games' popularity", () => {
+  const item = (id: number) => data.item(id)!;
+  assert.ok(item(3031).popularity! > 0);
+  // a component counts for every build that goes through it: B. F. Sword for each Infinity Edge
+  assert.ok(item(1038).popularity! >= item(3031).popularity!);
+  const kaisa = data.champion('Kaisa')!.itemPopularity!;
+  assert.ok(kaisa.builds >= 20);
+  assert.ok(Object.values(kaisa.shares).every(s => s > 0 && s <= 1));
+});
+
+test('popularity counts an item for every build that holds it or something built from it', () => {
+  // 3 is built from 2 and 1, and 2 from 1; 11 is what 10 turns into
+  const dd = { data: { 1: { from: [] }, 2: { from: ['1'] }, 3: { from: ['2', '1'] }, 10: { from: ['1'] }, 11: { specialRecipe: 10, from: ['10'] } } };
+  const games = [
+    { id: 'a', version: '16.20.5', players: [{ champion: 145, items: [3, 11, 9999] }, { champion: 1, items: [2] }, { champion: 77777, items: [3] }] },
+    { id: 'b', version: '16.19.1', skip: 'patch' as const },
+  ];
+  const n = countBuilds(games, dd, new Map([[145, 'Kaisa'], [1, 'Annie']]));
+  assert.equal(n.games, 1);
+  assert.equal(n.builds, 2);
+  assert.deepEqual(n.versions, { '16.20': 1 });
+  assert.deepEqual(n.items, { 1: 2, 2: 2, 3: 1, 10: 1 });
+  assert.deepEqual(n.champions.Kaisa, { builds: 1, items: { 1: 1, 2: 1, 3: 1, 10: 1 } });
 });
 
 test('automatic models read a stated hit count but refuse to guess one', () => {

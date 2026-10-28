@@ -256,6 +256,8 @@ export interface ChampionData {
   models: Record<Slot, AbilityModel>;
   /** places where the sources disagreed while compiling */
   warnings: string[];
+  /** what this champion's players build (data/popularity): their sampled builds, and the share holding each item id */
+  itemPopularity?: { builds: number; shares: Record<string, number> };
 }
 
 /** Summoner's Rift, ARAM, Arena. */
@@ -277,8 +279,12 @@ export interface ItemData {
   roles: ItemRole[];
   /** what players call it, lower case, letters and digits only: "bork", "qss" */
   aliases: string[];
+  /** the names of what it turns into once bought: Muramana for Manamune */
+  forms: string[];
   /** what it does that the picker's search finds it by: "antiheal", "shield" */
   traits: string[];
+  /** the share of sampled builds that hold it, or something built from it (data/popularity); absent without a sample */
+  popularity?: number;
   /** epicness tier from game data: 5+ is a completed item */
   tier: number;
   stats: Partial<Record<StatModTarget, number>>;

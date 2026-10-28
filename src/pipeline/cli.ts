@@ -1,4 +1,4 @@
-/* npm run data:<command> -- [--patch 16.20.1] [--champion Samira] [--draft] [--item 3153] [--accept] [--force] */
+/* npm run data:<command> -- [--patch 16.20.1] [--champion Samira] [--draft] [--item 3153] [--games 1000] [--accept] [--force] */
 import { fetchPatch } from './fetch.ts';
 
 const [command, ...rest] = process.argv.slice(2);
@@ -26,13 +26,19 @@ try {
       await printReport({ patch: arg('patch'), champion: arg('champion'), item: arg('item'), status: arg('status'), draft: flag('draft'), log });
       break;
     }
+    case 'popularity': {
+      const { fetchPopularity } = await import('./popularity.ts');
+      const games = arg('games');
+      await fetchPopularity({ patch: arg('patch'), games: games ? Number(games) : undefined, log });
+      break;
+    }
     case 'crosscheck': {
       const { crosscheck } = await import('./crosscheck.ts');
       await crosscheck({ patch: arg('patch'), champion: arg('champion'), refresh: flag('refresh'), log });
       break;
     }
     default:
-      console.error('usage: node src/pipeline/cli.ts <fetch|build|art|report|crosscheck> [--patch X.Y.Z] [--champion Id] [--item id|name] [--status auto] [--accept] [--force]');
+      console.error('usage: node src/pipeline/cli.ts <fetch|build|art|popularity|report|crosscheck> [--patch X.Y.Z] [--champion Id] [--item id|name] [--status auto] [--games N] [--accept] [--force]');
       process.exit(2);
   }
 } catch (err) {

@@ -66,12 +66,21 @@ const NICKNAMES: Record<string, string[]> = {
   "Sorcerer's Shoes": ['sorcs'],
   'Plated Steelcaps': ['tabi'],
   "Mercury's Treads": ['mercs'],
-  'Ionian Boots of Lucidity': ['ionians'],
   'Morellonomicon': ['morello'],
   'Thornmail': ['thorns'],
+  'Boots of Swiftness': ['swifties'],
+  'Ionian Boots of Lucidity': ['ionians', 'lucidity'],
+  // one-word names have no initials to go by
+  'Hullbreaker': ['hb'],
+  'Heartsteel': ['hs'],
+  // where the initials miss or are shared: Vampiric Scepter is "vs" too, Iceborn's are "ig", and Blackfire Torch's "bt" is Bloodthirster
+  'Void Staff': ['vs'],
+  'Iceborn Gauntlet': ['ibg'],
+  'Blackfire Torch': ['bft'],
 };
-/** Data Dragon's that name another item: Cull is not a Doran's Blade, and Last Whisper is the "lw" Lord Dominik's builds from. */
-const NOT_NICKNAMES: Record<string, string[]> = { 'Cull': ['dblade'], "Lord Dominik's Regards": ['lw'] };
+/** Data Dragon's that name another item: Cull is not a Doran's Blade, Last Whisper is the "lw" Lord Dominik's builds from,
+    and Seeker's Armguard only builds into Zhonya's. */
+const NOT_NICKNAMES: Record<string, string[]> = { 'Cull': ['dblade'], "Lord Dominik's Regards": ['lw'], "Seeker's Armguard": ['zhg', 'zonyas'] };
 /** Data Dragon's that are stat words: the picker reads these as the stat, which finds all such items rather than one. */
 const STAT_WORDS = new Set(['grievous', 'lethality']);
 const nickname = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -117,6 +126,15 @@ export function compileItems(ddItems: Raw, bin: Raw, table: StringTable, log: Co
     }
   }
   const sells = (shop: ItemShop, id: string) => shopsOf.get(Number(id))?.includes(shop) ?? false;
+  // what an item turns into once bought: Data Dragon lists Muramana with Manamune as its "special recipe", and
+  // Bounty of Worlds two steps on from World Atlas; the search finds an item by these names as well
+  const formsOf = new Map<number, string[]>();
+  for (const [id, it] of Object.entries(dd)) {
+    let from = Number(it.specialRecipe), steps = 0;
+    while (from && !shopsOf.has(from) && steps++ < 4) from = Number(dd[from]?.specialRecipe);
+    const base = from && shopsOf.has(from) ? from : 0;
+    if (base && !shopsOf.has(Number(id)) && it.name !== dd[base]?.name) formsOf.set(base, [...new Set([...(formsOf.get(base) ?? []), it.name as string])]);
+  }
   // an item the shop lists under no role (the upgraded boots, a support item's later forms) is listed under its recipe's
   const rolesFrom = (id: number, depth = 0): ItemRole[] => {
     const own = rolesOf(game.get(id));
@@ -159,6 +177,7 @@ export function compileItems(ddItems: Raw, bin: Raw, table: StringTable, log: Co
       component: Array.isArray(it.into) && it.into.some((to: string) => shops.some(s => sells(s, to))),
       roles: rolesFrom(id),
       aliases: aliasesOf(it.name, it.colloq),
+      forms: formsOf.get(id) ?? [],
       traits: TRAITS.filter(([, re]) => re.test(tooltip ?? '')).map(([t]) => t),
       tier: typeof g.epicness === 'number' ? g.epicness : 0,
       stats, dataValues, calcs,

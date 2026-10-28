@@ -304,6 +304,8 @@ async function loadKit() {
   const known = new Set((S.view?.options || []).map(o => o.id));
   for (const id of Object.keys(S.options)) if (!known.has(id)) delete S.options[id];
   nameKit(); paintSkills(); renderLines(); renderSteps(); renderOpts(); schedule();
+  // the picker's order follows what this champion's players build
+  if (pick) renderItems();
 }
 function setChamp(c) {
   S.champ = c; S.view = null; S.options = {};
@@ -474,24 +476,28 @@ const finds = new WeakMap();
 function findOf(it) {
   let f = finds.get(it);
   if (!f) {
-    const words = fold(it.name).split(' '), small = new Set(['of', 'the']);
-    const ini = [words, words.filter(w => !small.has(w))].map(ws => ws.map(w => w[0]).join('')).filter(x => x.length > 1);
-    finds.set(it, f = {name: words.join(' '), flat: words.join(''), words, ini: [...new Set(ini)], nick: it.aliases || []});
+    const named = n => { const words = fold(n).split(' '); return {name: words.join(' '), flat: words.join(''), words, form: n}; };
+    const own = named(it.name), small = new Set(['of', 'the']);
+    const ini = [own.words, own.words.filter(w => !small.has(w))].map(ws => ws.map(w => w[0]).join('')).filter(x => x.length > 1);
+    finds.set(it, f = {...own, ini: [...new Set(ini)], nick: it.aliases || [], forms: (it.forms || []).map(named)});
   }
   return f;
 }
-// how well an item answers one word of the search: [score, how], or null
+// how well an item answers one word of the search: [score, how, the form it answered by], or null
 function answer(it, t, byStat = true) {
   const f = findOf(it), x = t.text, flat = x.replace(/ /g, '');
   let best = null;
-  const hit = (s, how) => { if (!best || s > best[0]) best = [s, how]; };
+  const hit = (s, how, form) => { if (!best || s > best[0]) best = [s, how, form]; };
   if (f.nick.includes(flat)) hit(100, 'nick');
   else if (flat.length >= 3 && f.nick.some(n => n.startsWith(flat))) hit(50, 'nick');
   // initials that are also a stat word read as the stat first: "mr" is magic resist before Mortal Reminder
   if (f.ini.includes(flat)) hit(t.stat && !t.part ? 20 : 90, 'ini');
-  if (f.name.startsWith(x)) hit(80, 'name');
-  else if (f.words.some(w => w.startsWith(x))) hit(60, 'name');
-  else if (flat.length >= 3 && f.flat.includes(flat)) hit(40, 'name');
+  // its own name, then the names of what it turns into ("muramana" finds Manamune), a little below
+  for (const [n, less, how] of [[f, 0, 'name'], ...f.forms.map(g => [g, 5, 'form'])]) {
+    if (n.name.startsWith(x)) hit(80 - less, how, n.form);
+    else if (n.words.some(w => w.startsWith(x))) hit(60 - less, how, n.form);
+    else if (flat.length >= 3 && n.flat.includes(flat)) hit(40 - less, how, n.form);
+  }
   if (byStat && t.stat?.some(i => STAT_WORDS[i][2](it))) hit(t.part ? 25 : 30, 'stat');
   return best;
 }
@@ -528,6 +534,14 @@ const roleNow = () => itemRole?.champ === S.champ.id ? itemRole.role : champClas
 const inRole = (it, role) => role === 'All' || !it.roles || it.roles.includes(role);
 const sold = (it, m) => (it.shops || ['sr']).includes(m);
 const offered = it => sold(it, 'sr') || ADDABLE.some(m => S.shops[m] && sold(it, m));
+/* The list's order: what this champion's players build, most built first, where enough of their games were
+   sampled; then what all players build; then the name. A component counts for every build it goes into. */
+const champUse = () => { const p = S.view?.itemPopularity; return p && p.builds >= 20 ? p.shares : null; };const byUse = (mine = champUse()) => (x, y) => (mine?.[y.id] || 0) - (mine?.[x.id] || 0) || (y.popularity || 0) - (x.popularity || 0) || x.name.localeCompare(y.name);
+function useText(it) {
+  const mine = champUse()?.[it.id], n = mine || it.popularity;
+  if (!n) return '';
+  return `${it.component ? 'Goes into' : 'In'} ${n < .01 ? 'under 1%' : Math.round(n * 100) + '%'} of ${mine ? S.champ.name + ' ' : ''}builds. `;
+}
 function setItemRole(role) {
   itemRole = {champ: S.champ.id, role};
   renderItems();
@@ -536,13 +550,14 @@ function setItemRole(role) {
 // what found an item, for the footer and the best match: "Nickname “bork”", "Has crit and attack speed"
 function foundBy(r) {
   const out = [], stats = [];
-  for (const [t, how] of r.how) {
+  for (const [t, how, form] of r.how) {
     if (how === 'nick') out.push(`Nickname “${t.text}”`);
+    else if (how === 'form') out.push(`Turns into ${form}`);
     else if (how === 'ini') out.push(`Initials “${t.text.toUpperCase()}”`);
     else if (how === 'stat') stats.push(STAT_WORDS[t.stat.find(i => STAT_WORDS[i][2](r.it))][0]);
   }
   if (stats.length) out.push('Has ' + stats.join(' and '));
-  return out;
+  return [...new Set(out)];
 }
 function footIdle() {
   $('#item-foot').innerHTML = `<span>${touched() ? 'Tap an item for its details, and again to pick it.'
@@ -554,7 +569,11 @@ function paintReading(toks) {
   if (!toks.length) { el.innerHTML = `<span>Try</span>${['LDR', 'bork', 'lethality', 'anti heal', 'ap pen'].map(x => `<button data-try="${x}">${x}</button>`).join('')}`; return; }
   el.innerHTML = '<span>Reading as</span>' + toks.map(t => {
     const flat = t.text.replace(/ /g, ''), items = [...S.items.values()].filter(offered);
-    const by = items.find(it => findOf(it).nick.includes(flat) || (!t.stat || t.part) && findOf(it).ini.includes(flat));
+    // a word names an item when that item answers it best, by nickname or initials, and no other item as well:
+    // "bt" is Bloodthirster's nickname before it is Blackfire Torch's initials; "rh" names neither Ravenous Hydra nor Runaan's
+    const named = items.map(it => [it, answer(it, t, false)]).filter(([, a]) => a && a[0] >= 90 && (a[1] === 'nick' || a[1] === 'ini'))
+      .sort((x, y) => y[1][0] - x[1][0]);
+    const by = named[0] && !named.some(([it, a]) => a[0] === named[0][1][0] && it.name !== named[0][0].name) ? named[0][0] : null;
     if (by) return `<b class="nm">${esc(t.text)} = ${esc(by.name)}</b>`;
     if (t.stat) return `<b class="st">${t.stat.map(i => STAT_WORDS[i][0]).join(' or ')}</b>${items.some(it => findOf(it).ini.includes(flat)) ? '<em>or initials</em>' : ''}`;
     return `<b>“${esc(t.text)}”</b>`;
@@ -566,11 +585,12 @@ function renderItems() {
   for (const it of S.items.values()) {
     const how = toks.map(t => [t, answer(it, t)]);
     if (how.some(([, a]) => !a)) continue;
-    all.push({it, s: how.reduce((s, [, a]) => s + a[0], 0), top: Math.max(0, ...how.map(([, a]) => a[0])), how: how.map(([t, a]) => [t, a[1]])});
+    all.push({it, s: how.reduce((s, [, a]) => s + a[0], 0), top: Math.max(0, ...how.map(([, a]) => a[0])), how: how.map(([t, a]) => [t, a[1], a[2]])});
   }
+  const use = byUse();
   const shown = all.filter(r => offered(r.it)).sort(toks.length
-    ? (x, y) => y.s - x.s || inRole(y.it, role) - inRole(x.it, role) || sold(y.it, 'sr') - sold(x.it, 'sr') || x.it.component - y.it.component || x.it.name.localeCompare(y.it.name)
-    : (x, y) => x.it.name.localeCompare(y.it.name));
+    ? (x, y) => y.s - x.s || inRole(y.it, role) - inRole(x.it, role) || sold(y.it, 'sr') - sold(x.it, 'sr') || x.it.component - y.it.component || use(x.it, y.it)
+    : (x, y) => use(x.it, y.it));
   found = new Map(shown.map(r => [r.it.id, r]));
   // the best match is what Enter picks: an item a word found by name, ahead of every other
   const top = shown[0], next = shown.find(r => r.it.name !== top?.it.name);
@@ -2366,7 +2386,7 @@ function wire() {
   $('#item-grid').addEventListener('mouseover', e => {
     const p = e.target.closest('[data-id]'); if (!p) return;
     const it = S.items.get(+p.dataset.id), shop = shopOf(it), by = found.get(it.id) ? foundBy(found.get(it.id)) : [];
-    const about = (by.length ? `${by.join('. ')}. ` : '') + (shop ? `${SHOP[shop]} item. ` : '')
+    const about = (by.length ? `${by.join('. ')}. ` : '') + useText(it) + (shop ? `${SHOP[shop]} item. ` : '')
       + (it.status === 'unmodeled' ? 'Stats are counted; its passive is not yet.' : it.plaintext || it.tags.join(', '));
     $('#item-foot').innerHTML = `<b>${esc(it.name)}</b><span class="g">${nf(it.gold)} g</span><span>${esc(about)}</span>`;
   });

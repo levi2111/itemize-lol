@@ -40,10 +40,12 @@ const championView = (c: ChampionData) => ({
     return [s, { name: c.slots[s].name, icon: c.slots[s].icon, maxRank: c.slots[s].maxRank, status: m.status, damaging: m.rules.length > 0 || m.status === 'unmodeled', notes: m.notes }];
   })),
   options: c.options.map(o => ({ id: o.id, label: o.label, kind: o.kind, ...(o.min !== undefined && { min: o.min }), ...(o.max !== undefined && { max: o.max }) })),
+  // what this champion's players build, for the item picker's order
+  ...(c.itemPopularity && { itemPopularity: c.itemPopularity }),
 });
 const itemView = (i: ItemData) => ({
   id: i.id, name: i.name, gold: i.gold, tags: i.tags, plaintext: i.plaintext, shops: i.shops, component: i.component, stats: i.stats,
-  roles: i.roles, aliases: i.aliases, traits: i.traits,
+  roles: i.roles, aliases: i.aliases, forms: i.forms, traits: i.traits, popularity: i.popularity ?? 0,
   status: i.model.status, notes: i.model.notes,
   // what a page can let the user set about the item; defaults depend on the build, so a calculation reports them
   controls: (i.model.controls ?? []).map(c => ({

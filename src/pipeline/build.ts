@@ -14,6 +14,7 @@ import type { RawManifest } from './fetch.ts';
 import { compileItems } from './items.ts';
 import { resolveChampion, resolveItem, type Lock, type ModelIssue } from './models.ts';
 import { DATA_DIR, distDir, rawDir, ROOT } from './paths.ts';
+import { loadPopularity } from './popularity.ts';
 
 const MODELS_DIR = join(ROOT, 'src', 'models');
 const LOCK_PATH = join(MODELS_DIR, 'models.lock.json');
@@ -155,6 +156,18 @@ export async function buildDataset(opts: BuildOptions = {}): Promise<BuildReport
   const itemIds = new Set(items.map(i => i.id));
   for (const m of itemModels.values()) if (!itemIds.has(m.id)) report.modelIssues.push({ where: `item ${m.id} ${m.name}`, message: 'model file names an item that is not in the shop this patch' });
 
+  // ---- popularity: the items' order in the picker, from a sample of games (npm run data:popularity) ----
+  const pop = await loadPopularity(patch);
+  const share = (n: number | undefined, of: number) => n && of ? Math.round(n / of * 10_000) / 10_000 : 0;
+  if (pop) {
+    for (const it of items) it.popularity = share(pop.items[it.id], pop.builds);
+    for (const c of champions) {
+      const p = pop.champions[c.id];
+      // an item one player of the champion built says little about the rest
+      if (p) c.itemPopularity = { builds: p.builds, shares: Object.fromEntries(Object.entries(p.items).filter(([, n]) => n >= 2).map(([id, n]) => [id, share(n, p.builds)])) };
+    }
+  }
+
   // ---- format canaries ----
   const byId = new Map(champions.map(c => [c.id, c]));
   const itemById = new Map(items.map(i => [i.id, i]));
@@ -198,6 +211,7 @@ export async function buildDataset(opts: BuildOptions = {}): Promise<BuildReport
   log(`abilities: ${cov(report.coverage.abilities)}`);
   log(`items:     ${cov(report.coverage.items)}`);
   log(`anchors:   ${report.anchors.passed} passed${report.anchors.missing.length ? `, ${report.anchors.missing.length} could not be checked` : ''}`);
+  log(`popularity: ${pop ? `${pop.games} games played on ${Object.keys(pop.versions ?? {}).join(', ') || '?'}, sampled for ${pop.patch === patch ? 'this patch' : `patch ${pop.patch}`}` : 'no sample; the picker sorts by name (npm run data:popularity)'}`);
   for (const m of report.anchors.missing) log(`  anchor not found: ${m}`);
   const mm = Object.entries(report.sourceMismatches);
   if (mm.length) log(`Data Dragon disagrees with the game files on: ${mm.map(([k, n]) => `${k} (${n})`).join(', ')}; game files used`);
