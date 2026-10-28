@@ -93,8 +93,10 @@ export function championHead(c: PageChampion, slug: string) {
   return {
     title: `${c.name} build damage and DPS calculator`,
     description: full.length <= 160 ? full : say(''),
+    /** a shared link's line under the title: short, the poster says the rest (as the site's, src/server/preview.ts) */
+    preview: 'Which build hits harder?',
     url: ORIGIN + pagePath(slug),
-    image: `${ORIGIN}/og/${c.id}.png`,
+    image: `${ORIGIN}/og/${c.id}.jpg`,
   };
 }
 
@@ -120,9 +122,12 @@ export function championPage(html: string, c: PageChampion, slug: string, layout
     `<meta property="og:type" content="website">`,
     `<meta property="og:site_name" content="itemize.lol">`,
     `<meta property="og:title" content="${esc(head.title)}">`,
-    `<meta property="og:description" content="${esc(head.description)}">`,
+    `<meta property="og:description" content="${esc(head.preview)}">`,
     `<meta property="og:url" content="${head.url}">`,
     `<meta property="og:image" content="${head.image}">`,
+    `<meta property="og:image:type" content="image/jpeg">`,
+    `<meta property="og:image:width" content="1200">`,
+    `<meta property="og:image:height" content="630">`,
     `<meta name="twitter:card" content="summary_large_image">`,
   ].join('\n'));
   // as paintChamp in app.js writes them, --len included (the receipt sizes the name by it)

@@ -1,7 +1,7 @@
 /* The preview images made at build time, written by scripts/site.ts into .build/site/og/:
-     /og/<id>.png         each champion's card (Data Dragon id: /og/Vayne.png, /og/MonkeyKing.png),
-                          the image of a champion's own page and the base of every shared build's card
-     /og/default.png      the site's card, for a page without a build
+     /og/<id>.jpg         each champion's poster (Data Dragon id: /og/Vayne.jpg, /og/MonkeyKing.jpg), the image of its page
+     /og/<id>.png         each champion's card, the base of every shared build's card (src/og/card.ts)
+     /og/default.jpg      the site's poster, for a page without a build
      /og/items/<id>.bin   each item's icon, ICON pixels square, raw RGB, for the Worker to draw
    All of it follows from the dataset, the art, the glyphs and the code drawing it, so it is kept in
    .build/og-cache/ under a hash of those and only drawn again when one of them changes. */
@@ -10,9 +10,9 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, r
 import { join } from 'node:path';
 import { constants, deflateRawSync, inflateRawSync } from 'node:zlib';
 import sharp from 'sharp';
-import { ART_END, ART_W, BG, ICON, championCard } from '../src/og/card.ts';
+import { ART_END, ART_W, BG, ICON, championCard, posterCard } from '../src/og/card.ts';
 import { readAtlas } from '../src/og/font.ts';
-import { H } from '../src/og/png.ts';
+import { H, W } from '../src/og/png.ts';
 import type { ArtIndex } from '../src/pipeline/art.ts';
 import { ROOT } from '../src/pipeline/paths.ts';
 import { Dataset } from '../src/server/dataset.ts';
@@ -45,6 +45,21 @@ async function artPanel(file: string): Promise<Uint8Array> {
   return px;
 }
 
+/** The splash art over a whole poster, cut where sharp finds the most to look at, and darkened to the bottom left, where the words go. */
+async function posterArt(file: string): Promise<Uint8Array> {
+  const bg = hex(BG);
+  const shade = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+    <defs>
+      <linearGradient id="b" x1="0" x2="0" y1="0" y2="1"><stop offset=".45" stop-color="${bg}" stop-opacity="0"/><stop offset=".8" stop-color="${bg}" stop-opacity=".75"/><stop offset="1" stop-color="${bg}" stop-opacity=".92"/></linearGradient>
+      <linearGradient id="l" x1="0" x2="1"><stop offset="0" stop-color="${bg}" stop-opacity=".55"/><stop offset=".55" stop-color="${bg}" stop-opacity="0"/></linearGradient>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#l)"/><rect width="100%" height="100%" fill="url(#b)"/>
+  </svg>`);
+  return new Uint8Array(await sharp(file).resize({ width: W, height: H, fit: 'cover', position: sharp.strategy.attention })
+    .modulate({ brightness: 0.9 }).composite([{ input: shade }]).removeAlpha().raw().toBuffer());
+}
+const jpeg = (px: Uint8Array) => sharp(px, { raw: { width: W, height: H, channels: 3 } }).jpeg({ quality: 82, mozjpeg: true }).toBuffer();
+
 const compress = (b: Uint8Array) => deflateRawSync(b, { level: 9, finishFlush: constants.Z_SYNC_FLUSH });
 const card = (art: Uint8Array, fonts: ReturnType<typeof readAtlas>, o: Parameters<typeof championCard>[2]) => championCard(art, fonts, o, compress);
 
@@ -64,17 +79,17 @@ export async function buildOg(site: string) {
     mkdirSync(join(tmp, 'items'), { recursive: true });
     const fonts = readAtlas(inflateRawSync(glyphs));
     const patch = data.manifest.displayPatch;
-    const more = ['Combo damage, DPS and time to kill,', 'for any champion and six items.'];
     const splash = (id: string) => join(ROOT, 'web', 'art', art.version, 'splash', `${id}.webp`);
-    let bytes = 0;
+    let bytes = 0, posters = 0;
     for (const c of data.index) {
       if (!existsSync(splash(c.id))) continue;
-      const png = card(await artPanel(splash(c.id)), fonts, { title: c.name, sub: c.title.charAt(0).toUpperCase() + c.title.slice(1), lead: 'Which build hits harder?', more, patch });
+      const png = card(await artPanel(splash(c.id)), fonts, { title: c.name, patch });
       writeFileSync(join(tmp, `${c.id}.png`), png);
-      bytes += png.length;
+      const jpg = await jpeg(posterCard(await posterArt(splash(c.id)), fonts, { title: c.name }));
+      writeFileSync(join(tmp, `${c.id}.jpg`), jpg);
+      bytes += png.length; posters += jpg.length;
     }
-    writeFileSync(join(tmp, 'default.png'), card(await artPanel(splash('Kaisa')), fonts,
-      { title: 'Build vs build', sub: 'League of Legends item builds, side by side', lead: 'Which build hits harder?', more, patch }));
+    writeFileSync(join(tmp, 'default.jpg'), await jpeg(posterCard(await posterArt(splash('Kaisa')), fonts, { title: 'Build vs build' })));
     // the icons, cut from the site's sheet of them
     const sheet = join(ROOT, 'web', 'art', art.version, 'items.webp');
     const { data: all, info } = await sharp(sheet).flatten({ background: hex(BG) }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -92,7 +107,7 @@ export async function buildOg(site: string) {
     }
     try { renameSync(tmp, done); } catch { rmSync(tmp, { recursive: true, force: true }); }   // another build finished first
     if (!existsSync(done)) throw new Error('og cache: nothing drawn');
-    console.log(`og -> ${data.index.length} champion cards (${(bytes / data.index.length / 1024).toFixed(0)} KB each), ${art.items.ids.length} icons, in ${((Date.now() - t) / 1000).toFixed(0)} s`);
+    console.log(`og -> ${data.index.length} champion cards (${(bytes / data.index.length / 1024).toFixed(0)} KB each) and posters (${(posters / data.index.length / 1024).toFixed(0)} KB each), ${art.items.ids.length} icons, in ${((Date.now() - t) / 1000).toFixed(0)} s`);
   }
   cpSync(done, join(site, 'og'), { recursive: true });
   return key;

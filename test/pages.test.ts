@@ -58,7 +58,10 @@ test('a champion page starts on its champion, with a head of its own', () => {
   assert.match(html, /<meta name="description" content="[^"]*Vayne, the Night Hunter[^"]*Tumble[^"]*">/);
   assert.match(html, /<link rel="canonical" href="https:\/\/itemize\.lol\/vayne">/);
   assert.match(html, /<meta property="og:url" content="https:\/\/itemize\.lol\/vayne">/);
-  assert.match(html, /<meta property="og:image" content="https:\/\/itemize\.lol\/og\/Vayne\.png">/);
+  // a shared link shows the poster, a short title and one short line, not the description written for searches
+  assert.match(html, /<meta property="og:image" content="https:\/\/itemize\.lol\/og\/Vayne\.jpg">/);
+  assert.match(html, /<meta property="og:image:type" content="image\/jpeg">/);
+  assert.match(html, /<meta property="og:description" content="Which build hits harder\?">/);
   assert.match(html, /<meta name="twitter:card" content="summary_large_image">/);
   assert.match(html, /id="champ-name"[^>]*>Vayne</);
   assert.match(html, /id="champ-title">The Night Hunter</);
@@ -67,7 +70,7 @@ test('a champion page starts on its champion, with a head of its own', () => {
   const withOg = source('tabs').replace('<link rel="canonical"', '<meta property="og:title" content="itemize.lol">\n<link rel="canonical"');
   assert.equal(championPage(withOg, vayne, 'vayne', 'tabs').match(/property="og:title"/g)!.length, 1);
   // og images are named by Data Dragon id
-  assert.match(championPage(source('tabs'), data.champion('MonkeyKing')!, 'wukong', 'tabs'), /og\/MonkeyKing\.png/);
+  assert.match(championPage(source('tabs'), data.champion('MonkeyKing')!, 'wukong', 'tabs'), /og\/MonkeyKing\.jpg/);
 });
 
 test('the receipt page of a champion points search at the tabs one', () => {

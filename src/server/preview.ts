@@ -99,12 +99,14 @@ export function preview(data: ServedData, sb: SharedBuild): Preview {
 
 /* ---------- the tags in a page's head ---------- */
 /** The site's own preview: for a page without a build, or with a link that cannot be read. web/index.html and
-    web/receipt.html carry it as written by siteMeta, which test/share.test.ts checks. */
+    web/receipt.html carry it as written by siteMeta, which test/share.test.ts checks. A preview is mostly its image:
+    a short title and a line. The line is there so that Discord does not show the page's longer description, written
+    for search results, in its place. */
 export const SITE = {
   name: 'itemize.lol',
-  title: 'itemize.lol · League of Legends item builds, compared by damage',
-  description: 'Compare League of Legends item builds by the damage they actually deal: combo damage, DPS and time to kill, broken down by source.',
-  imageAlt: 'itemize.lol: two item builds side by side, with the damage each deals',
+  title: 'League of Legends damage calculator',
+  description: 'Which build hits harder?',
+  imageAlt: 'itemize.lol: League of Legends item builds, compared by damage',
   /** the site's background: the embed's bar on Discord, and a phone browser's bar */
   color: '#0c2524',
   origin: 'https://itemize.lol',
@@ -119,7 +121,7 @@ export function metaTags(m: Meta): string {
   return [
     ['property', 'og:site_name', SITE.name], ['property', 'og:type', 'website'],
     ['property', 'og:title', m.title], ...m.description ? [['property', 'og:description', m.description]] : [], ['property', 'og:url', m.url],
-    ['property', 'og:image', m.image], ['property', 'og:image:type', 'image/png'],
+    ['property', 'og:image', m.image], ['property', 'og:image:type', m.image.endsWith('.jpg') ? 'image/jpeg' : 'image/png'],
     ['property', 'og:image:width', '1200'], ['property', 'og:image:height', '630'], ['property', 'og:image:alt', m.imageAlt],
     ['name', 'twitter:card', 'summary_large_image'], ['name', 'theme-color', m.color],
   ].map(([k, n, v]) => `<meta ${k}="${n}" content="${attr(v!)}">`).join('\n');
@@ -127,5 +129,5 @@ export function metaTags(m: Meta): string {
 /** The site's own tags, for the page at `path` ("/" or "/receipt"). */
 export const siteMeta = (path: string): Meta => ({
   title: SITE.title, description: SITE.description, url: SITE.origin + path,
-  image: `${SITE.origin}/og/default.png`, imageAlt: SITE.imageAlt, color: SITE.color,
+  image: `${SITE.origin}/og/default.jpg`, imageAlt: SITE.imageAlt, color: SITE.color,
 });

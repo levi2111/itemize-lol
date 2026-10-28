@@ -77,11 +77,11 @@ export function previews(data: ServedData, fonts: () => Fonts, version: string, 
       const icons = new Map(ids.flatMap((id, i) => pics[i] ? [[id, pics[i]!] as const] : []));
       try { png = card && renderCard(card, fonts(), p.card, icons); } catch (err) { console.error('card', err); }
     }
-    // a link that cannot be read, or a champion without a card, shows the site's own card for a day
-    const body = png ?? await asset('/og/default.png');
+    // a link that cannot be read, or a champion without a card, shows the site's own poster for a day
+    const body = png ?? await asset('/og/default.jpg');
     if (!body) return new Response('not found', { status: 404 });
     const res = new Response(req.method === 'HEAD' ? null : body as Uint8Array<ArrayBuffer>, { headers: {
-      'content-type': 'image/png', 'content-length': String(body.length), 'cache-control': png ? FOREVER : 'public, max-age=86400',
+      'content-type': png ? 'image/png' : 'image/jpeg', 'content-length': String(body.length), 'cache-control': png ? FOREVER : 'public, max-age=86400',
       'x-content-type-options': 'nosniff', 'cross-origin-resource-policy': 'cross-origin',
     } });
     if (cache && req.method === 'GET') ctx.waitUntil(cache.put(req, res.clone()));

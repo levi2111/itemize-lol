@@ -22,7 +22,7 @@ const art = () => {
   for (let y = 0; y < ART_END; y++) a.set([BG >> 16, (BG >> 8) & 255, BG & 255], y * ART_W * 3);
   return a;
 };
-const CHAMP = championCard(art(), fonts, { title: 'Vayne', sub: 'The Night Hunter', lead: 'Which build hits harder?', more: ['Compare item builds'], patch: '26.20' }, compress);
+const CHAMP = championCard(art(), fonts, { title: 'Vayne', patch: '26.20' }, compress);
 
 /** A PNG's pixels, every chunk's CRC checked on the way. */
 function decode(png: Uint8Array): Uint8Array {

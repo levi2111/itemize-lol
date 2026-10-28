@@ -1,10 +1,11 @@
-/* The preview images, 1200 by 630. Every champion has a card of its own, made at build time
-   (scripts/og.ts): its splash art at the top right, fading into the background, its name at the top
-   left, the site's mark and the patch at the bottom. A shared build's card is that card with the rest
-   rewritten: level and target, the builds as rows of item icons with their combo damage and a bar
-   each, and the verdict large under the art. The name, the art and the footer are copied from the
-   champion's card (png.ts), which is what makes a card cheap enough to draw on a request; nothing is
-   drawn over the art, so it never has to be decoded.
+/* The preview images, 1200 by 630. A champion's page and the site have a poster, made at build time
+   (scripts/og.ts): the splash art over the whole of it, the name and the site's mark, and nothing else.
+   A shared build's card starts from a second card of each champion, also made at build time: its splash
+   art at the top right, fading into the background, its name at the top left, the site's mark and the
+   patch at the bottom. The build's card rewrites the rest: level and target, the builds as rows of item
+   icons with their combo damage and a bar each, and the verdict large under the art. The name, the art
+   and the footer are copied from the champion's card (png.ts), which is what makes a card cheap enough
+   to draw on a request; nothing is drawn over the art, so it never has to be decoded.
 
    Sized for where it is seen: Discord shows it about 400 pixels wide, a third of this, so no text
    is under 24 pixels and what matters is large. Nothing important is within 40 pixels of an edge. */
@@ -37,7 +38,7 @@ function title(f: Fonts, name: string, width: number): Face {
 /** the width of the art, at the right of a card */
 export const ART_W = W - SPLIT;
 
-/** A champion's card (or the site's), from its art (ART_W by H pixels, RGB) and what it says. `compress` deflates a piece, as writeCard wants. */
+/** A champion's card, the start of its builds' cards, from its art (ART_W by H pixels, RGB). `compress` deflates a piece, as writeCard wants. */
 export function championCard(art: Uint8Array, f: Fonts, o: Parameters<typeof drawChampionCard>[2], compress: (b: Uint8Array) => Uint8Array): Uint8Array {
   const c = new Canvas(W, H, BG), edge = [BG >> 16, (BG >> 8) & 255, BG & 255];
   for (let y = 0; y < H; y++) { c.prepare(y); c.px.set(art.subarray(y * ART_W * 3, (y + 1) * ART_W * 3), (y * W + SPLIT) * 3); }
@@ -49,30 +50,31 @@ export function championCard(art: Uint8Array, f: Fonts, o: Parameters<typeof dra
   return writeCard(y => filterRow(c.px, y), compress);
 }
 
-/** What a champion's card says: what every card copies from it (name, mark, patch), and what only it has. */
-export function drawChampionCard(c: Canvas, f: Fonts, o: { title: string; sub: string; lead: string; more: string[]; patch: string }) {
-  const name = o.title.toUpperCase().replace(/[^A-Z0-9 '.&-]/g, '');
+/** What a champion's card says, all of which its builds' cards copy: the name, the mark and the patch. */
+export function drawChampionCard(c: Canvas, f: Fonts, o: { title: string; patch: string }) {
+  const name = cardName(o.title);
   text(c, title(f, name, 680), name, X, 148, TEXT);
-  text(c, f.sub, fit(f.sub, o.sub, RIGHT - X), X, 216, DIM);
-  text(c, f.lead, o.lead, X, 330, TEXT);
-  o.more.forEach((line, i) => text(c, f.caption, line, X, 392 + i * 46, DIM));
-  drawFooter(c, f, o.patch);
-  // under the art, where a build's card puts its verdict: the site's two tags, A against B
-  const size = 116, y = 412, right = W - 52, gap = 92;
-  for (const [k, x] of [['A', right - 2 * size - gap], ['B', right - size]] as const) {
-    c.rect(x, y, size, size, COLOR[k === 'A' ? 'a' : 'b']);
-    text(c, f.tagBig, k, Math.round(x + size / 2 - measure(f.tagBig, k) / 2), y + size / 2 + Math.round(f.tagBig.ascent / 2), INK);
-  }
-  text(c, f.caption, 'vs', Math.round(right - size - gap / 2 - measure(f.caption, 'vs') / 2), y + size / 2 + 12, DIM);
-  text(c, f.caption, 'by the damage they deal', right, y + size + 52, TEXT, { align: 'right' });
+  drawMark(c, f);
+  text(c, f.mono, `Patch ${o.patch}`, RIGHT, 598, DIM, { align: 'right' });
 }
-function drawFooter(c: Canvas, f: Fonts, patch: string) {
-  // the mark as the site's top bar has it: "itemize" on a yellow block, ".lol" after it
+const cardName = (s: string) => s.toUpperCase().replace(/[^A-Z0-9 '.&-]/g, '');
+/** the mark as the site's top bar has it: "itemize" on a yellow block, ".lol" after it */
+function drawMark(c: Canvas, f: Fonts) {
   const w = measure(f.mark, 'itemize');
   c.rect(X, 566, Math.round(w) + 20, 46, COLOR.a);
   text(c, f.mark, 'itemize', X + 10, 602, INK);
   text(c, f.mark, '.lol', X + w + 22, 602, DIM);
-  text(c, f.mono, `Patch ${patch}`, RIGHT, 598, DIM, { align: 'right' });
+}
+
+/** A poster, for a champion's page or the site: its art (W by H pixels, RGB, already shaded where the words go)
+    with a name over the bottom left and the mark under it. Returns the pixels, for the build to encode. */
+export function posterCard(art: Uint8Array, f: Fonts, o: { title: string }): Uint8Array {
+  const c = new Canvas(W, H, BG);
+  for (let y = 0; y < H; y++) { c.prepare(y); c.px.set(art.subarray(y * W * 3, (y + 1) * W * 3), y * W * 3); }
+  const name = cardName(o.title);
+  text(c, title(f, name, W - 2 * X), name, X, 536, TEXT);
+  drawMark(c, f);
+  return c.px;
 }
 
 const nf = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -160,7 +162,7 @@ export function renderCard(champion: Uint8Array, f: Fonts, facts: CardFacts, ico
     drawn at startup, that cost falls under the startup limit rather than a request's. */
 export function warmUp(f: Fonts) {
   const art = new Uint8Array(ART_W * H * 3).fill(40);
-  const card = championCard(art, f, { title: 'Warm', sub: 'up', lead: 'Which build hits harder?', more: [], patch: '0' }, storedPiece);
+  const card = championCard(art, f, { title: 'Warm', patch: '0' }, storedPiece);
   const icon = new Uint8Array(ICON * ICON * 3).fill(90), icons = new Map([1, 2, 3, 4, 5, 6].map(id => [id, icon]));
   const build = (key: 'a' | 'b', total: number) => ({ key, name: 'Build ' + key, fallback: 'Build', items: [1, 2, 3, 4, 5, 6], total, dps: 512, timeToKill: 3.2, kills: false });
   const facts: CardFacts = { champion: { id: 'Warm', name: 'Warm' }, level: 13, patch: '0', target: ['vs dummy: 2,400 HP, 80 armor, 50 MR'], builds: [build('a', 2345), build('b', 2057)], lead: { key: 'a', percent: 14 } };
