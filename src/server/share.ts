@@ -61,7 +61,7 @@ export interface SharedBuild {
   /** one build, or two when comparing */
   builds: SharedBuildSide[];
   target: { kind: 'dummy'; hp: number; armor: number; mr: number }
-    | { kind: 'champ'; champion: ChampionIndexEntry; level: number; hp: number; armor: number; mr: number }
+    | { kind: 'champ'; champion: ChampionIndexEntry; level: number; items: number[]; hp: number; armor: number; mr: number }
     | { kind: 'raw' };
   body: CalcBody;
   /** one engine request per build, as POST /api/v1/calc makes them from the body */
@@ -109,9 +109,10 @@ export function readShare(data: ServedData, s: Record<string, unknown>, layout: 
     const d = s.d as Record<string, unknown>;
     dummy = { hp: int(d.hp, 1, 100000, 2400), ar: int(d.ar, 0, 2000, 80), mr: int(d.mr, 0, 2000, 50) };
   }
-  let enemy = { champion: byId(PAGE_DEFAULTS.enemy.id)!, level: PAGE_DEFAULTS.enemy.level as number };
+  // the enemy: [id, level, its six slots]
+  let enemy = { champion: byId(PAGE_DEFAULTS.enemy.id)!, level: PAGE_DEFAULTS.enemy.level as number, items: build(undefined) };
   const e = Array.isArray(s.e) ? byId(s.e[0]) : undefined;
-  if (e) enemy = { champion: e, level: int((s.e as unknown[])[1], 1, 18, 13) };
+  if (e) enemy = { champion: e, level: int((s.e as unknown[])[1], 1, 18, 13), items: build((s.e as unknown[])[2]) };
   const combo = { ...PAGE_DEFAULTS.combo } as CalcBody['combo']['counts'];
   if (Array.isArray(s.q)) ACTIONS.forEach((k, i) => combo[k] = int((s.q as unknown[])[i], 0, 30, 0));
   const options = new Map<string, number>();
@@ -146,17 +147,19 @@ export function readShare(data: ServedData, s: Record<string, unknown>, layout: 
   const opts: Record<string, number> = {};
   for (const [id, v] of options) if (known.has(id)) opts[id] = v;
 
-  // the target: the dummy's dials as the link set them; an enemy's dials are refilled with its own stats once they arrive
+  // the target: the dummy's dials as the link set them; an enemy's dials are refilled with its own stats, its
+  // items' added, once they arrive
   let targetBody: TargetInput | null = null, shown: SharedBuild['target'] = { kind: 'raw' };
   if (target === 'dummy') {
     const t = { hp: Math.max(1, dummy.hp || 1), armor: dummy.ar || 0, mr: dummy.mr || 0 };
     targetBody = { dummy: true, ...t };
     shown = { kind: 'dummy', ...t };
   } else if (target === 'champ') {
-    const t = championAsTarget(data.champion(enemy.champion.id)!, enemy.level);
+    const held = enemy.items.filter((id): id is number => id !== null);
+    const t = championAsTarget(data.champion(enemy.champion.id)!, enemy.level, held.map(id => data.item(id)!));
     const dials = { hp: Math.max(1, t.hp || 1), armor: t.armor || 0, mr: t.mr || 0 };
-    targetBody = { champion: enemy.champion.id, level: enemy.level, ...dials };
-    shown = { kind: 'champ', champion: enemy.champion, level: enemy.level, ...dials };
+    targetBody = { champion: enemy.champion.id, level: enemy.level, ...(held.length && { items: held }), ...dials };
+    shown = { kind: 'champ', champion: enemy.champion, level: enemy.level, items: held, ...dials };
   }
 
   // recalc, with itemOptsOf: a build's item settings, kept only for items it holds

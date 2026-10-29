@@ -8,7 +8,9 @@
                                                 (an item's settings: the ids `data:report -- --item` lists under "controls")
      node scripts/calc.ts Vayne --enemy Ornn:13 --target 3200,150,90
                                                 (the target: the practice tool's dummy unless --enemy names a champion, whose
-                                                 own stats --target then overrides; --plain makes the numbers all base) */
+                                                 own stats --target then overrides; --plain makes the numbers all base)
+     node scripts/calc.ts Vayne --enemy Ornn:13:3075,4401
+                                                (the enemy's items, after a second colon) */
 import { calculate } from '../src/engine/calc.ts';
 import type { Action, DataSource, TargetInput } from '../src/engine/types.ts';
 import { Dataset } from '../src/server/dataset.ts';
@@ -39,9 +41,9 @@ for (const part of (arg('settings') ?? '').split(',').filter(Boolean)) {
 }
 const [q, w, e, r] = nums(arg('ranks'), [5, 5, 5, 3]) as [number, number, number, number];
 const [hp, armor, mr] = nums(arg('target'), [2400, 80, 50]) as [number, number, number];
-const [enemy, enemyLevel = '13'] = (arg('enemy') ?? '').split(':');
+const [enemy, enemyLevel = '13', enemyItems] = (arg('enemy') ?? '').split(':');
 const target: TargetInput | null = rest.includes('--raw') ? null
-  : enemy ? { champion: enemy, level: Number(enemyLevel), ...(arg('target') && { hp, armor, mr }) }
+  : enemy ? { champion: enemy, level: Number(enemyLevel), ...(enemyItems && { items: nums(enemyItems, []) }), ...(arg('target') && { hp, armor, mr }) }
   : { dummy: !rest.includes('--plain'), hp, armor, mr };
 const combo = arg('combo') ?? 'aa:3,q:1,w:1,e:1,r:1';
 const options = Object.fromEntries((arg('options') ?? '').split(',').filter(Boolean).map(kv => { const [k, v] = kv.split('='); return [k!, Number(v ?? 1)]; }));
@@ -67,7 +69,9 @@ for (const l of res.combo.lines) {
   for (const p of l.parts) console.log(`        ${p.label} (${p.id}) ${p.type} ×${p.hits}: raw ${p.total.raw}, dealt ${p.total.dealt}${p.over ? `   over ${p.over.seconds} s: ${p.over.perSecond.raw}/s raw, ${p.over.perSecond.dealt}/s dealt` : ''}`);
 }
 console.log(`  TOTAL raw ${res.combo.total.raw}  dealt ${res.combo.total.dealt}  blocked ${res.combo.blocked}  hp left ${res.combo.hpLeft}`);
-console.log(`  DPS raw ${res.dps.raw} dealt ${res.dps.dealt}   time to kill ${res.timeToKill ?? '–'} s`);
+console.log(`  DPS raw ${res.dps.raw} dealt ${res.dps.dealt}   time to kill ${res.timeToKill ?? '–'} s   (auto attacks)`);
+const f = res.fight, used = Object.entries(f.uses).filter(([, n]) => n).map(([a, n]) => `${a} ×${n}`).join(', ');
+console.log(`  fight DPS raw ${f.dps.raw} dealt ${f.dps.dealt}   time to kill ${f.timeToKill ?? '–'} s   over ${f.seconds} s: ${used || 'nothing'}`);
 for (const [slot, a] of Object.entries(res.abilities)) {
   if (!a.cast) continue;
   const cd = a.cooldown ? `cooldown ${a.cooldown.seconds} s (${a.cooldown.base} s, ${a.cooldown.haste} haste)` : 'no cooldown in the game data';

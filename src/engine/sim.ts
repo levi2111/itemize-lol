@@ -15,6 +15,8 @@ const AS_MIN = 0.2, AS_MAX = 3.003;
 const DEFAULT_CAST_TIME = 0.25;
 /** A rule's repeat count is played hit by hit up to this many, so each can see the health the last one left. */
 const MAX_INSTANCES = 60;
+/** On the clock, damage over time given as one amount lands in ticks this many seconds apart. */
+const TICK = 0.5;
 
 /** `bonus` is the part of `resist` that is bonus, which `bonusPctPen` (penetration of bonus resistance only) also cuts. */
 export function resistAfterPen(resist: number, pctPen: number, flatPen: number, bonus = 0, bonusPctPen = 0): number {
@@ -78,7 +80,13 @@ export interface FightOptions {
   sustained?: boolean;
   /** how critical strikes count; see ComboInput.crits */
   crits?: CritMode;
+  /** played on the clock by the caller, who sets `time` before each action: actions take no time of their own,
+      and what a cast deals over time (a burn, a zone, a channel) lands tick by tick as `landTicks` moves the clock */
+  timed?: boolean;
 }
+
+/** Damage over time waiting to land on the clock: already amplified, resisted when it lands. */
+interface Tick { at: number; owner: Owner; rule: string; label: string; type: DamageType; raw: number; crit: boolean }
 
 export class Fight {
   readonly champ: ChampionData;
@@ -87,8 +95,11 @@ export class Fight {
   readonly ranks: Record<CastSlot, number>;
   readonly sustained: boolean;
   readonly crits: CritMode;
+  readonly timed: boolean;
   readonly caveats = new Set<string>();
   readonly hits: Hit[] = [];
+  /** everything dealt so far, before and after resistances: `hits` added up */
+  readonly total = { raw: 0, dealt: 0 };
   /** rules whose damage takes time to land, by `owner/rule`: the seconds it runs for, per action that set it off */
   readonly spread = new Map<string, Map<number, number>>();
   /** how many times each rule fired, by `owner/rule`, whether or not it dealt damage */
@@ -105,6 +116,8 @@ export class Fight {
   private readonly counted = new Set<string>();
   private readonly counters = new Map<string, number>();
   private readonly lastFired = new Map<string, number>();
+  /** on the clock: damage over time still to land, soonest first */
+  private readonly ticks: Tick[] = [];
   private readonly owners: Owner[] = [];
   /** the target's stats as the fight started, and the health it has left */
   private readonly target: TargetStats & { left: number } | null;
@@ -127,6 +140,7 @@ export class Fight {
     this.ranks = build.ranks;
     this.sustained = !!opts.sustained;
     this.crits = opts.crits ?? 'average';
+    this.timed = !!opts.timed;
     this.target = target ? { ...target, left: target.hp.total } : null;
     this.env = {
       level: build.level,
@@ -467,12 +481,13 @@ export class Fight {
     return raw;
   }
 
-  /** Returns whether anything was dealt. */
-  private deal(owner: Owner, rule: string, label: string, type: DamageType, amount: number, crit = false): boolean {
+  /** Returns whether anything was dealt. `amplified`: the amount is already amplified (a tick, amplified when it was cast). */
+  private deal(owner: Owner, rule: string, label: string, type: DamageType, amount: number, crit = false, amplified = false): boolean {
     if (!(amount > 0)) return false;
-    const raw = this.amplify(owner.source, type, amount);
+    const raw = amplified ? amount : this.amplify(owner.source, type, amount);
     const dealt = !this.target || type === 'true' ? raw : raw * damageMultiplier(this.resistance(type));
     if (this.target) this.target.left = Math.max(0, this.target.left - dealt);
+    this.total.raw += raw; this.total.dealt += dealt;
     const last = this.hits.at(-1);
     if (last && last.owner === owner.key && last.rule === rule && last.type === type) { last.raw += raw; last.dealt += dealt; last.instances++; }
     else this.hits.push({ line: owner.line, owner: owner.key, rule, label, type, raw, dealt, instances: 1, crit });
@@ -506,7 +521,24 @@ export class Fight {
     };
     let landed = false;
     const crit = !!rule.crit;
-    if (whole) for (let i = 0; i < count; i++) landed = this.deal(owner, rule.id, label, rule.type, one(), crit) || landed;
+    // On the clock, what a cast (or an item's burn on a spell) deals over time lands as it is dealt: its instances
+    // spread evenly over the time, or one amount in ticks. Other rules with a duration (a bleed on each attack)
+    // already count only the time that has run, so they land at once as before.
+    const ticking = this.timed && rule.over && (rule.on === 'cast' || (rule.on === 'spell' && owner.itemId !== undefined)) ? this.eval(rule.over, owner) : 0;
+    if (ticking > 0) {
+      // cast again before it has run out, it starts over, as a burn refreshes and a toggle stays on: what was
+      // still to land of the last cast does not
+      for (let i = this.ticks.length - 1; i >= 0; i--) if (this.ticks[i]!.owner === owner && this.ticks[i]!.rule === rule.id) this.ticks.splice(i, 1);
+      const amounts = whole ? Array.from({ length: count }, one) : count > 0 ? [one() * count] : [];
+      const n = amounts.length === 1 ? Math.max(1, Math.round(ticking / TICK)) : amounts.length;
+      const parts = amounts.length === 1 ? Array<number>(n).fill(amounts[0]! / n) : amounts;
+      parts.forEach((a, i) => {
+        if (!(a > 0)) return;
+        this.ticks.push({ at: this.time + (i + 1) * ticking / parts.length, owner, rule: rule.id, label, type: rule.type, raw: this.amplify(owner.source, rule.type, a), crit });
+        landed = true;
+      });
+      this.ticks.sort((x, y) => x.at - y.at);
+    } else if (whole) for (let i = 0; i < count; i++) landed = this.deal(owner, rule.id, label, rule.type, one(), crit) || landed;
     else if (count > 0) landed = this.deal(owner, rule.id, label, rule.type, one() * count, crit);
     // the damage is still dealt at once and the fight's clock does not wait for it: the duration is only reported
     if (landed && rule.over) {
@@ -577,6 +609,24 @@ export class Fight {
   /** Seconds one basic attack takes. */
   get attackPeriod(): number { return 1 / this.stats.attackSpeed.total; }
 
+  /** Seconds an ability's cast takes: the game's number, or a default where the data gives none. */
+  castTime(slot: CastSlot): number {
+    return this.champ.spells[this.champ.models[slot].spell]?.castTime ?? DEFAULT_CAST_TIME;
+  }
+
+  /** On the clock: when the next tick of damage over time lands, Infinity with none waiting. */
+  get nextTick(): number { return this.ticks[0]?.at ?? Infinity; }
+  /** On the clock: moves the fight to `at` and lands every tick due by then. */
+  landTicks(at: number): void {
+    this.time = at;
+    while (this.ticks.length && this.ticks[0]!.at <= at + 1e-9) {
+      const t = this.ticks.shift()!;
+      this.action++;
+      this.deal(t.owner, t.rule, t.label, t.type, t.raw, t.crit, true);
+      this.trigger('after');
+    }
+  }
+
   /** An ability's cooldown at its rank: the game's number and what ability haste (all of it, plus the basic or
       ultimate kind) makes of it. Null when it has no rank or the game data gives none. */
   cooldown(slot: CastSlot): { base: number; haste: number; seconds: number } | null {
@@ -585,6 +635,18 @@ export class Fight {
     if (rank < 1 || base === undefined) return null;
     const haste = this.stats.abilityHaste + (slot === 'r' ? this.stats.ultHaste : this.stats.basicHaste);
     return { base, haste, seconds: base * 100 / (100 + haste) };
+  }
+
+  /** An ability's charges at its rank, when it holds any: how many, and the seconds one takes to come back,
+      after ability haste unless the game exempts it. Null without a rank or charges. */
+  charges(slot: CastSlot): { max: number; recharge: number } | null {
+    const ammo = this.champ.spells[this.champ.slots[slot].spell]?.ammo, rank = this.rankOf(slot);
+    if (!ammo || rank < 1) return null;
+    const at = (v: number[]) => v[Math.min(rank, v.length - 1)] ?? 0;
+    const max = at(ammo.max), recharge = at(ammo.recharge);
+    if (!(max >= 1 && recharge > 0)) return null;
+    const haste = ammo.fixed ? 0 : this.stats.abilityHaste + (slot === 'r' ? this.stats.ultHaste : this.stats.basicHaste);
+    return { max, recharge: recharge * 100 / (100 + haste) };
   }
 
   act(action: Action): void {
@@ -596,7 +658,7 @@ export class Fight {
       this.trigger('attack');
       this.trigger('onhit');
       this.trigger('after');
-      this.time += this.attackPeriod;
+      if (!this.timed) this.time += this.attackPeriod;
       return;
     }
     const owner = this.owners.find(o => o.slot === action);
@@ -610,7 +672,7 @@ export class Fight {
       if (this.hits.reduce((s, h) => s + h.raw, 0) > before) this.trigger('spell');
       this.trigger('after');
     } finally { this.casting = undefined; }
-    this.time += this.champ.spells[this.champ.models[action].spell]?.castTime ?? DEFAULT_CAST_TIME;
+    if (!this.timed) this.time += this.castTime(action);
   }
 }
 

@@ -63,11 +63,13 @@ export function preview(data: ServedData, sb: SharedBuild): Preview {
   const names = sb.builds.map((b, i) => b.typed && clean(b.name) || auto[i]!);
   const builds: CardBuild[] = sb.builds.map((b, i) => ({
     key: b.key, name: names[i]!, fallback: auto[i]!, items: b.items,
-    total: results[i]!.combo.total.dealt, dps: results[i]!.dps.dealt, timeToKill: results[i]!.timeToKill, kills: results[i]!.combo.kills,
+    // DPS and time to kill as the page shows them: the fight's, abilities included
+    total: results[i]!.combo.total.dealt, dps: results[i]!.fight.dps.dealt, timeToKill: results[i]!.fight.timeToKill, kills: results[i]!.combo.kills,
   }));
 
   const t = sb.target;
   const stats = t.kind === 'raw' ? null : `${nf(t.hp)} HP, ${nf(t.armor)} armor, ${nf(t.mr)} MR`;
+  const held = t.kind === 'champ' && t.items.length ? `, ${t.items.length} item${t.items.length === 1 ? '' : 's'}` : '';
 
   // the image says it all, so the words stay short: a preview with a title, a sentence and the image read as clutter
   let title: string, alt: string, lead: CardFacts['lead'] = null;
@@ -90,7 +92,7 @@ export function preview(data: ServedData, sb: SharedBuild): Preview {
     card: {
       champion: { id: sb.champion.id, name: champ }, level: sb.level, patch: data.manifest.displayPatch,
       target: t.kind === 'dummy' ? [`vs dummy: ${stats}`, `vs dummy: ${nf(t.hp)} HP, ${nf(t.armor)} AR, ${nf(t.mr)} MR`, `vs ${nf(t.hp)} HP dummy`]
-        : t.kind === 'champ' ? [`vs ${t.champion.name}, level ${t.level}: ${stats}`, `vs ${t.champion.name}, level ${t.level}`, `vs ${t.champion.name}`]
+        : t.kind === 'champ' ? [`vs ${t.champion.name}, level ${t.level}${held}: ${stats}`, `vs ${t.champion.name}, level ${t.level}${held}`, `vs ${t.champion.name}`]
         : ['raw damage, before armor and magic resist', 'raw damage, before resistances', 'raw damage'],
       builds, lead,
     },

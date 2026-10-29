@@ -2,14 +2,14 @@
    It reads the compiled data from beside its own module (src/server/engine-files.ts says where): every item once,
    and each champion when first needed. The page starts it as a module worker and may end it mid-search.
 
-     in:  { id, req: AutoBuildRequest, enemy: { id, level } | null }   enemy: the target champion, for tankiness
+     in:  { id, req: AutoBuildRequest, enemy: { id, level, items? } | null }   enemy: the target champion, for tankiness
      out: { id, result: AutoBuildResult & { taken, ms } } or { id, error: message }    ms: the search alone
      in:  { warm: champion id }   loads the data a search for that champion needs, and answers nothing */
 import type { DataSource } from '../engine/types.ts';
 import type { ChampionData, ItemData } from '../shared/types.ts';
 import { autoBuild, damageTaken, type AutoBuildRequest } from './search.ts';
 
-interface Ask { id: number; req: AutoBuildRequest; enemy: { id: string; level: number } | null }
+interface Ask { id: number; req: AutoBuildRequest; enemy: { id: string; level: number; items?: number[] } | null }
 interface Warm { warm: string }
 // the worker's own scope, without the DOM's types in the build
 const scope = globalThis as unknown as { onmessage: ((e: { data: Ask | Warm }) => void) | null; postMessage(m: unknown): void };
@@ -38,7 +38,7 @@ scope.onmessage = async ({ data: msg }) => {
     const data: DataSource = { patch: '', champion: id => known.get(id), item: id => all.get(id) };
     const t0 = performance.now();
     const req = { ...ask.req };
-    if (req.goal === 'tank' && ask.enemy && enemy) req.taken = damageTaken(data, enemy.id, ask.enemy.level);
+    if (req.goal === 'tank' && ask.enemy && enemy) req.taken = damageTaken(data, enemy.id, ask.enemy.level, ask.enemy.items ?? []);
     const result = autoBuild(data, all.values(), req);
     scope.postMessage({ id: ask.id, result: { ...result, taken: req.taken ?? null, ms: performance.now() - t0 } });
   } catch (e) {

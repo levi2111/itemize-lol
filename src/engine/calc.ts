@@ -3,7 +3,7 @@
 import type { CastSlot, ChampionData, DamageType, ItemData, Slot } from '../shared/types.ts';
 import { CAST_SLOTS, SLOTS } from '../shared/types.ts';
 import { defaultSequence, Fight, type Hit } from './sim.ts';
-import { CalcError, CRIT_MODES, type AbilityInfo, type Action, type Amount, type BuildInput, type ByType, type CalcRequest, type CalcResult, type CritMode, type DataSource, type ItemInfo, type SourceLine, type StatLine, type TargetInput, type TargetStats } from './types.ts';
+import { CalcError, CRIT_MODES, type AbilityInfo, type Action, type Amount, type BuildInput, type ByType, type CalcRequest, type CalcResult, type CritMode, type DataSource, type FightResult, type ItemInfo, type SourceLine, type StatLine, type TargetInput, type TargetStats } from './types.ts';
 
 export const LIMITS = {
   items: 6,
@@ -15,6 +15,14 @@ export const LIMITS = {
   /** seconds simulated for DPS when there is no target to kill */
   window: 10,
 } as const;
+
+/** A cooldown in the game data shorter than this is a recast lockout, an ammo timer or a toggle rather than the
+    ability's own (Teemo's mushrooms, Caitlyn's traps, Karthus's Defile), so in a fight such an ability is cast once.
+    Cassiopeia's Twin Fang, at 0.75 s, is the shortest real one. */
+const SHORTEST_COOLDOWN = 0.75;
+/** The share of a basic attack before it lands, when nothing else can be done; a cast can take the rest of it.
+    The game has a wind-up per champion that the dataset does not carry yet. */
+const WINDUP = 0.25;
 
 const TYPES: DamageType[] = ['physical', 'magic', 'true'];
 const ACTIONS: Action[] = ['aa', ...CAST_SLOTS];
@@ -177,6 +185,72 @@ function sustain(c: Checked): { dps: Amount; timeToKill: number | null; caveats:
   return { dps: { raw: total.raw / t, dealt: total.dealt / t }, timeToKill: null, caveats: f.caveats };
 }
 
+/** The fight on the clock (see FightResult). The champion attacks whenever its attack is ready and it is not
+    casting, attack first when an ability is ready at the same moment, so the cast goes into the attack's backswing;
+    otherwise it casts the first ability that is ready. A cast takes its cast time, and its cooldown, after ability
+    haste, starts with it. Played until the target dies, the horizon, or without a target the window. */
+function fightOn(c: Checked): FightResult & { caveats: Set<string> } {
+  const f = new Fight(c.champ, c.items, c.build, c.target, { sustained: true, timed: true });
+  const caveats = new Set<string>();
+  // Only what a cast deals is cast. A passive in an ability's slot (Vayne's Silver Bolts), a toggle (Jinx's weapons)
+  // or a buff (Kai'Sa's Supercharge) works through the attacks and the champion's options, and casting it would
+  // only cost time
+  const abilities = [...new Set(c.sequence)].filter((a): a is CastSlot => a !== 'aa' && c.build.ranks[a] >= 1 && c.champ.models[a].rules.some(r => r.on === 'cast'));
+  // Each ability holds charges, one coming back every `recharge` seconds, and waits `lockout` between two casts.
+  // Most hold one, back after their cooldown; one with charges in the game data (Vel'Koz's Plasma Fission) holds
+  // those, and its cooldown is the wait between casts. One with no usable cooldown is cast once.
+  const state = abilities.map(slot => {
+    const cd = f.cooldown(slot), ammo = f.charges(slot);
+    const u = { slot, max: 1, recharge: Infinity, lockout: 0, charges: 1, back: Infinity, free: 0 };
+    if (ammo) Object.assign(u, { max: ammo.max, charges: ammo.max, recharge: ammo.recharge, lockout: cd?.seconds ?? 0 });
+    else if (cd && cd.base >= SHORTEST_COOLDOWN) u.recharge = cd.seconds;
+    else caveats.add(`${c.champ.slots[slot].name} has ${cd ? `a cooldown of ${cd.base} s in the game data, which is not its real one` : 'no cooldown in the game data'}, so the fight casts it once.`);
+    return u;
+  });
+  const ready = (u: typeof state[number]) => u.charges >= 1 ? u.free : Math.max(u.free, u.back);
+  const uses: Record<Action, number> = { aa: 0, q: 0, w: 0, e: 0, r: 0 };
+  const end = c.target ? LIMITS.horizon : LIMITS.window;
+  const hp = c.target ? c.target.hp.total : Infinity;
+  let busy = 0, nextAttack = 0, at = 0, killed = false;
+  // the last thing that happened: when, what had been dealt before it, and what it dealt
+  let last = { at: 0, raw: 0, dealt: 0, addRaw: 0, addDealt: 0 };
+  for (;;) {
+    at = Math.min(Math.max(busy, Math.min(nextAttack, ...state.map(ready))), f.nextTick);
+    if (killed || at >= end) break;
+    const before = { ...f.total };
+    if (f.nextTick <= at) f.landTicks(at);
+    else {
+      f.time = at;
+      if (nextAttack <= at) {
+        f.act('aa'); uses.aa++;
+        busy = at + WINDUP * f.attackPeriod; nextAttack = at + f.attackPeriod;
+      } else {
+        const u = state.find(x => ready(x) <= at)!;
+        // the charges that came back by now, then the one this cast uses; the clock for the next starts when one is missing
+        for (; u.back <= at; u.back = u.charges < u.max ? u.back + u.recharge : Infinity) u.charges++;
+        u.charges--;
+        if (u.back === Infinity) u.back = at + u.recharge;
+        u.free = at + u.lockout;
+        f.act(u.slot); uses[u.slot]++;
+        busy = at + f.castTime(u.slot);
+      }
+    }
+    last = { at, raw: before.raw, dealt: before.dealt, addRaw: f.total.raw - before.raw, addDealt: f.total.dealt - before.dealt };
+    killed = f.targetHp === 0;
+  }
+  for (const k of f.caveats) caveats.add(k);
+  const out = (dps: Amount, timeToKill: number | null, seconds: number) => ({ dps, timeToKill, seconds, abilities, uses, caveats });
+  // the last action counts as dealt evenly until the next one would have happened
+  const span = at - last.at;
+  if (killed) {
+    const part = last.addDealt > 0 ? (hp - last.dealt) / last.addDealt : 1;
+    const ttk = Math.max(0.01, last.at + part * span);
+    if (ttk <= end) return out({ raw: (last.raw + part * last.addRaw) / ttk, dealt: hp / ttk }, ttk, ttk);
+  }
+  const part = span > 0 ? Math.min(1, (end - last.at) / span) : 1;
+  return out({ raw: (last.raw + part * last.addRaw) / end, dealt: (last.dealt + part * last.addDealt) / end }, null, end);
+}
+
 /** One cast of each ranked ability on a fresh fight, and its cooldown: what the page shows when an ability is pointed at. */
 function abilityInfo(c: Checked, crits: CritMode): CalcResult['abilities'] {
   const out = {} as CalcResult['abilities'];
@@ -239,8 +313,9 @@ export function calculate(data: DataSource, req: CalcRequest): CalcResult {
     total.raw += h.raw; total.dealt += h.dealt;
     types[h.type].raw += h.raw; types[h.type].dealt += h.dealt;
   }
-  const s = sustain(c);
-  const caveats = new Set([...fight.caveats, ...s.caveats]);
+  const s = sustain(c), fr = fightOn(c);
+  const caveats = new Set([...fight.caveats, ...s.caveats, ...fr.caveats]);
+  if (req.target?.items?.some(x => x !== null && x !== undefined)) caveats.add('The target\'s items count for their health, armor and magic resist; what their passives do (less damage from attacks or crits, shields) is not counted.');
   for (const slot of CAST_SLOTS) {
     if (c.sequence.includes(slot) && c.build.ranks[slot] < 1) caveats.add(`${c.champ.slots[slot].name} is in the combo but has no rank, so it does nothing.`);
   }
@@ -270,6 +345,7 @@ export function calculate(data: DataSource, req: CalcRequest): CalcResult {
     },
     dps: round(s.dps),
     timeToKill: s.timeToKill === null ? null : r2(s.timeToKill),
+    fight: fightView(fr),
     abilities: abilityInfo(c, c.crits),
     options: fight.optionValues,
     items: itemInfo(c, fight, c.crits),
@@ -284,6 +360,7 @@ export interface Headline {
   combo: Pick<CalcResult['combo'], 'total' | 'hpLeft' | 'kills'>;
   dps: Amount;
   timeToKill: number | null;
+  fight: Pick<FightResult, 'dps' | 'timeToKill'>;
 }
 export function headline(data: DataSource, req: CalcRequest): Headline {
   const c = check(data, req);
@@ -293,12 +370,17 @@ export function headline(data: DataSource, req: CalcRequest): Headline {
   fight.end();
   const total = zero();
   for (const h of fight.hits) { total.raw += h.raw; total.dealt += h.dealt; }
-  const s = sustain(c);
+  const s = sustain(c), { dps, timeToKill } = fightView(fightOn(c));
   return {
     combo: { total: round(total), hpLeft: fight.targetHp === null ? null : r2(fight.targetHp), kills: fight.targetHp === 0 },
     dps: round(s.dps),
     timeToKill: s.timeToKill === null ? null : r2(s.timeToKill),
+    fight: { dps, timeToKill },
   };
+}
+/** The fight as the result reports it, rounded. */
+function fightView(fr: ReturnType<typeof fightOn>): FightResult {
+  return { dps: round({ ...fr.dps }), timeToKill: fr.timeToKill === null ? null : r2(fr.timeToKill), seconds: r2(fr.seconds), abilities: fr.abilities, uses: fr.uses };
 }
 
 /* One number of a calculation each, for a search that compares many builds (src/autobuild/search.ts): the same
@@ -319,6 +401,10 @@ export function comboDamage(data: DataSource, req: CalcRequest): number {
 export function sustainedDps(data: DataSource, req: CalcRequest): number {
   return sustain(check(data, req)).dps.dealt;
 }
+/** The fight's DPS, abilities included (see FightResult), after resistances when there is a target. */
+export function fightDps(data: DataSource, req: CalcRequest): number {
+  return fightOn(check(data, req)).dps.dealt;
+}
 /** The build's stats, unrounded. */
 export function buildStats(data: DataSource, req: CalcRequest): Fight['stats'] {
   const c = check(data, req);
@@ -331,25 +417,44 @@ type Totals = { hp: number; armor: number; mr: number };
     base armor or magic resist, so everything the tool adds is bonus. The game counts it as a champion. */
 export const DUMMY_BASE: Readonly<Totals> = { hp: 1000, armor: 0, mr: 0 };
 
-/** A champion's own health and resistances at a level, in whole numbers as the site shows them: its base stats when it is the target. */
-export function championAsTarget(champ: ChampionData, level: number): Totals {
-  const f = new Fight(champ, [], { champion: champ.id, level, ranks: { q: 0, w: 0, e: 0, r: 0 }, items: [] }, null);
+/** A champion's health and resistances at a level, in whole numbers as the site shows them: with no items, its base
+    stats when it is the target; with items, what they add as well, worked out as for any build (a share of health,
+    say, counts what the other items gave). */
+export function championAsTarget(champ: ChampionData, level: number, items: ItemData[] = []): Totals {
+  const f = new Fight(champ, items, { champion: champ.id, level, ranks: { q: 0, w: 0, e: 0, r: 0 }, items: items.map(i => i.id) }, null);
   return { hp: Math.round(f.stats.hp.total), armor: Math.round(f.stats.armor.total), mr: Math.round(f.stats.mr.total) };
+}
+
+/** A target champion's items: ids checked against the data, empty slots left out. Throws a CalcError naming `field`. */
+export function targetItems(data: DataSource, ids: unknown, field = 'target.items'): ItemData[] {
+  if (ids === undefined || ids === null) return [];
+  if (!Array.isArray(ids)) throw new CalcError(field, `${field} must be a list`);
+  const held = ids.filter(x => x !== null && x !== undefined);
+  if (held.length > LIMITS.items) throw new CalcError(field, `a champion holds at most ${LIMITS.items} items`);
+  return held.map(id => {
+    const it = typeof id === 'number' ? data.item(id) : undefined;
+    if (!it) throw new CalcError(field, `unknown item ${String(id)}`);
+    return it;
+  });
 }
 
 /** The target's health, armor and magic resist, each split into base and bonus (see TargetInput). Throws a CalcError naming the field at fault. */
 export function resolveTarget(data: DataSource, t: TargetInput): TargetStats {
   if (!t || typeof t !== 'object' || Array.isArray(t)) throw new CalcError('target', 'target must be an object or null');
   if (t.dummy !== undefined && typeof t.dummy !== 'boolean') throw new CalcError('target.dummy', 'target.dummy must be true or false');
-  let base: Totals | null = t.dummy ? DUMMY_BASE : null;
+  let base: Totals | null = t.dummy ? DUMMY_BASE : null, held: Totals | null = null;
+  if (t.items !== undefined && t.champion === undefined) throw new CalcError('target.items', 'only a champion target holds items');
   if (t.champion !== undefined) {
     if (t.dummy) throw new CalcError('target', 'the target is the dummy or a champion, not both');
     const champ = typeof t.champion === 'string' ? data.champion(t.champion) : undefined;
     if (!champ) throw new CalcError('target.champion', `unknown champion "${String(t.champion)}"`);
-    base = championAsTarget(champ, int(t.level ?? 1, 'target.level', 1, 18));
+    const level = int(t.level ?? 1, 'target.level', 1, 18), items = targetItems(data, t.items);
+    base = championAsTarget(champ, level);
+    held = items.length ? championAsTarget(champ, level, items) : base;
   }
   const split = (stat: keyof Totals, bonusKey: 'bonusHp' | 'bonusArmor' | 'bonusMr', min: number, max: number): StatLine => {
-    const total = t[stat] === undefined && base && t.champion !== undefined ? base[stat] : real(t[stat], `target.${stat}`, min, max);
+    // a champion's totals left out are its own with its items'
+    const total = t[stat] === undefined && held ? held[stat] : real(t[stat], `target.${stat}`, min, max);
     // what is above the base is bonus; a total below it is all base
     const bonus = t[bonusKey] === undefined ? Math.max(0, total - (base?.[stat] ?? total)) : real(t[bonusKey], `target.${bonusKey}`, 0, Math.max(0, total));
     return { total, base: total - bonus, bonus };

@@ -25,12 +25,16 @@ export interface BuildInput {
  * - `champion` at `level`: that champion's own stats at that level. Totals left out are those; totals given
  *   above them count the difference as bonus, as items would add it.
  * - neither: plain numbers, all base unless a bonus is given.
- * A `bonus*` given replaces the one that follows from the base. */
+ * A `bonus*` given replaces the one that follows from the base.
+ * A champion can hold `items`: totals left out are then its own stats with the items' added, and what the items add
+ * is bonus, as in the game. Only their stats count, not what their passives do. */
 export interface TargetInput {
   dummy?: boolean;
   /** a champion id; then `level` is required */
   champion?: string;
   level?: number;
+  /** the champion's item ids, at most six */
+  items?: (number | null)[];
   /** required unless `champion` is given */
   hp?: number;
   armor?: number;
@@ -181,6 +185,8 @@ export interface CalcResult {
   dps: Amount;
   /** seconds of sustained basic attacks to kill from full health; null without a target or beyond the horizon */
   timeToKill: number | null;
+  /** basic attacks and abilities together, on the clock: see FightResult */
+  fight: FightResult;
   /** the passive has no cast and no cooldown */
   abilities: Record<Slot, AbilityInfo>;
   /** the value each of the champion's options had: what the caller set, or the default for this build */
@@ -188,6 +194,32 @@ export interface CalcResult {
   items: ItemInfo[];
   /** things the caller should tell the user: assumptions, and anything the engine could not evaluate */
   caveats: string[];
+}
+
+/** A fight on the clock, from a fresh start: every ability the combo uses is cast again each time it is ready, in the
+ * order the combo first uses them, and basic attacks fill the time between, as many as attack speed allows.
+ *
+ * How long it is measured over decides who looks best: a mage's damage comes in bursts with cooldowns between,
+ * a marksman's builds up steadily, so a short window favours the one and a long window the other. The fight
+ * therefore has no length of its own: it lasts until the target dies. Against a tank that is long and steady
+ * damage counts; against a squishy target it is short and burst counts, as in a game. DPS is the target's health
+ * over the time to kill, so ranking builds by it is ranking them by how fast they kill. Without a target there is
+ * nothing to kill, and the fight is a fixed window (LIMITS.window); past the horizon it is cut there.
+ *
+ * Each action's damage counts as dealt evenly until the next action, so the time to kill moves smoothly with the
+ * target's health: the killing blow counts only as far as it was needed. With no ability in the combo this is
+ * the sustained DPS above. */
+export interface FightResult {
+  /** damage per second over the fight: after resistances, and before them (raw) */
+  dps: Amount;
+  /** seconds to kill from full health; null without a target or beyond the horizon */
+  timeToKill: number | null;
+  /** how long it was measured over: the time to kill, the horizon, or the window without a target */
+  seconds: number;
+  /** the abilities cast, first choice first when several are ready at once */
+  abilities: CastSlot[];
+  /** basic attacks and casts of each ability made before the end, the killing one included */
+  uses: Record<Action, number>;
 }
 
 /** Where the engine reads compiled data from. */

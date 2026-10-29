@@ -4,7 +4,7 @@ import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
 import { secureHeaders } from 'hono/secure-headers';
-import { calculate, championAsTarget, resolveTarget } from '../engine/calc.ts';
+import { calculate, championAsTarget, resolveTarget, targetItems } from '../engine/calc.ts';
 import { CalcError, type CalcResult, type TargetInput } from '../engine/types.ts';
 import type { ChampionData, ItemData, Slot } from '../shared/types.ts';
 import { SLOTS } from '../shared/types.ts';
@@ -109,12 +109,21 @@ export function createApp(data: ServedData, opts: AppOptions = {}) {
     const champ = data.champion(c.req.param('id'));
     return champ ? cached(c, championView(champ)) : c.json({ error: { message: 'no such champion' } }, 404);
   });
+  /* A champion's health, armor and magic resist at a level, as the target: its own, with its items' added when
+     `items` lists them (ids separated by commas) */
   api.get('/champions/:id/target', c => {
     const champ = data.champion(c.req.param('id'));
     if (!champ) return c.json({ error: { message: 'no such champion' } }, 404);
     const level = Math.round(Number(c.req.query('level') ?? 1));
     if (!(level >= 1 && level <= 18)) return c.json({ error: { field: 'level', message: 'level must be between 1 and 18' } }, 400);
-    return cached(c, championAsTarget(champ, level));
+    const list = c.req.query('items');
+    try {
+      const items = targetItems(data, list ? list.split(',').map(Number) : [], 'items');
+      return cached(c, championAsTarget(champ, level, items));
+    } catch (err) {
+      if (err instanceof CalcError) return c.json({ error: { field: err.field, message: err.message } }, 400);
+      throw err;
+    }
   });
 
   api.post('/calc', bodyLimit({ maxSize: 16 * 1024 }), async c => {

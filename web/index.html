@@ -309,8 +309,9 @@ body[data-compare="on"] .slot.uniq::after{content:"";position:absolute;left:0;ri
 .ab-top{display:flex;align-items:center;justify-content:space-between;gap:.6rem}
 .ab-for{display:flex;align-items:center;gap:.45rem;font-weight:700;font-size:.9rem;white-space:nowrap}
 .ab-for .spark{color:var(--a)}
-.ab-goals,.ab-limit .seg{align-self:start}
+.ab-goals,.ab-limit .seg,.ab-pool{align-self:start}
 .ab-goals button{padding:.38rem .8rem}
+.ab-pool button{padding:.38rem .75rem}
 .ab-says{margin:0;font-size:.76rem;color:var(--dim);min-height:2em}
 .ab-limit{display:flex;flex-wrap:wrap;align-items:center;gap:.45rem .6rem}
 .ab-limit .seg button{padding:.38rem .75rem}
@@ -431,12 +432,15 @@ input[type=range]::-moz-range-thumb{width:.85rem;height:.85rem;border:0;backgrou
   repeating-linear-gradient(90deg,transparent 0 calc(10000%/var(--hpv) - 1px),rgba(8,28,27,.45) 0 calc(10000%/var(--hpv)))}
 .hp-txt{font-family:var(--font-mono);font-size:.82rem;color:var(--dim);white-space:nowrap}
 .hp-txt b{color:var(--text);font-weight:600}
-.t-inv{display:grid;gap:.55rem;align-content:start}
+.t-inv{position:relative;display:grid;gap:.55rem;align-content:start;max-width:24rem}
 .t-inv .sec-head{justify-content:flex-start}
-.t-slots{display:flex;gap:.45rem}
-.t-slots span{width:3rem;height:3rem;border:1px dashed var(--faint);border-radius:3px;opacity:.55}
+.t-inv .b-gold{font-family:var(--font-mono);font-size:.76rem;color:var(--dim)}
+.t-inv .b-gold b{color:var(--text);font-weight:600}
+.t-slots{display:grid;grid-template-columns:repeat(6,3.3rem);gap:.45rem}
 .t-inv p{margin:0;font-size:.8rem;color:var(--faint)}
-.soon{font-size:.62rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);border:1px solid var(--faint);border-radius:99px;padding:.02rem .45rem}
+.t-inv p .swap{margin-left:.3rem}
+/* the item picker, opened for the target: over the dials, from the items' right edge */
+.t-inv .picker{left:auto;right:0;width:56rem}
 
 /* ---------- breakdown tab ---------- */
 .pane-break{display:grid;grid-template-columns:minmax(0,1fr) 27rem;gap:3.5rem}
@@ -473,6 +477,8 @@ body[data-compare="on"] .n.win{color:var(--text);font-weight:700}
 .bs{display:grid;gap:.55rem}
 .bs+.bs{padding-top:1.3rem;border-top:1px solid var(--rule)}
 .mixrow{display:grid;grid-template-columns:1.35rem 9rem minmax(0,1fr);gap:.7rem;align-items:center;font-size:.84rem;color:var(--dim)}
+.fightrow{display:grid;grid-template-columns:1.35rem minmax(0,1fr);gap:.7rem;align-items:center;font-size:.84rem;color:var(--dim)}
+.fightrow b{color:var(--text)}
 .split{display:flex;height:.5rem;border-radius:1px;overflow:hidden}
 .split i{display:block;background:var(--c)}
 .p{--c:var(--phys)} .m{--c:var(--magic)}
@@ -1062,8 +1068,9 @@ input[type=range]::-webkit-slider-thumb{width:1.5rem;height:1.5rem;margin-top:ca
 input[type=range]::-moz-range-thumb{width:1.5rem;height:1.5rem}
 .t-row2{grid-template-columns:minmax(0,1fr);gap:1.6rem}
 .hp{grid-template-columns:1.35rem minmax(0,1fr) auto}
-.t-slots{gap:.4rem}
-.t-slots span{width:auto;flex:1;aspect-ratio:1;height:auto}
+.t-inv{max-width:none}
+.t-inv .picker{left:0;width:auto}
+.t-slots{grid-template-columns:repeat(6,minmax(0,1fr));gap:.45rem}
 
 /* breakdown: each source is two lines, its numbers on the first, its type and bars under them */
 .pane-break{grid-template-columns:minmax(0,1fr);gap:2rem}
@@ -1270,7 +1277,7 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
     </div>
     <div class="hero-side">
       <div class="metric">
-        <span class="lbl">DPS, autos and procs</span>
+        <span class="lbl" id="dps-lbl">DPS, to the kill</span>
         <div class="metric-v">
           <span class="mv a win"><span class="tag a sm only-cmp">A</span><i>–</i></span>
           <span class="mv b only-cmp"><span class="tag b sm">B</span><i>–</i></span>
@@ -1440,10 +1447,11 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
           <div class="hp a"><span class="tag a sm">A</span><div class="hpbar" id="bar-a"><i></i></div><span class="hp-txt"><b id="left-a">–</b> left</span></div>
           <div class="hp b only-cmp"><span class="tag b sm">B</span><div class="hpbar" id="bar-b"><i></i></div><span class="hp-txt"><b id="left-b">–</b> left</span></div>
         </div>
-        <div class="t-inv">
-          <div class="sec-head"><span class="lbl">Target items</span><span class="soon">soon</span></div>
-          <div class="t-slots" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
-          <p>Their items will add to the stats above.</p>
+        <div class="t-inv" id="t-inv">
+          <div class="sec-head"><span class="lbl">Target items</span><span class="b-gold only-champ"><b id="t-gold">0</b> gold</span></div>
+          <div class="t-slots only-champ" id="t-slots"></div>
+          <p class="only-champ">Their health, armor and magic resist add to the stats above. What their passives do isn't counted.</p>
+          <p class="only-dummy">Only an enemy champion holds items. <button class="swap" data-t="champ">Use an enemy champion</button></p>
         </div>
       </div>
     </section>

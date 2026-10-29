@@ -83,6 +83,10 @@ export interface SpellData {
   slot?: Slot;
   maxRank: number;
   cooldown?: number[];
+  /** charges, by rank: how many it holds and the seconds each takes to come back (Vel'Koz's Plasma Fission,
+      Teemo's mushrooms). `cooldown` is then only the wait between two casts. `fixed`: ability haste does not
+      shorten the recharge */
+  ammo?: { max: number[]; recharge: number[]; fixed?: true };
   cost?: number[];
   castTime?: number;
   /** index = rank, 0 is the unlearned rank */

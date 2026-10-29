@@ -1,11 +1,14 @@
-/* Auto-build: the items that make a build best at one thing (combo damage, sustained DPS or staying alive),
+/* Auto-build: the items that make a build best at one thing (combo damage, DPS in a fight or staying alive),
    within an amount of gold or a number of items. Every build is scored by the engine itself, so whatever it
    models (crit with Infinity Edge, penetration against the target's armor, on-hit, amplifiers, stacks at their
-   defaults) counts the same as on the page.
+   defaults) counts the same as on the page. DPS is the fight's (FightResult in src/engine/types.ts): the combo's
+   abilities cast as they come off cooldown with attacks between, until the target dies, so ability haste and
+   ability damage count, and how long the fight lasts follows from the target rather than from the champion.
 
    Scoring every build is out of reach: about 105 finished Summoner's Rift items in six slots. So the search
    first leaves out what cannot win and then scores every build that is left:
      1. the rules: the Rift's shop, one pair of boots and the game's other "only so many of" groups (ItemData.limits);
+        and, when asked, only what the champion's players build (`pool`);
      2. items that add little on their own to the kept items are dropped, and at most POOL of the rest are tried;
      3. every build of those under the limit is scored. With a gold limit only builds that have no room left
         for another item count, since adding one never costs damage;
@@ -13,7 +16,7 @@
         until no swap helps. That result is the best found, not proven best, and says so (`exact`);
      5. with a gold limit, what is left buys components, best value first.
    Runs in the browser, in a Web Worker (worker.ts), and in the tests. Pure and synchronous. */
-import { buildStats, calculate, comboDamage, sustainedDps } from '../engine/calc.ts';
+import { buildStats, calculate, comboDamage, fightDps } from '../engine/calc.ts';
 import { damageMultiplier } from '../engine/sim.ts';
 import type { BuildInput, ComboInput, DataSource, TargetInput } from '../engine/types.ts';
 import type { ChampionData, DamageType, ItemData } from '../shared/types.ts';
@@ -40,7 +43,13 @@ export interface AutoBuildRequest {
   boots?: boolean;
   /** for tankiness: the share of the damage taken that is physical, magic and true. Half physical, half magic if left out */
   taken?: Record<DamageType, number>;
+  /** the finished items tried: `any` that the rules allow (the default), or only those the champion's players `built`
+      (ChampionData.itemPopularity). The engine plays any champion with any item, and in a fight a few seconds long
+      marksman items give a mage more damage than its own: its spells wait on cooldowns while every attack lands.
+      `built` keeps the search to the champion's own kind of build. Without a big enough sample it is `any` */
+  pool?: Pool;
 }
+export type Pool = 'built' | 'any';
 
 export interface FoundBuild {
   /** kept items first, then the finished items found, then components */
@@ -62,6 +71,8 @@ export interface AutoBuildResult {
   scored: number;
   /** every build that could win was scored */
   exact: boolean;
+  /** the items it drew from: `built` only when that was asked and the champion's sample allowed it */
+  pool: Pool;
   /** why there is nothing to show, when there is nothing */
   problem: string | null;
 }
@@ -77,6 +88,16 @@ const PARTS = 8;
 /** an item adding less than this share of the best single item's gain is left out */
 const SMALL = 0.03;
 const SLOTS = 6;
+/** `built`: the sampled builds a champion needs (as the item picker's order), and the share of them, and the
+    number, an item has to be in */
+const SAMPLE = 20, POPULAR = 0.01, POPULAR_BUILDS = 2;
+
+/** The finished items a champion's players build, by id; null without a big enough sample. */
+export function builtBy(champ: ChampionData | undefined): Set<number> | null {
+  const p = champ?.itemPopularity;
+  if (!p || p.builds < SAMPLE) return null;
+  return new Set(Object.entries(p.shares).filter(([, s]) => s >= POPULAR && s * p.builds >= POPULAR_BUILDS).map(([id]) => Number(id)));
+}
 
 const rift = (it: ItemData) => it.shops.includes('sr');
 const isBoots = (it: ItemData) => it.tags.includes('Boots');
@@ -116,13 +137,13 @@ function ranksAt(champ: ChampionData, level: number): BuildInput['ranks'] {
   return ranks;
 }
 
-/** The split of what an enemy champion deals: its auto attacks and each ability once, at its level, with no items. */
-export function damageTaken(data: DataSource, enemy: string, level: number): Record<DamageType, number> {
+/** The split of what an enemy champion deals: its auto attacks and each ability once, at its level, with its items. */
+export function damageTaken(data: DataSource, enemy: string, level: number, items: number[] = []): Record<DamageType, number> {
   const champ = data.champion(enemy);
   const half = { physical: 0.5, magic: 0.5, true: 0 };
   if (!champ) return half;
   const r = calculate(data, {
-    build: { champion: champ.id, level, ranks: ranksAt(champ, level), items: [] },
+    build: { champion: champ.id, level, ranks: ranksAt(champ, level), items: items.filter(id => data.item(id)).slice(0, 6) },
     target: null, combo: { counts: { aa: 3, q: 1, w: 1, e: 1, r: 1 } },
   });
   const t = r.combo.byType, sum = t.physical.raw + t.magic.raw + t.true.raw;
@@ -150,10 +171,12 @@ export function autoBuild(data: DataSource, items: Iterable<ItemData>, req: Auto
     const itemOptions = Object.fromEntries(Object.entries(req.build.itemOptions ?? {}).filter(([id]) => held.has(id)));
     const calc = { build: { ...req.build, items: ids, itemOptions }, target: req.target, combo: req.combo };
     if (goal === 'burst') return comboDamage(data, calc);
-    if (goal === 'dps') return sustainedDps(data, calc);
+    if (goal === 'dps') return fightDps(data, calc);
     return effectiveHealth(buildStats(data, calc), taken);
   };
-  const result = (over: Partial<AutoBuildResult>): AutoBuildResult => ({ goal, builds: [], base: 0, allowed: 0, tried: 0, scored, exact: true, problem: null, ...over });
+  // what the champion's players build, when asked and known; too few of those to fill the slots is any item
+  let built = req.pool === 'built' ? builtBy(data.champion(req.build.champion)) : null;
+  const result = (over: Partial<AutoBuildResult>): AutoBuildResult => ({ goal, builds: [], base: 0, allowed: 0, tried: 0, scored, exact: true, pool: built ? 'built' : 'any', problem: null, ...over });
 
   if (keep.length > SLOTS) return result({ problem: 'A build holds six items.' });
   if (!fits(keep)) return result({ problem: 'The kept items break the game\'s rules: two pairs of boots, or two of a kind the shop allows once.' });
@@ -169,6 +192,10 @@ export function autoBuild(data: DataSource, items: Iterable<ItemData>, req: Auto
   const kept = new Set(keep.map(it => it.id));
   let pool = [...items].filter(it => finished(it) && !kept.has(it.id) && !never.has(it.id) && it.gold <= left && fits([...keep, it]));
   if (byItems && req.boots === false) pool = pool.filter(it => !isBoots(it));
+  if (built) {
+    const theirs = pool.filter(it => built!.has(it.id));
+    if (theirs.length >= open + 2) pool = theirs; else built = null;
+  }
   const allowed = pool.length;
   if (open === 0) return result({ builds: [{ items: keep.map(it => it.id), gold: keepGold, score: base }], base, allowed });
   if (byItems && pool.length < open) return result({ base, allowed, problem: 'Not that many items the rules allow are left to add.' });

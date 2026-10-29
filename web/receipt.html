@@ -295,8 +295,8 @@ body[data-compare="on"] .slot.uniq::after{content:"";position:absolute;left:.1re
 .ab-top{display:flex;align-items:center;justify-content:space-between;gap:.6rem}
 .ab-for{display:flex;align-items:center;gap:.45rem;font-weight:700;font-size:.84rem;white-space:nowrap}
 .ab-for .spark{color:var(--hl-a)}
-.ab-goals,.ab-limit .seg{align-self:start}
-.ab-goals button,.ab-limit .seg button{padding:.34rem .7rem}
+.ab-goals,.ab-limit .seg,.ab-pool{align-self:start}
+.ab-goals button,.ab-limit .seg button,.ab-pool button{padding:.34rem .7rem}
 .ab-says{margin:0;font-size:.72rem;color:var(--chalk-dim);min-height:2em}
 .ab-limit{display:flex;flex-wrap:wrap;align-items:center;gap:.45rem .55rem}
 .ab-amt{display:flex;align-items:center;gap:.4rem;font-size:.76rem;color:var(--chalk-dim)}
@@ -549,12 +549,13 @@ input[type=range]::-moz-range-track{height:2px;background:var(--rule)}
 input[type=range]::-moz-range-thumb{width:.5rem;height:.95rem;border:0;background:var(--chalk);border-radius:1px}
 .dial-note{font-family:var(--font-mono);font-size:.64rem;color:var(--chalk-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-.t-inv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.45rem .9rem;align-items:center}
-.t-inv .row-head{grid-column:1/-1;justify-content:flex-start}
-.t-slots{display:flex;gap:.35rem}
-.t-slots span{width:2.2rem;height:2.2rem;border:1px dashed var(--chalk-faint);border-radius:2px;opacity:.6}
+.t-inv{position:relative;display:grid;gap:.45rem;align-content:start}
+.t-inv .row-head{justify-content:flex-start}
+.t-inv .b-gold{font-family:var(--font-mono);font-size:.7rem;color:var(--chalk-dim)}
+.t-inv .b-gold b{color:var(--chalk);font-weight:600}
+.t-slots{display:grid;grid-template-columns:repeat(6,minmax(0,2.7rem));gap:.4rem}
 .t-inv p{margin:0;font-size:.72rem;line-height:1.25;color:var(--chalk-faint)}
-.soon{font-family:var(--font-mono);font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:var(--chalk-dim);border:1px solid var(--chalk-faint);border-radius:2px;padding:.02rem .35rem}
+.t-inv p .swap{margin-left:.3rem}
 
 /* ---------- stat ledger ---------- */
 .ledger{position:relative;z-index:1;display:grid;grid-template-columns:10rem repeat(12,minmax(0,1fr));padding:0 1.5rem;border-top:1px solid var(--rule);background:rgba(7,25,24,.82)}
@@ -935,8 +936,7 @@ body[data-compare="off"] .r-row{grid-template-columns:1.9rem minmax(0,1fr) 4.4re
 input[type=range]{height:2.5rem}
 input[type=range]::-webkit-slider-thumb{width:.8rem;height:1.6rem;margin-top:calc(1px - .8rem)}
 input[type=range]::-moz-range-thumb{width:.8rem;height:1.6rem}
-.t-inv{grid-template-columns:minmax(0,1fr)}
-.t-slots span{width:auto;flex:1;aspect-ratio:1;height:auto}
+.t-slots{grid-template-columns:repeat(6,minmax(0,1fr))}
 
 /* the stat ledger: three cells to a row */
 .ledger{grid-template-columns:repeat(3,minmax(0,1fr));padding:0 var(--pr) 1rem var(--pl)}
@@ -1202,7 +1202,7 @@ input[type=range]::-moz-range-thumb{width:.8rem;height:1.6rem}
           <div class="r-more" id="more">
             <div class="r-row"><span class="lbl">Blocked by target</span>
               <span class="n a"><i>–</i></span><span class="n b only-cmp"><i>–</i></span><span class="only-solo"></span></div>
-            <div class="r-row"><span class="lbl">DPS, autos and procs</span>
+            <div class="r-row"><span class="lbl" id="dps-lbl">DPS, to the kill</span>
               <span class="n a"><i>–</i></span><span class="n b only-cmp"><i>–</i></span><span class="only-solo"></span></div>
             <div class="r-row"><span class="lbl">Time to kill</span>
               <span class="n a"><i>–</i></span><span class="n b only-cmp"><i>–</i></span><span class="only-solo"></span></div>
@@ -1304,10 +1304,11 @@ input[type=range]::-moz-range-thumb{width:.8rem;height:1.6rem}
         </div>
       </div>
 
-      <div class="t-inv needs-target">
-        <div class="row-head"><span class="eyebrow">Target items</span><span class="soon">soon</span></div>
-        <div class="t-slots" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
-        <p>Their items will add to the stats above.</p>
+      <div class="t-inv needs-target" id="t-inv">
+        <div class="row-head"><span class="eyebrow">Target items</span><span class="b-gold only-champ"><b id="t-gold">0</b> gold</span></div>
+        <div class="t-slots only-champ" id="t-slots"></div>
+        <p class="only-champ">Their health, armor and magic resist add to the stats above; their passives aren't counted.</p>
+        <p class="only-dummy">Only an enemy champion holds items. <button class="swap" data-t="champ">Use an enemy champion</button></p>
       </div>
     </section>
   </main>

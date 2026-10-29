@@ -96,8 +96,26 @@ test('options, item settings, crits and ranks per build', () => {
 test('a headline is the calculation\'s own numbers', () => {
   for (const r of [...read(PAGE).requests, ...read({ ...PAGE, t: 'raw', k: 'never' }).requests, ...read({ ...PAGE, c: 'Vayne', t: 'champ', e: ['Garen', 18] }).requests]) {
     const full = calculate(data, r), h = headline(data, r);
-    assert.deepEqual(h, { combo: { total: full.combo.total, hpLeft: full.combo.hpLeft, kills: full.combo.kills }, dps: full.dps, timeToKill: full.timeToKill });
+    assert.deepEqual(h, {
+      combo: { total: full.combo.total, hpLeft: full.combo.hpLeft, kills: full.combo.kills }, dps: full.dps, timeToKill: full.timeToKill,
+      fight: { dps: full.fight.dps, timeToKill: full.fight.timeToKill },
+    });
   }
+});
+
+test('an enemy\'s items: the link\'s third part, its slots, which the dials then count', () => {
+  const held = [3075, 4401, 3047];
+  const sb = read({ ...PAGE, t: 'champ', e: ['Ornn', 13, [3075, null, 4401, 999999, 'x', 3047, 3068]] });
+  const ornn = data.champion('Ornn')!;
+  assert.deepEqual(sb.body.target, { champion: 'Ornn', level: 13, items: held, ...championAsTarget(ornn, 13, held.map(id => data.item(id)!)) });
+  assert.equal(sb.target.kind === 'champ' && sb.target.items.length, 3);
+  assert.match(preview(data, sb).card.target[0]!, /^vs Ornn, level 13, 3 items: /);
+  // none: as before, and no items in the request
+  assert.deepEqual(read({ ...PAGE, t: 'champ', e: ['Ornn', 13, []] }).body.target, { champion: 'Ornn', level: 13, ...championAsTarget(ornn, 13) });
+  // the card's DPS and time to kill are the fight's, as the page shows them
+  const card = preview(data, sb).card.builds[0]!, full = calculate(data, sb.requests[0]!);
+  assert.equal(card.dps, full.fight.dps.dealt);
+  assert.equal(card.timeToKill, full.fight.timeToKill);
 });
 
 test('preview says only what it is: the champion and a comparison or one build; the card names the builds', () => {

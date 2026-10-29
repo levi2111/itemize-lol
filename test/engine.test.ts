@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { calculate, championAsTarget, resolveTarget } from '../src/engine/calc.ts';
-import { damageMultiplier, defaultSequence, resistAfterPen } from '../src/engine/sim.ts';
+import { damageMultiplier, defaultSequence, Fight, resistAfterPen } from '../src/engine/sim.ts';
 import { CalcError, type CalcRequest } from '../src/engine/types.ts';
 import { Dataset } from '../src/server/dataset.ts';
 import { growth } from '../src/shared/expr.ts';
@@ -216,6 +216,100 @@ test('time to kill and DPS agree with each other', () => {
   assert.equal(unkillable.timeToKill, null);
 });
 
+test('the fight: with no ability in the combo it is the sustained DPS and time to kill', () => {
+  for (const [champion, items] of [['Samira', [3031]], ['Vayne', [3153, 3124, 3006]], ['Jinx', [3031, 6672]]] as const) {
+    for (const target of [{ hp: 2400, armor: 80, mr: 50 }, { champion: 'Ornn', level: 13 }, { hp: 900000, armor: 300, mr: 300 }]) {
+      const res = calculate(data, req({ champion, items: [...items] }, { counts: { aa: 3 } }, target));
+      // out of reach, the two cut the last attack at the horizon a little differently
+      if (res.timeToKill === null) near(res.fight.dps.dealt / res.dps.dealt, 1, 0.005);
+      else near(res.fight.dps.dealt, res.dps.dealt);
+      assert.equal(res.fight.timeToKill, res.timeToKill);
+      assert.deepEqual(res.fight.abilities, []);
+    }
+  }
+});
+
+test('the fight: it lasts until the target dies, and its DPS is the target\'s health over that time', () => {
+  const res = calculate(data, req({ items: [3031, 6672] }, { counts: { aa: 3, q: 1, w: 1, e: 1, r: 1 } }, { hp: 2400, armor: 80, mr: 50 }));
+  assert.ok(res.fight.timeToKill !== null);
+  assert.equal(res.fight.seconds, res.fight.timeToKill);
+  near(res.fight.dps.dealt * res.fight.timeToKill!, 2400, 2);
+  // abilities on top of the attacks kill sooner
+  assert.ok(res.fight.timeToKill! < res.timeToKill!);
+  // no target: a fixed window; a target out of reach: the horizon, and no time to kill
+  const raw = calculate(data, req({ items: [3031] }, { counts: { aa: 3, q: 1 } }));
+  assert.equal(raw.fight.seconds, 10);
+  assert.equal(raw.fight.timeToKill, null);
+  const wall = calculate(data, req({ items: [3031] }, { counts: { aa: 3, q: 1 } }, { hp: 900000, armor: 300, mr: 300 }));
+  assert.equal(wall.fight.seconds, 60);
+  assert.equal(wall.fight.timeToKill, null);
+});
+
+test('the fight: each ability comes back after its cooldown with haste, in the combo\'s order, and buffs are not cast', () => {
+  // a target that never dies: the whole minute is played
+  const target = { hp: 900000, armor: 0, mr: 0 };
+  const ez = calculate(data, req({ champion: 'Ezreal', ranks: { q: 5, w: 1, e: 1, r: 2 }, items: [3158] }, { sequence: ['q', 'w', 'aa'] }, target));
+  assert.deepEqual(ez.fight.abilities, ['q', 'w']);
+  const cd = ez.abilities.q.cooldown!.seconds;
+  assert.ok(ez.abilities.q.cooldown!.haste > 0);
+  // cast as soon as it is ready, give or take an attack's wind-up now and then
+  assert.ok(ez.fight.uses.q <= Math.ceil(60 / cd) && ez.fight.uses.q >= Math.floor(60 / (cd + 0.3)), `${ez.fight.uses.q} casts of a ${cd} s cooldown`);
+  assert.equal(ez.fight.uses.e, 0, 'not in the combo');
+  // Silver Bolts is a passive in W's slot and Final Hour a buff: neither is cast, Tumble is
+  const vayne = calculate(data, req({ champion: 'Vayne', items: [3153] }, { counts: { aa: 3, q: 1, w: 1, r: 1 } }, target));
+  assert.deepEqual(vayne.fight.abilities, ['q']);
+  assert.equal(vayne.fight.uses.w + vayne.fight.uses.r, 0);
+});
+
+test('the fight: charges from the game data, and an ability without a real cooldown is cast once', () => {
+  const target = { hp: 900000, armor: 0, mr: 0 };
+  const velkoz = data.champion('Velkoz')!, w = velkoz.spells[velkoz.slots.w.spell]!;
+  const [max, recharge] = [w.ammo!.max[5]!, w.ammo!.recharge[5]!];
+  const res = calculate(data, req({ champion: 'Velkoz', ranks: { q: 1, w: 5, e: 1, r: 2 }, items: [] }, { counts: { w: 1 } }, target));
+  // both charges at the start, then one each recharge
+  near(res.fight.uses.w, max + Math.floor((60 - 1e-9) / recharge), 1);
+  // Light Binding has no cooldown in the game data
+  const lux = calculate(data, req({ champion: 'Lux', ranks: { q: 1, w: 1, e: 5, r: 2 }, items: [] }, { counts: { q: 1, e: 1 } }, target));
+  assert.equal(lux.fight.uses.q, 1);
+  assert.ok(lux.fight.uses.e > 3);
+  assert.ok(lux.caveats.some(c => /Light Binding .* casts it once/.test(c)));
+});
+
+test('the fight: damage over time from a cast lands tick by tick on the clock', () => {
+  const cass = data.champion('Cassiopeia')!, build = { champion: 'Cassiopeia', level: 13, ranks: { q: 5, w: 1, e: 1, r: 1 }, items: [] };
+  const target = resolveTarget(data, { hp: 5000, armor: 0, mr: 0 });
+  const f = new Fight(cass, [], build, target, { sustained: true, timed: true });
+  f.time = 0;
+  f.act('q');
+  assert.equal(f.total.dealt, 0, 'nothing has landed yet');
+  assert.ok(f.nextTick > 0 && f.nextTick < 1);
+  f.landTicks(10);
+  const once = calculate(data, { build, target: { hp: 5000, armor: 0, mr: 0 }, combo: {} }).abilities.q.cast!;
+  near(f.total.dealt, once.dealt, 0.05);
+});
+
+test('target items: a champion\'s items add to its health, armor and magic resist, as bonus', () => {
+  const thornmail = data.item(3075)!, fon = data.item(4401)!;
+  const darius = data.champion('Darius')!, own = championAsTarget(darius, 13);
+  const t = resolveTarget(data, { champion: 'Darius', level: 13, items: [3075, 4401, null] });
+  assert.deepEqual([t.hp.base, t.armor.base, t.mr.base], [own.hp, own.armor, own.mr]);
+  near(t.hp.bonus, (thornmail.stats.hp ?? 0) + (fon.stats.hp ?? 0), 1);
+  near(t.armor.bonus, (thornmail.stats.armor ?? 0) + (fon.stats.armor ?? 0), 1);
+  near(t.mr.bonus, (thornmail.stats.mr ?? 0) + (fon.stats.mr ?? 0), 1);
+  assert.deepEqual(championAsTarget(darius, 13, [thornmail, fon]), { hp: t.hp.total, armor: t.armor.total, mr: t.mr.total });
+  // the champion's own passive works on them as in any build: Ornn's Living Forge raises his bonus armor
+  const ornn = resolveTarget(data, { champion: 'Ornn', level: 13, items: [3075] });
+  assert.ok(ornn.armor.bonus > (thornmail.stats.armor ?? 0));
+  const own2 = championAsTarget(data.champion('Ornn')!, 13);
+  // totals given are still the totals; what is above the champion's own is bonus
+  const given = resolveTarget(data, { champion: 'Ornn', level: 13, items: [3075], hp: own2.hp + 1000, armor: own2.armor + 100, mr: own2.mr });
+  assert.deepEqual([given.hp.bonus, given.armor.bonus, given.mr.bonus], [1000, 100, 0]);
+  // and they count against the attacker, with a word on what does not
+  const vs = (items: number[]) => calculate(data, req({ items: [3031] }, { counts: { aa: 3 } }, { champion: 'Ornn', level: 13, items }));
+  assert.ok(vs([3075]).combo.total.dealt < vs([]).combo.total.dealt);
+  assert.ok(vs([3075]).caveats.some(c => /target's items/.test(c)));
+});
+
 test('an ability without a rank does nothing and says so', () => {
   const res = calculate(data, req({ ranks: { q: 0, w: 0, e: 0, r: 0 } }, { counts: { q: 1 } }));
   assert.equal(res.combo.total.raw, 0);
@@ -291,6 +385,9 @@ test('bad requests are rejected with the offending field', () => {
   bad(req({}, {}, { dummy: true, champion: 'Ornn', level: 3 }), 'target');
   bad(req({}, {}, { champion: 'Nobody', level: 3 }), 'target.champion');
   bad(req({}, {}, { champion: 'Ornn', level: 19 }), 'target.level');
+  bad(req({}, {}, { dummy: true, hp: 2400, armor: 0, mr: 0, items: [3075] }), 'target.items');
+  bad(req({}, {}, { champion: 'Ornn', level: 13, items: [999999] }), 'target.items');
+  bad(req({}, {}, { champion: 'Ornn', level: 13, items: [3075, 3075, 3075, 3075, 3075, 3075, 3075] }), 'target.items');
   bad(req({ items: [3161], itemOptions: { 3057: { spellblade: 1 } } }, {}), 'build.itemOptions');
   bad(req({ items: [3161], itemOptions: { 3161: { nothing: 1 } } }, {}), 'build.itemOptions');
   bad(req({ items: [3161], itemOptions: { 3161: { stacks: 'four' as unknown as number } } }, {}), 'build.itemOptions');
@@ -301,7 +398,8 @@ test('every champion computes without a crash or a NaN', () => {
     const champ = data.champion(c.id)!;
     const ranks = { q: champ.slots.q.maxRank, w: champ.slots.w.maxRank, e: champ.slots.e.maxRank, r: champ.slots.r.maxRank };
     const res = calculate(data, { build: { champion: c.id, level: 18, ranks, items: [3153, 6672, 3071] }, target: { hp: 3000, armor: 100, mr: 60 }, combo: { counts: { aa: 3, q: 1, w: 1, e: 1, r: 1 } } });
-    for (const v of [res.combo.total.raw, res.combo.total.dealt, res.dps.dealt, res.stats.ad.total]) assert.ok(Number.isFinite(v) && v >= 0, `${c.id}: ${v}`);
+    for (const v of [res.combo.total.raw, res.combo.total.dealt, res.dps.dealt, res.fight.dps.dealt, res.stats.ad.total]) assert.ok(Number.isFinite(v) && v >= 0, `${c.id}: ${v}`);
+    assert.ok(res.fight.seconds > 0 && res.fight.seconds <= 60, `${c.id}: a fight of ${res.fight.seconds} s`);
     assert.ok(res.combo.total.dealt <= res.combo.total.raw + 0.01, `${c.id}: dealt exceeds raw`);
   }
 });

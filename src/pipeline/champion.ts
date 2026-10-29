@@ -50,6 +50,12 @@ function compileSpell(id: string, obj: Raw, table: StringTable, log: CompileLog)
   if (name) out.name = name;
   // cooldowns are indexed by rank; costs start at rank 1
   if (Array.isArray(s.cooldownTime)) out.cooldown = s.cooldownTime.map(clean);
+  // charges, where the spell holds any and they come back on a timer
+  if (Array.isArray(s.mMaxAmmo) && Array.isArray(s.mAmmoRechargeTime)
+    && s.mMaxAmmo.some((n: number, i: number) => n >= 1 && s.mAmmoRechargeTime[i] > 0)) {
+    out.ammo = { max: s.mMaxAmmo.map(clean), recharge: s.mAmmoRechargeTime.map(clean) };
+    if (s.mCooldownNotAffectedByCDR === true) out.ammo.fixed = true;
+  }
   if (Array.isArray(s.mana)) out.cost = [s.mana[0] ?? 0, ...s.mana].map(clean);
   const castTime = s.mCastTime ?? s.spellCastTime;
   if (typeof castTime === 'number') out.castTime = clean(castTime);

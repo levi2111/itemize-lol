@@ -2,8 +2,8 @@
    builds as the engine does, and the browser gets the engine as plain JavaScript. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { autoBuild, effectiveHealth, finished, type AutoBuildRequest } from '../src/autobuild/search.ts';
-import { buildStats, calculate, championAsTarget, comboDamage, sustainedDps } from '../src/engine/calc.ts';
+import { autoBuild, builtBy, effectiveHealth, finished, type AutoBuildRequest } from '../src/autobuild/search.ts';
+import { buildStats, calculate, championAsTarget, comboDamage, fightDps, sustainedDps } from '../src/engine/calc.ts';
 import type { CalcRequest } from '../src/engine/types.ts';
 import { Dataset } from '../src/server/dataset.ts';
 import { ENGINE_ENTRY, engineData, engineModules } from '../src/server/engine-files.ts';
@@ -39,7 +39,25 @@ test('quick measures are the numbers a full calculation reports', () => {
   const full = calculate(data, req);
   assert.ok(Math.abs(comboDamage(data, req) - full.combo.total.dealt) < 0.01);
   assert.ok(Math.abs(sustainedDps(data, req) - full.dps.dealt) < 0.01);
+  assert.ok(Math.abs(fightDps(data, req) - full.fight.dps.dealt) < 0.01);
   assert.ok(Math.abs(buildStats(data, req).hp.total - full.stats.hp.total) < 0.01);
+});
+
+test('DPS is the fight\'s, abilities included, and a pool of what the champion\'s players build', () => {
+  const syndra = { champion: 'Syndra', level: 13, ranks: { q: 5, w: 5, e: 1, r: 2 }, items: [] };
+  const theirs = builtBy(data.champion('Syndra'))!;
+  assert.ok(theirs.size >= 8 && theirs.has(item("Rabadon's Deathcap").id));
+  const built = autoBuild(data, data.items, ask({ goal: 'dps', build: syndra, limit: { items: 3 }, pool: 'built' }));
+  assert.equal(built.pool, 'built');
+  for (const b of built.builds) {
+    assert.ok(b.items.every(id => theirs.has(id)), 'only what Syndra players build');
+    assert.ok(Math.abs(b.score - fightDps(data, { build: { ...syndra, items: b.items }, target, combo: ask({}).combo })) < 0.01);
+  }
+  const any = autoBuild(data, data.items, ask({ goal: 'dps', build: syndra, limit: { items: 3 }, pool: 'any' }));
+  assert.equal(any.pool, 'any');
+  assert.ok(any.allowed > built.allowed);
+  // a champion without a sample, or with too few of its items for the slots, falls back to any item
+  assert.equal(builtBy({ ...data.champion('Syndra')!, itemPopularity: { builds: 5, shares: {} } }), null);
 });
 
 test('a gold limit: every build fits in it, keeps the rules, and beats an empty build', () => {

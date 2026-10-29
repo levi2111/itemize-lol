@@ -28,7 +28,8 @@ const S = {
   compare: true,
   target: 'dummy',
   dummy: {hp:2400, ar:80, mr:50},
-  enemy: {id:'Ornn', name:'Ornn', level:13},
+  enemy: {id:'Ornn', name:'Ornn', level:13, items:[null,null,null,null,null,null]},   // the target champion and its six slots
+  enemyView: null,                  // GET /champions/:id of the enemy, for the item picker's order when it picks for the enemy
   combo: {aa:3, q:1, w:1, e:0, r:0},
   crits: 'average',                 // how the combo counts critical strikes: average, never or always
   shops: {aram: false, arena: false},   // shops the item picker adds to Summoner's Rift's
@@ -149,10 +150,13 @@ let timer = 0, seq = 0, feed = false;
    the receipt is then redrawn in place instead of being fed out of the till again. */
 function schedule(quiet) { if (!quiet) feed = true; clearTimeout(timer); timer = setTimeout(recalc, 70); }
 /* The dials hold totals; saying what stands there lets the engine split them into base and bonus,
-   which effects such as Giant Slayer read: the dummy's base is the practice tool's, an enemy's its own. */
+   which effects such as Giant Slayer read: the dummy's base is the practice tool's, an enemy's its own.
+   An enemy's items are in the dials already (enemyStats); the engine is told them as well. */
+const enemyItems = () => S.enemy.items.filter(Boolean);
 function targetBody() {
   if (S.target === 'raw') return null;
-  const v = readDials(), who = S.target === 'champ' ? {champion: S.enemy.id, level: S.enemy.level} : {dummy: true};
+  const v = readDials(), held = enemyItems();
+  const who = S.target === 'champ' ? {champion: S.enemy.id, level: S.enemy.level, ...(held.length && {items: held})} : {dummy: true};
   return {...who, hp: v.hp, armor: v.ar, mr: v.mr};
 }
 /* A build's item settings, kept only for items it holds and settings those items still have. */
@@ -199,14 +203,21 @@ async function recalc() {
 function setTab(t) {
   $$('.tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
   $$('.pane').forEach(p => p.hidden = p.dataset.pane !== t);
-  if (t !== 'build') { closePicker(); closeAuto(); }
+  // the picker stays open on the tab with its slots: the builds', or the enemy's
+  if (pick && (pick.b === 't') !== (t === 'target')) closePicker();
+  if (t !== 'build') closeAuto();
 }
 function paintTabs() {
   if (RECEIPT) return;
-  const na = S.builds.a.filter(Boolean).length, nb = S.builds.b.filter(Boolean).length, v = readDials(), e = S.enemy;
+  const na = S.builds.a.filter(Boolean).length, nb = S.builds.b.filter(Boolean).length, v = readDials();
   $('#ts-build').textContent = `${S.champ.name}, level ${S.level}, ` + (S.compare ? `${na} and ${nb} items${S.split ? ', ranks per build' : ''}` : `${na} items`);
   $('#ts-target').textContent = S.target === 'raw' ? 'None, raw output'
-    : `${S.target === 'dummy' ? 'Dummy' : e.name + ' Lv ' + e.level}, ${nf(v.hp)} HP, ${v.ar} armor, ${v.mr} MR`;
+    : `${S.target === 'dummy' ? 'Dummy' : enemyName()}, ${nf(v.hp)} HP, ${v.ar} armor, ${v.mr} MR`;
+}
+/* The enemy as the page names it: "Ornn Lv 13", and its items when it holds any. */
+function enemyName() {
+  const e = S.enemy, n = enemyItems().length;
+  return `${e.name} Lv ${e.level}${n ? ` + ${n} item${n === 1 ? '' : 's'}` : ''}`;
 }
 
 /* ---------- champion ---------- */
@@ -231,7 +242,7 @@ function paintSub() {
     const v = readDials(), stats = `${nf(v.hp)} HP, ${v.ar} armor, ${v.mr} MR`;
     $('#r-champ').textContent = $('#raw-champ').textContent = S.champ.name;
     $('#r-lvl').textContent = S.level;
-    $('#r-target').textContent = t === 'raw' ? 'None' : t === 'dummy' ? `Dummy, ${stats}` : `${e.name} Lv ${e.level}, ${stats}`;
+    $('#r-target').textContent = t === 'raw' ? 'None' : t === 'dummy' ? `Dummy, ${stats}` : `${enemyName()}, ${stats}`;
     $('#r-combo').textContent = comboText();
     $('#stamp-sm').textContent = t === 'raw' ? 'before resistances' : 'after mitigation';
     $('#stamp-lg').textContent = t === 'raw' ? 'raw output' : t === 'dummy' ? 'vs dummy' : 'vs ' + e.name;
@@ -431,6 +442,7 @@ function renderBuilds() {
     $('.b-gold b', row).textContent = nf(S.builds[k].reduce((s, id) => s + (S.items.get(id)?.gold || 0), 0));
   }
   paintAutoKeep();
+  renderTargetItems();
   const now = $('#shop-now');
   if (now) {
     const on = Object.keys(S.shops).filter(m => S.shops[m]);
@@ -441,6 +453,20 @@ function renderBuilds() {
       : `Both builds use the champion, level and ranks ${PHONE.matches ? 'on this tab' : 'above'}. Underlined items differ.`;
   }
   paintTabs();
+}
+/* The enemy champion's six slots, on the Target tab: the same picker fills them ('t' where a build is 'a' or 'b'),
+   and their stats go into the dials (enemyStats). */
+function renderTargetItems() {
+  const el = $('#t-slots');
+  if (!el) return;
+  const name = esc(S.enemy.name);
+  el.innerHTML = S.enemy.items.map((id, i) => {
+    const sel = pick && pick.b === 't' && pick.i === i ? ' sel' : '';
+    if (!id) return `<div class="slot empty${sel}" role="button" tabindex="0" data-b="t" data-i="${i}" aria-label="${name}'s items, slot ${i + 1}, empty"></div>`;
+    const it = S.items.get(id), item = esc(it?.name || 'Item ' + id), shop = shopOf(it);
+    return `<div class="slot${sel}" role="button" tabindex="0" data-b="t" data-i="${i}" title="${item}${shop ? `, ${SHOP[shop]} item` : ''}" aria-label="${name}'s items, slot ${i + 1}, ${item}">${itemIco(id)}${badge(it)}<button class="rm" data-rm aria-label="Remove ${item}">×</button></div>`;
+  }).join('');
+  $('#t-gold').textContent = nf(S.enemy.items.reduce((s, id) => s + (S.items.get(id)?.gold || 0), 0));
 }
 /* The shops: Summoner's Rift's items are always offered; ARAM's and Arena's own can be added.
    An item the Rift does not sell is marked with its shop, in the picker and in a slot. */
@@ -454,12 +480,16 @@ function setShop(m) {
   renderItems(); renderBuilds();
 }
 function pickerLabel() {
-  $('#picker-for').innerHTML = `<span class="tag ${pick.b} sm">${pick.b.toUpperCase()}</span>Slot ${pick.i + 1}`;
+  $('#picker-for').innerHTML = pick.b === 't' ? `${esc(S.enemy.name)}, slot ${pick.i + 1}` : `<span class="tag ${pick.b} sm">${pick.b.toUpperCase()}</span>Slot ${pick.i + 1}`;
 }
 function openPicker(b, i) {
   closeItemMenu(); closeAuto();
   pick = {b, i};
-  $('#picker').hidden = false;
+  // the picker opens beside the slots it fills: the builds', or the enemy's on the target's side
+  const picker = $('#picker'), home = b === 't' ? $('#t-inv') : $('#builds');
+  if (picker.parentElement !== home) home.insertBefore(picker, b === 't' ? null : $('#ab'));
+  if (b === 't') enemyKit();
+  picker.hidden = false;
   pickerLabel(); renderBuilds();
   const q = $('#item-q'); q.value = ''; searching = false; renderItems();
   if (!touched()) q.focus();
@@ -467,6 +497,17 @@ function openPicker(b, i) {
 function closePicker() {
   if (!pick) return;
   pick = null; $('#picker').hidden = true; renderBuilds();
+}
+/* The enemy's kit, for its players' items in the picker; the picker is drawn again when it arrives. */
+async function enemyKit() {
+  const id = S.enemy.id;
+  if (S.enemyView?.id === id) return;
+  try {
+    const v = await api(`/champions/${encodeURIComponent(id)}`);
+    if (S.enemy.id !== id) return;
+    S.enemyView = v;
+    if (pick?.b === 't') renderItems();
+  } catch (e) {}
 }
 /* The search reads what players type: a name or a piece of one, a nickname from the item data ("bork"),
    initials worked out from the name ("ldr"; "botrk" or "brk"), or a stat word ("lethality", "anti heal").
@@ -533,21 +574,24 @@ function readQuery(q) {
 let itemRole = null, found = new Map(), bestFind = null;
 // a search being written, which Esc clears; after a pick the words stay, selected, and Esc closes the picker
 let searching = false;
-const champClass = () => ITEM_ROLES.includes(S.champ.tags?.[0]) ? S.champ.tags[0] : null;
-const roleNow = () => itemRole?.champ === S.champ.id ? itemRole.role : champClass() || 'All';
+/* Whom the picker picks for: the champion, or the enemy when it fills the enemy's slots. */
+const pickFor = () => pick?.b === 't' ? S.champs.find(c => c.id === S.enemy.id) || S.enemy : S.champ;
+const pickView = () => pick?.b === 't' ? (S.enemyView?.id === S.enemy.id ? S.enemyView : null) : S.view;
+const champClass = () => ITEM_ROLES.includes(pickFor().tags?.[0]) ? pickFor().tags[0] : null;
+const roleNow = () => itemRole?.champ === pickFor().id ? itemRole.role : champClass() || 'All';
 const inRole = (it, role) => role === 'All' || !it.roles || it.roles.includes(role);
 const sold = (it, m) => (it.shops || ['sr']).includes(m);
 const offered = it => sold(it, 'sr') || ADDABLE.some(m => S.shops[m] && sold(it, m));
 /* The list's order: what this champion's players build, most built first, where enough of their games were
    sampled; then what all players build; then the name. A component counts for every build it goes into. */
-const champUse = () => { const p = S.view?.itemPopularity; return p && p.builds >= 20 ? p.shares : null; };const byUse = (mine = champUse()) => (x, y) => (mine?.[y.id] || 0) - (mine?.[x.id] || 0) || (y.popularity || 0) - (x.popularity || 0) || x.name.localeCompare(y.name);
+const champUse = () => { const p = pickView()?.itemPopularity; return p && p.builds >= 20 ? p.shares : null; };const byUse = (mine = champUse()) => (x, y) => (mine?.[y.id] || 0) - (mine?.[x.id] || 0) || (y.popularity || 0) - (x.popularity || 0) || x.name.localeCompare(y.name);
 function useText(it) {
   const mine = champUse()?.[it.id], n = mine || it.popularity;
   if (!n) return '';
-  return `${it.component ? 'Goes into' : 'In'} ${n < .01 ? 'under 1%' : Math.round(n * 100) + '%'} of ${mine ? S.champ.name + ' ' : ''}builds. `;
+  return `${it.component ? 'Goes into' : 'In'} ${n < .01 ? 'under 1%' : Math.round(n * 100) + '%'} of ${mine ? pickFor().name + ' ' : ''}builds. `;
 }
 function setItemRole(role) {
-  itemRole = {champ: S.champ.id, role};
+  itemRole = {champ: pickFor().id, role};
   renderItems();
   if (!touched()) $('#item-q').focus();
 }
@@ -631,7 +675,7 @@ function renderItems() {
   const mine = champClass();
   $('#item-roles').innerHTML = ITEM_ROLES.map(r => {
     const n = toks.length ? shown.filter(x => inRole(x.it, r)).length : null;
-    return `<button class="role${n === 0 ? ' none' : ''}" role="tab" data-role="${r}" aria-selected="${r === role}">${r}${r === mine ? `<i class="you" title="${esc(S.champ.name)}'s class"></i>` : ''}${n === null ? '' : `<span class="n">${n}</span>`}</button>`;
+    return `<button class="role${n === 0 ? ' none' : ''}" role="tab" data-role="${r}" aria-selected="${r === role}">${r}${r === mine ? `<i class="you" title="${esc(pickFor().name)}'s class"></i>` : ''}${n === null ? '' : `<span class="n">${n}</span>`}</button>`;
   }).join('');
   $$('#item-chips [data-w]').forEach(c => c.setAttribute('aria-pressed', toks.some(t => !t.part && t.stat?.[0] === STAT_WORD.get(c.dataset.w))));
   paintReading(toks);
@@ -639,12 +683,14 @@ function renderItems() {
 }
 function choose(id) {
   if (!pick) return;
-  S.builds[pick.b][pick.i] = id;
+  const enemy = pick.b === 't', slots = enemy ? S.enemy.items : S.builds[pick.b];
+  slots[pick.i] = id;
   searching = false;
-  const next = S.builds[pick.b].findIndex((v, j) => !v && j > pick.i);
+  const next = slots.findIndex((v, j) => !v && j > pick.i);
   if (next > -1) { pick.i = next; pickerLabel(); renderBuilds(); const q = $('#item-q'); if (!touched() || document.activeElement === q) { q.select(); q.focus(); } }
   else closePicker();
-  schedule();
+  // the enemy's dials take its items' stats first, and recalculate once they have
+  if (enemy) enemyStats(); else schedule();
 }
 
 /* ---------- auto-build ---------- */
@@ -659,7 +705,8 @@ const ENGINE = $('meta[name="engine"]')?.content || '/engine/';
 const SPARK = '<svg class="spark" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M7 2l1.6 4.4L13 8l-4.4 1.6L7 14l-1.6-4.4L1 8l4.4-1.6z"/><path d="M13 0l.6 1.4L15 2l-1.4.6L13 4l-.6-1.4L11 2l1.4-.6z"/></svg>';
 const AB_GOALS = {
   burst: {label: 'Burst', unit: 'damage', short: 'damage', says: () => S.target === 'raw' ? 'Your combo, before armor and magic resist.' : 'Your combo, against the target.'},
-  dps: {label: 'DPS', unit: 'DPS', short: 'DPS', says: () => 'Auto attacks, sustained. Abilities don’t count toward DPS yet.'},
+  dps: {label: 'DPS', unit: 'DPS', short: 'DPS', says: () => S.target === 'raw' ? 'Autos, and your combo’s abilities each time they’re ready, over 10 seconds.'
+    : 'Autos, and your combo’s abilities each time they’re ready, until the target dies: the fastest kill.'},
   tank: {label: 'Tankiness', unit: 'effective HP', short: 'eff. HP', says: () => S.target === 'champ' ? `Effective health against ${S.enemy.name}’s damage.` : 'Effective health against damage half physical, half magic.'},
 };
 const AB_GOLD = [3000, 6000, 10000, 15000, 20000];
@@ -668,6 +715,8 @@ const AB = {
   // the limit starts at a number of items on each visit and is never saved: a gold limit left on unnoticed
   // looked like poor picks
   goal: 'burst', mode: 'items', gold: 6000, count: 3, fill: true, boots: true,
+  // the items tried: what the champion's players build, or any. Any item lets marksman items win a mage's DPS
+  pool: 'built',
   goldSet: false,                   // the visitor set the gold; until then it starts at the build's own
   keep: new Set(),                  // item ids of the build that stay
   never: new Set(),                 // item ids never to use
@@ -719,9 +768,9 @@ function autoAsk() {
       build: {champion: S.champ.id, level: S.level, ranks: k === 'b' && S.split ? S.ranksB : S.ranks, options: S.options, items: [], itemOptions: itemOptsOf(k)},
       target: targetBody(), combo: {counts: S.combo, crits: S.crits},
       goal: AB.goal, limit: AB.mode === 'gold' ? {gold: AB.gold} : {items: AB.count},
-      keep, never: [...AB.never], fill: AB.fill, boots: AB.boots,
+      keep, never: [...AB.never], fill: AB.fill, boots: AB.boots, pool: AB.pool,
     },
-    enemy: S.target === 'champ' ? {id: S.enemy.id, level: S.enemy.level} : null,
+    enemy: S.target === 'champ' ? {id: S.enemy.id, level: S.enemy.level, items: enemyItems()} : null,
   };
 }
 /* `soon` waits for a moment of quiet first, for a number being typed or the page being changed. */
@@ -756,7 +805,7 @@ function autoNow(k) {
   const r = S.res?.[k];
   if (!r) return null;
   if (AB.goal === 'burst') return r.combo.total.dealt;
-  if (AB.goal === 'dps') return r.dps.dealt;
+  if (AB.goal === 'dps') return r.fight.dps.dealt;
   const t = AB.res?.taken || {physical: 0.5, magic: 0.5, true: 0}, m = x => x >= 0 ? 100 / (100 + x) : 2 - 100 / (100 - x);
   const per = t.physical * m(r.stats.armor.total) + t.magic * m(r.stats.mr.total) + t.true;
   return per > 0 ? r.stats.hp.total / per : r.stats.hp.total;
@@ -788,7 +837,9 @@ function paintAutoCtl() {
     <div class="seg ab-goals" role="radiogroup" aria-label="Best at">${Object.entries(AB_GOALS).map(([k, x]) => `<button role="radio" data-goal="${k}" aria-checked="${AB.goal === k}">${x.label}</button>`).join('')}</div>
     <p class="ab-says">${esc(g.says())}</p>
     <span class="lbl">Within</span>
-    <div class="ab-limit"><div class="seg" role="radiogroup" aria-label="Limit">${[['items', 'Items'], ['gold', 'Gold']].map(([k, l]) => `<button role="radio" data-mode="${k}" aria-checked="${AB.mode === k}">${l}</button>`).join('')}</div>${amount}</div>`;
+    <div class="ab-limit"><div class="seg" role="radiogroup" aria-label="Limit">${[['items', 'Items'], ['gold', 'Gold']].map(([k, l]) => `<button role="radio" data-mode="${k}" aria-checked="${AB.mode === k}">${l}</button>`).join('')}</div>${amount}</div>
+    <span class="lbl">From</span>
+    <div class="seg ab-pool" role="radiogroup" aria-label="Items from">${[['built', `${S.champ.name} builds`], ['any', 'Any item']].map(([k, l]) => `<button role="radio" data-pool="${k}" aria-checked="${AB.pool === k}" title="${k === 'built' ? `Items in at least 1% of the ${esc(S.champ.name)} builds sampled` : 'Every finished item the shop allows'}">${esc(l)}</button>`).join('')}</div>`;
 }
 function paintAutoKeep() {
   if (!AB.for) return;
@@ -827,7 +878,10 @@ function paintAutoRes() {
       <span class="ab-g">${nf(b.gold)} g</span><div class="ab-puts">${put('a')}${put('b')}</div></div>`;
   }).join('');
   const t = r?.taken, split = AB.goal === 'tank' && t ? ` · against ${Math.round(t.physical * 100)}% physical, ${Math.round(t.magic * 100)}% magic${t.true >= 0.005 ? `, ${Math.round(t.true * 100)}% true` : ''}` : '';
-  const foot = r && !AB.err ? `<span title="Items the shop's rules allow, the ones worth trying, and the builds the engine scored"><b>${r.allowed}</b> allowed <i>→</i> <b>${r.tried}</b> tried <i>→</i> <b>${nf(r.scored)}</b> builds scored${split}</span>
+  // the champion's own items, unless too few of its games were sampled to say what they are
+  const from = r?.pool === 'built' ? `in ${esc(S.champ.name)} builds` : 'allowed';
+  const fell = r && AB.pool === 'built' && r.pool === 'any' ? ` · too few ${esc(S.champ.name)} games sampled, so any item` : '';
+  const foot = r && !AB.err ? `<span title="Items the shop's rules allow${r.pool === 'built' ? ` that ${esc(S.champ.name)} players build` : ''}, the ones worth trying, and the builds the engine scored"><b>${r.allowed}</b> ${from} <i>→</i> <b>${r.tried}</b> tried <i>→</i> <b>${nf(r.scored)}</b> builds scored${split}${fell}</span>
     <span class="ab-how" title="${r.exact ? 'Every build that could win was scored.' : 'Too many builds to score them all: it built slot by slot and then swapped items while that helped.'}">${r.exact ? 'Exact' : 'Best found'} · ${r.ms < 100 ? '<0.1' : (r.ms / 1000).toFixed(1)} s</span>` : '';
   el.innerHTML = `<div class="ab-head"><b>Best builds</b>${AB.busy && r ? '<span class="ab-wait">Searching…</span>' : ''}<span class="hint">${K} now: ${now === null ? '–' : `<b>${nf(now)}</b> ${g.unit}`}</span></div>
     <div class="ab-rows">${rows}</div><div class="ab-foot">${foot}</div>`;
@@ -843,6 +897,7 @@ function wireAuto() {
     if (t.id === 'ab-x') { const k = AB.for; closeAuto(); $(`[data-auto="${k}"]`)?.focus(); return; }
     if (d.goal) { AB.goal = d.goal; paintAutoCtl(); paintAutoRes(); runAuto(); $(`#ab [data-goal="${d.goal}"]`)?.focus(); return; }
     if (d.mode) { AB.mode = d.mode; paintAutoCtl(); runAuto(); $(`#ab [data-mode="${d.mode}"]`)?.focus(); return; }
+    if (d.pool) { AB.pool = d.pool; paintAutoCtl(); runAuto(); $(`#ab [data-pool="${d.pool}"]`)?.focus(); return; }
     if (d.gold) { AB.gold = +d.gold; AB.goldSet = true; paintAutoCtl(); runAuto(); return; }
     if (d.count) { AB.count = Math.max(1, Math.min(6, AB.count + +d.count)); paintAutoCtl(); runAuto(); $(`#ab [data-count="${d.count}"]`)?.focus(); return; }
     if (d.keep) { const id = +d.keep; AB.keep.has(id) ? AB.keep.delete(id) : AB.keep.add(id); paintAutoKeep(); runAuto(); $(`#ab [data-keep="${id}"]`)?.focus(); return; }
@@ -1154,7 +1209,7 @@ function wireTouch() {
     scrollTo({top: first ? first.getBoundingClientRect().top + scrollY - $('.tot').offsetHeight - 12 : 0});
   });
   // a slot tapped on a phone is kept in view above the picker's sheet
-  $('#builds').addEventListener('click', () => { if (PHONE.matches && pick) $('.slot.sel')?.scrollIntoView({block: 'nearest', behavior: 'smooth'}); });
+  for (const el of [$('#builds'), $('#t-slots')]) el.addEventListener('click', () => { if (PHONE.matches && pick) $('.slot.sel')?.scrollIntoView({block: 'nearest', behavior: 'smooth'}); });
   // a finger sliding along the level ruler sets the level under it
   const ruler = $('#ruler');
   let slide = null;
@@ -1196,7 +1251,8 @@ function chooseChamp(id) {
   if (!c) return;
   closeChamps();
   if (champFor === 'atk') setChamp(c);
-  else { S.enemy = {id: c.id, name: c.name, level: S.enemy.level}; enemyStats(); }
+  // the items stay with the target: another champion holding them
+  else { S.enemy = {id: c.id, name: c.name, level: S.enemy.level, items: S.enemy.items}; if (pick?.b === 't') { closePicker(); } enemyStats(); }
 }
 
 /* ---------- target ---------- */
@@ -1204,11 +1260,11 @@ const dial = k => [$(`#t-${k}`), $(`#t-${k}-r`)];
 function readDials() { return {hp: Math.max(1, +$('#t-hp').value || 1), ar: +$('#t-ar').value || 0, mr: +$('#t-mr').value || 0}; }
 function writeDials(v) { for (const k of ['hp','ar','mr']) dial(k).forEach(el => el.value = v[k]); }
 async function enemyStats() {
-  const e = S.enemy;
-  $('#auto-note').textContent = `Base stats at level ${e.level}. Anything you add counts as bonus.`;
+  const e = S.enemy, held = enemyItems();
+  $('#auto-note').textContent = `Base stats at level ${e.level}${held.length ? ', with its items' : ''}. Anything you add counts as bonus.`;
   paintTarget();
   try {
-    const t = await api(`/champions/${encodeURIComponent(e.id)}/target?level=${e.level}`);
+    const t = await api(`/champions/${encodeURIComponent(e.id)}/target?level=${e.level}${held.length ? `&items=${held.join(',')}` : ''}`);
     if (S.enemy !== e || S.target !== 'champ') return;
     writeDials({hp: t.hp, ar: t.armor, mr: t.mr});
   } catch (err) {}
@@ -1247,6 +1303,7 @@ function paintTarget() {
 }
 function setTarget(t) {
   if (S.target === 'dummy') S.dummy = readDials();
+  if (t !== 'champ' && pick?.b === 't') closePicker();
   S.target = t;
   document.body.dataset.target = t;
   $$('#tseg button').forEach(b => b.setAttribute('aria-checked', b.dataset.t === t));
@@ -1443,13 +1500,13 @@ function verdicts(A, B) {
     const who = best && ({aa: 'autos hit', p: 'passive hits', items: 'items hit'}[best.l.key] || best.l.key.toUpperCase() + ' hits');
     say[w].push(`<b>Burst.</b> ${p === null ? 'More' : '+' + p + '%'} combo${best ? `, ${who} ${best.r.toFixed(1)}× harder` : ''}`);
   }
-  const da = A.dps.dealt, db = B.dps.dealt;
+  const da = A.fight.dps.dealt, db = B.fight.dps.dealt;
   if (Math.round(da) !== Math.round(db)) {
     const w = da > db ? 'a' : 'b', p = pc(Math.max(da, db), Math.min(da, db));
-    const ta = A.timeToKill, tb = B.timeToKill, sooner = ta !== null && tb !== null ? Math.abs(ta - tb) : null;
-    say[w].push(`<b>Long fights.</b> ${p === null ? 'More' : '+' + p + '%'} DPS${sooner ? `, kills ${sooner.toFixed(1)} s sooner` : ''}`);
+    const ta = A.fight.timeToKill, tb = B.fight.timeToKill, sooner = ta !== null && tb !== null ? Math.abs(ta - tb) : null;
+    say[w].push(`<b>To the kill.</b> ${p === null ? 'More' : '+' + p + '%'} DPS${sooner ? `, kills ${sooner.toFixed(1)} s sooner` : ''}`);
   }
-  return ['a', 'b'].map(k => `<div class="vd"><span class="tag ${k} sm">${k.toUpperCase()}</span><p>${say[k].join('. ') || 'Behind on this combo and in long fights'}</p></div>`).join('');
+  return ['a', 'b'].map(k => `<div class="vd"><span class="tag ${k} sm">${k.toUpperCase()}</span><p>${say[k].join('. ') || 'Behind on this combo and in a fight to the kill'}</p></div>`).join('');
 }
 /* What the numbers on screen assume: the engine's caveats, and the notes of every model that took part. */
 function assumptions() {
@@ -1462,9 +1519,18 @@ function assumptions() {
   }
   return [...notes];
 }
+/* A build's fight: how long it took and what it used, the source of the DPS and time to kill above. */
+function fightRow(k, r, cmpOnly) {
+  const f = r.fight, u = f.uses;
+  const used = [u.aa ? `${u.aa} auto${u.aa === 1 ? '' : 's'}` : '', ...SLOTS.filter(s => u[s]).map(s => `${s.toUpperCase()}${u[s] > 1 ? ' ×' + u[s] : ''}`)].filter(Boolean);
+  const head = S.target === 'raw' ? `In <b>10 s</b>` : f.timeToKill === null ? `No kill in <b>${f.seconds} s</b>` : `Kills in <b>${f.timeToKill.toFixed(1)} s</b>`;
+  return `<div class="fightrow${cmpOnly ? ' only-cmp' : ''}"><span class="tag ${k} sm">${k.toUpperCase()}</span><span>${head}: ${used.join(', ') || 'nothing'}</span></div>`;
+}
 function paintSide() {
   const A = S.res.a, B = S.compare ? S.res.b : null, raw = S.target === 'raw', notes = assumptions();
   $('#bside').innerHTML = `${critSide(A, B)}
+    <div class="bs"><span class="lbl">To the kill</span>${fightRow('a', A)}${B ? fightRow('b', B, true) : ''}
+      <span class="hint">${raw ? 'With nothing to kill, DPS is over 10 seconds' : 'DPS and time to kill come from this fight'}: autos, and the combo's abilities each time they're ready.</span></div>
     <div class="bs"><span class="lbl">Damage mix</span>${mixRow('a', A)}${B ? mixRow('b', B, true) : ''}</div>
     <div class="bs"><span class="lbl">Blocked by the target</span>
       <div class="pair">
@@ -1474,7 +1540,19 @@ function paintSide() {
     ${B ? `<div class="bs only-cmp"><span class="lbl">Where each build wins</span>${verdicts(A, B)}</div>` : ''}
     ${notes.length ? `<div class="bs"><span class="lbl">What these numbers assume</span><div class="notes">${notes.map(n => `<p>${esc(n)}</p>`).join('')}</div></div>` : ''}`;
 }
-const killTime = r => !r || S.target === 'raw' || r.timeToKill === null ? '–' : r.timeToKill.toFixed(1) + ' s';
+const killTime = r => !r || S.target === 'raw' || r.fight.timeToKill === null ? '–' : r.fight.timeToKill.toFixed(1) + ' s';
+/* DPS and time to kill are the fight's (FightResult in src/engine/types.ts): autos, and the combo's abilities again
+   each time they are ready, from full health until the target dies. Its label says which abilities, its tooltip how. */
+function paintFightLabel(A, B) {
+  const el = $('#dps-lbl');
+  if (!el) return;
+  const used = SLOTS.filter(k => [A, B].some(r => r?.fight.abilities.includes(k))), names = used.map(k => k.toUpperCase());
+  const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names.at(-1) : names[0];
+  el.textContent = used.length ? `DPS, autos + ${names.join(' ')}` : 'DPS, autos and procs';
+  el.title = (S.target === 'raw' ? 'Over 10 seconds, as there is nothing to kill: ' : 'From full health until the target dies: ')
+    + (used.length ? `basic attacks, and ${list} again each time ${used.length > 1 ? 'they come' : 'it comes'} back off cooldown. ` : 'basic attacks and what they set off. Put abilities in the combo and the fight casts them too. ')
+    + (S.target === 'raw' ? '' : 'A tanky target makes a long fight, where steady damage counts; a squishy one a short fight, where burst does.');
+}
 
 /* ---------- hero ---------- */
 function paintHero() {
@@ -1485,12 +1563,13 @@ function paintHero() {
   $('.tot.a').classList.toggle('win', !B || ta >= tb);
   $('.tot.b').classList.toggle('win', !!B && tb > ta);
   paintGlance(A, B);
+  paintFightLabel(A, B);
   const [dps, ttk] = $$('.metric');
   const put = (box, k, text, win) => { const el = $(`.mv.${k}`, box); $('i', el).textContent = text; el.classList.toggle('win', win); };
-  const da = A.dps.dealt, db = B ? B.dps.dealt : 0;
+  const da = A.fight.dps.dealt, db = B ? B.fight.dps.dealt : 0;
   put(dps, 'a', nf(da), !B || da >= db);
   put(dps, 'b', B ? nf(db) : '–', !!B && db > da);
-  const ka = A.timeToKill ?? Infinity, kb = B ? B.timeToKill ?? Infinity : Infinity;
+  const ka = A.fight.timeToKill ?? Infinity, kb = B ? B.fight.timeToKill ?? Infinity : Infinity;
   put(ttk, 'a', killTime(A), !raw && (!B || ka <= kb) && ka < Infinity);
   put(ttk, 'b', killTime(B), !raw && !!B && kb < ka);
 }
@@ -1557,10 +1636,11 @@ function paintReceipt() {
   const [blocked, dps, ttk] = $$('#more .r-row');
   put($('.n.a', blocked), raw ? '–' : '−' + nf(A.combo.blocked), false);
   put($('.n.b', blocked), raw || !B ? '–' : '−' + nf(B.combo.blocked), false);
-  const da = A.dps.dealt, db = B ? B.dps.dealt : 0;
+  paintFightLabel(A, B);
+  const da = A.fight.dps.dealt, db = B ? B.fight.dps.dealt : 0;
   put($('.n.a', dps), nf(da), !!B && da > db);
   put($('.n.b', dps), B ? nf(db) : '–', !!B && db > da);
-  const ka = A.timeToKill ?? Infinity, kb = B ? B.timeToKill ?? Infinity : Infinity;
+  const ka = A.fight.timeToKill ?? Infinity, kb = B ? B.fight.timeToKill ?? Infinity : Infinity;
   put($('.n.a', ttk), killTime(A), !raw && !!B && ka < kb);
   put($('.n.b', ttk), killTime(B), !raw && !!B && kb < ka);
   $('#verdict').innerHTML = B ? verdicts(A, B) : '';
@@ -1815,7 +1895,7 @@ function remember() {
     notice(null);
   }
   if (now === kept) return;
-  try { localStorage.setItem(KEEP, JSON.stringify({s: now, data: dataOf(served), seen: seenNow()})); kept = now; dropLink(); } catch (e) {}
+  try { localStorage.setItem(KEEP, JSON.stringify({s: now, data: dataOf(served), seen: seenNow(), dps: SEEN})); kept = now; dropLink(); } catch (e) {}
 }
 function wireRemember() {
   const touch = () => { pressed = true; };
@@ -1842,18 +1922,21 @@ const dataOf = m => m && {patch: m.patch, built: m.builtAt};
 /* Each build's combo and DPS against the target, as the page shows them. */
 function seenNow() {
   const out = {};
-  for (const k of S.compare && S.res.b ? ['a', 'b'] : ['a']) out[k] = [Math.round(S.res[k].combo.total.dealt), Math.round(S.res[k].dps.dealt)];
+  for (const k of S.compare && S.res.b ? ['a', 'b'] : ['a']) out[k] = [Math.round(S.res[k].combo.total.dealt), Math.round(S.res[k].fight.dps.dealt)];
   return out;
 }
+/* What seenNow's DPS is: the fight's since it counts abilities. A record from before has auto attacks' DPS,
+   which is not compared with the fight's: it is only brought up to date. */
+const SEEN = 'fight';
 /* Each settle before the visitor does anything is still the build they came back to: it is compared with what
    they saw last time, and that is updated. The receipt page counts crits at the average and shows one set of
    ranks, so a build kept with others is left for the tabs page. */
 function review() {
   const was = back && decodeState(back.s), data = dataOf(served);
   if (!was || !data || (was.k ?? 'average') !== S.crits || !!was.rb !== S.split) return;
-  const seen = seenNow(), news = back.seen && (back.data?.patch !== data.patch || back.data?.built !== data.built);
+  const seen = seenNow(), news = back.seen && back.dps === SEEN && (back.data?.patch !== data.patch || back.data?.built !== data.built);
   notice(news ? patchNews(back.seen, seen, back.data?.patch !== data.patch) : null);
-  try { localStorage.setItem(KEEP, JSON.stringify({...back, data, seen})); } catch (e) {}
+  try { localStorage.setItem(KEEP, JSON.stringify({...back, data, seen, dps: SEEN})); } catch (e) {}
 }
 /* The line, or null when nothing moved enough. `was` and `now` are seenNow()'s. One build's line names each
    number that moved; a comparison's names one: the combo if it moved or changed hands, else DPS, so the line
@@ -2146,7 +2229,8 @@ async function copyLater(text) {
 }
 function encodeState() {
   const s = {c: S.champ.id, l: S.level, r: SLOTS.map(k => S.ranks[k]), o: S.order, a: S.builds.a, b: S.builds.b, n: [$('#name-a').value, $('#name-b').value],
-    m: S.compare ? 1 : 0, t: S.target, d: S.target === 'raw' ? S.dummy : readDials(), e: [S.enemy.id, S.enemy.level], q: ACTIONS.map(k => S.combo[k]),
+    m: S.compare ? 1 : 0, t: S.target, d: S.target === 'raw' ? S.dummy : readDials(),
+    e: [S.enemy.id, S.enemy.level, ...(enemyItems().length ? [S.enemy.items] : [])], q: ACTIONS.map(k => S.combo[k]),
     ...(Object.keys(S.options).length && {x: S.options}),
     ...(S.crits !== 'average' && {k: S.crits}),
     ...(S.split && {rb: SLOTS.map(k => S.ranksB[k]), ob: S.orderB}),
@@ -2195,7 +2279,7 @@ function applyState(s) {
   if (['raw', 'dummy', 'champ'].includes(s.t)) S.target = s.t;
   if (s.d) S.dummy = {hp: int(s.d.hp, 1, 100000, 2400), ar: int(s.d.ar, 0, 2000, 80), mr: int(s.d.mr, 0, 2000, 50)};
   const e = Array.isArray(s.e) && S.champs.find(x => x.id === s.e[0]);
-  if (e) S.enemy = {id: e.id, name: e.name, level: int(s.e[1], 1, 18, 13)};
+  if (e) S.enemy = {id: e.id, name: e.name, level: int(s.e[1], 1, 18, 13), items: build(s.e[2])};
   if (Array.isArray(s.q)) ACTIONS.forEach((k, i) => S.combo[k] = int(s.q[i], 0, 30, 0));
   // ids are checked against the kit once it has loaded
   if (s.x && typeof s.x === 'object') for (const [id, v] of Object.entries(s.x).slice(0, 24)) if (Number.isFinite(+v)) S.options[id] = Math.round(+v);
@@ -2307,7 +2391,7 @@ const STOPS = RECEIPT ? [
     ph: {at: ['#champ-btn'], text: () => `${tap()} the name to choose from ${allChamps()}. Further down, under the builds, set the level on the ruler; ${ranksText()}`}},
   {at: ['#builds'], side: 'above', title: () => S.compare ? 'Two builds, A and B' : 'Your build', text: buildsText},
   {at: ['.tgt'], side: 'left', title: "Who you're hitting",
-    text: 'A <b>target dummy</b> with the health, armor and magic resist you set, or a real <b>enemy champion</b> at its level. The bars show the health each build leaves it.',
+    text: 'A <b>target dummy</b> with the health, armor and magic resist you set, or a real <b>enemy champion</b> at its level, with its <b>items</b>. The bars show the health each build leaves it.',
     ph: {at: ['.tgt-mode', '.stage', '.hits']}},
   {at: ['.till'], side: 'right', title: 'The receipt',
     text: 'Every ability, auto attack and item effect in the combo, itemized, with the bigger number highlighted. <b>DPS</b> and <b>time to kill</b> say who wins a longer fight. Type in the <b>Qty</b> column to change the combo.',
@@ -2321,7 +2405,7 @@ const STOPS = RECEIPT ? [
     ph: {at: ['#champ-btn', '.lvl'], text: () => `${tap()} the champion to choose from ${allChamps()}, and set the level on the ruler. Further down, ${ranksText()}`}},
   {at: ['#builds > .sec-head', '#builds .build', '#add-b'], side: 'above', title: () => S.compare ? 'Two builds, A and B' : 'Your build', text: buildsText},
   {at: ['#tseg'], title: "Who you're hitting",
-    text: 'A <b>target dummy</b> with the health, armor and magic resist you set, or a real <b>enemy champion</b> at its level. <b>Raw output</b> is the damage before either. The numbers are in the <b>Target</b> tab.'},
+    text: 'A <b>target dummy</b> with the health, armor and magic resist you set, or a real <b>enemy champion</b> at its level, with its <b>items</b>. <b>Raw output</b> is the damage before either. The numbers are in the <b>Target</b> tab.'},
   {at: ['.totals', '.hero-side'], title: 'Who hits harder',
     text: () => `What the combo deals to the target, and the share of its health that is. <b>DPS</b> and <b>time to kill</b> say who wins a longer fight. The combo, top left, is ${comboNow()}; its pencil changes it.`,
     // on a phone the totals are the strip pinned at the top, and the rest of the band comes after the builds
@@ -2610,6 +2694,18 @@ function wire() {
   builds.addEventListener('keydown', e => {
     const slot = e.target.closest('.slot');
     if (slot && e.target === slot && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openPicker(slot.dataset.b, +slot.dataset.i); }
+  });
+  // the enemy's slots: a click opens the picker for that slot, × takes the item out
+  const tslots = $('#t-slots');
+  tslots.addEventListener('click', e => {
+    const slot = e.target.closest('.slot'); if (!slot) return;
+    const i = +slot.dataset.i;
+    if (e.target.closest('[data-rm]')) { S.enemy.items[i] = null; renderTargetItems(); enemyStats(); return; }
+    openPicker('t', i);
+  });
+  tslots.addEventListener('keydown', e => {
+    const slot = e.target.closest('.slot');
+    if (slot && e.target === slot && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openPicker('t', +slot.dataset.i); }
   });
   // a chip writes its stat word into the search, or takes it out
   $('#item-chips').innerHTML = ITEM_CHIPS.map(([l, w]) => `<button class="chip" data-w="${w}" aria-pressed="false">${l}</button>`).join('');
