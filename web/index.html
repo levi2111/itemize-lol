@@ -770,6 +770,13 @@ body:not([data-ranks="split"]) .rank-split{display:none!important}
 .legal .fb-btn:hover,.legal .fb-btn[aria-expanded="true"]{border-color:var(--faint);color:var(--text)}
 .legal-acts{display:flex;align-items:center;gap:.5rem}
 .legal .cx-pill{display:none}
+/* TEMPORARY, while the site is new (Oct 29, 2026): Feedback is a big filled button that rises out of the
+   notice's row, so that early visitors notice it. Once the site has settled, delete this block (here, its
+   phone rule further down, and the same two in receipt.html) and Feedback is the quiet outline above again.
+   CLAUDE.md lists it under "Temporary". */
+.legal #fb-btn{position:relative;z-index:5;margin:-1.3rem 0 -.1rem;padding:.6rem 1.2rem;gap:.5rem;border:0;background:var(--text);color:var(--ink);font-size:.95rem;font-weight:700;box-shadow:0 .5rem 1.4rem rgba(0,0,0,.5)}
+.legal #fb-btn svg{width:1.1rem;height:1.1rem;stroke-width:2.4}
+.legal #fb-btn:hover,.legal #fb-btn[aria-expanded="true"]{background:#fffbea;color:var(--ink)}
 /* contact: an envelope in the bar lists the ways to reach the maker; Feedback, at the end of the notice,
    writes an email with the build's link in it. Both are menus (setMenu); nothing is sent from the page. */
 .help[aria-expanded="true"]{border-color:var(--text);color:var(--text)}
@@ -1180,6 +1187,8 @@ body[data-compare="off"] .tot{min-width:0;padding-right:var(--pr)}
 .bar #contact-btn{display:none}
 #contact-set{margin-left:0}
 .fb-btn{min-height:2.5rem;padding:0 1rem}
+/* TEMPORARY, see the Feedback block above: on a phone it stays big but in its row */
+.legal #fb-btn{margin:0;min-height:2.9rem;padding:0 1.3rem}
 .menu .cx{min-height:2.75rem}
 
 /* build: the champion, the level and the builds, then the band, then the ranks */
