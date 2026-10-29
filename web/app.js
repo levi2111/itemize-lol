@@ -30,13 +30,14 @@ const S = {
   dummy: {hp:2400, ar:80, mr:50},
   enemy: {id:'Ornn', name:'Ornn', level:13, items:[null,null,null,null,null,null]},   // the target champion and its six slots
   enemyView: null,                  // GET /champions/:id of the enemy, for the item picker's order when it picks for the enemy
+  held: null,                       // {key, hp, ar, mr}: the enemy's totals with its items, as enemyStats put them in the dials
   combo: {aa:3, q:1, w:1, e:0, r:0},
   seq: null,                        // the combo's order when it is the visitor's own (My order), else null: the engine's
   crits: 'average',                 // how the combo counts critical strikes: average, never or always
   shops: {aram: false, arena: false},   // shops the item picker adds to Summoner's Rift's
   items: new Map(),
   champs: [],
-  res: null,                        // {a, b}: the last results, b null with one build
+  res: null,                        // {a, b, kind}: the last results, b null with one build, kind the target they were played on
   options: {},                      // the champion's options the user has set, by id; the rest keep their defaults
   // each build's item settings the user has set: item id -> control id -> value; the rest keep their defaults
   itemOpts: {a: {}, b: {}},
@@ -183,10 +184,11 @@ async function recalc() {
     }),
     target: targetBody(), combo: comboBody(),
   };
+  const kind = S.target;
   try {
     const out = await api('/calc', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)});
     if (mine !== seq) return;
-    S.res = {a: out.results[0], b: out.results[1] || null};
+    S.res = {a: out.results[0], b: out.results[1] || null, kind};
     paintResults(); paintSaved(); paintAutoRes();
     remember();
   } catch (e) {
@@ -1616,13 +1618,16 @@ function chooseChamp(id) {
 const dial = k => [$(`#t-${k}`), $(`#t-${k}-r`)];
 function readDials() { return {hp: Math.max(1, +$('#t-hp').value || 1), ar: +$('#t-ar').value || 0, mr: +$('#t-mr').value || 0}; }
 function writeDials(v) { for (const k of ['hp','ar','mr']) dial(k).forEach(el => el.value = v[k]); }
+// which enemy S.held is for: the champion, its level and its items
+const heldKey = () => [S.enemy.id, S.enemy.level, ...enemyItems()].join('/');
 async function enemyStats() {
-  const e = S.enemy, held = enemyItems();
-  $('#auto-note').textContent = `Base stats at level ${e.level}${held.length ? ', with its items' : ''}. Anything you add counts as bonus.`;
+  const e = S.enemy, held = enemyItems(), note = $('#auto-note');
+  if (note) note.textContent = `Base stats at level ${e.level}${held.length ? ', with its items' : ''}. Anything you add counts as bonus.`;
   paintTarget();
   try {
     const t = await api(`/champions/${encodeURIComponent(e.id)}/target?level=${e.level}${held.length ? `&items=${held.join(',')}` : ''}`);
     if (S.enemy !== e || S.target !== 'champ') return;
+    S.held = {key: heldKey(), hp: t.hp, ar: t.armor, mr: t.mr};
     writeDials({hp: t.hp, ar: t.armor, mr: t.mr});
   } catch (err) {}
   paintTarget(); schedule();
@@ -1630,18 +1635,30 @@ async function enemyStats() {
 function paintTarget() {
   const v = readDials(), raw = S.target === 'raw', cut = x => Math.round(x / (100 + Math.max(0, x)) * 100);
   const eff = [nf(v.hp * (1 + v.ar / 100)), nf(v.hp * (1 + v.mr / 100))];
-  // the receipt page's target column is narrow, so its dials get the short form
-  $('#n-hp').textContent = RECEIPT ? `eff. ${eff[0]} / ${eff[1]}` : `Effective ${eff[0]} vs physical, ${eff[1]} vs magic`;
-  $('#n-hp').title = RECEIPT ? 'Effective health against physical / magic damage' : '';
-  $('#n-ar').textContent = RECEIPT ? `blocks ${cut(v.ar)}% physical` : `Blocks ${cut(v.ar)}% of physical damage`;
-  $('#n-mr').textContent = RECEIPT ? `blocks ${cut(v.mr)}% magic` : `Blocks ${cut(v.mr)}% of magic damage`;
-  $('#hits').style.setProperty('--hpv', v.hp);
+  if (RECEIPT) {
+    // the receipt page's target column is narrow, so its dials get the short form
+    $('#n-hp').textContent = `eff. ${eff[0]} / ${eff[1]}`;
+    $('#n-hp').title = 'Effective health against physical / magic damage';
+    $('#n-ar').textContent = `blocks ${cut(v.ar)}% physical`;
+    $('#n-mr').textContent = `blocks ${cut(v.mr)}% magic`;
+    $('#hits').style.setProperty('--hpv', v.hp);
+  } else {
+    $('#n-hp').innerHTML = `effective <b>${eff[0]}</b> physical · <b>${eff[1]}</b> magic`;
+    $('#n-ar').innerHTML = `blocks <b>${cut(v.ar)}%</b> physical`;
+    $('#n-mr').innerHTML = `blocks <b>${cut(v.mr)}%</b> magic`;
+    paintStatFrom(v);
+    paintMatchup(S.res?.a, S.compare ? S.res?.b : null);
+    paintPicks();
+  }
   for (const k of ['a','b']) {
     const r = S.res?.[k], total = r ? r.combo.total.dealt : 0;
     const left = r && r.combo.hpLeft !== null ? r.combo.hpLeft : Math.max(0, v.hp - total), share = Math.min(100, total / v.hp * 100);
-    $(`#bar-${k}`).style.setProperty('--left', (left / v.hp * 100).toFixed(1) + '%');
-    $(`#left-${k}`).textContent = r ? nf(left) : '–';
-    if (RECEIPT) continue;
+    // the receipt page's bars of the health left; on the tabs it is the matchup's
+    if (RECEIPT) {
+      $(`#bar-${k}`).style.setProperty('--left', (left / v.hp * 100).toFixed(1) + '%');
+      $(`#left-${k}`).textContent = r ? nf(left) : '–';
+      continue;
+    }
     $(`#h-bar-${k}`).style.setProperty('--w', (r ? share : 0).toFixed(1) + '%');
     // raw output has no target to measure against: only how crits are counted, if it isn't the average
     const when = {never: 'no crits', always: 'all crits'}[r?.combo.crits] || '';
@@ -1658,6 +1675,82 @@ function paintTarget() {
   if (RECEIPT) { if (S.target === 'champ') paintSplash($('#enemy-splash'), e.id); }
   else if (face.dataset.id !== e.id) { face.dataset.id = e.id; face.innerHTML = champIco(e.id); }
   paintSub();
+}
+const TARGET_STATS = [['hp', 'hp', 'HP', 'Health'], ['ar', 'armor', 'armor', 'Armor'], ['mr', 'mr', 'MR', 'Magic resist']];
+/* Under each of the Target tab's stat rows, where its number comes from: base and bonus as the engine split them (the
+   result's target, while it is this kind of target's), the bonus called items as far as it is what the enemy's items
+   give. Worked out against the dials, so it keeps up with a slider being dragged. Beside the slots, what items add. */
+function paintStatFrom(v) {
+  const t = S.res?.kind === S.target ? S.res.a.target : null, held =S.target === 'champ' && S.held?.key === heldKey() ? S.held : null, adds = [];
+  for (const [k, stat, short, name] of TARGET_STATS) {
+    const ico = $(`#i-${k}`);
+    if (!ico.firstChild) ico.innerHTML = statIco(stat, name);
+    if (!t) { $(`#f-${k}`).textContent = ''; continue; }
+    const base = Math.min(v[k], Math.round(t[stat].base)), bonus = Math.round(v[k] - base);
+    const items = held ? Math.max(0, held[k] - Math.round(t[stat].base)) : 0;
+    if (items) adds.push(`+${nf(items)} ${short}`);
+    const parts = [base || !bonus ? `${nf(base)} base` : ''];
+    if (items && bonus >= items) parts.push(`${nf(items)} items`, bonus > items ? `${nf(bonus - items)} bonus` : '');
+    else if (bonus) parts.push(`${nf(bonus)} bonus`);
+    $(`#f-${k}`).textContent = parts.filter(Boolean).join(' + ');
+  }
+  $('#t-adds').textContent = adds.join(' · ');
+  $('.ta-isum').hidden = !enemyItems().length;
+}
+/* Against your builds, on the Target tab: how this target meets each build. What it blocks of a build's physical
+   and magic damage is after that build's penetration (1 − dealt ÷ raw, by type); lost is what armor and magic
+   resist took of the combo; effective health is the target's health against the build's own mix, health × raw ÷
+   dealt, so the build it is lower against fares better. That and time to kill lead, larger, the better build's
+   number in its colour. Under the table, where each build's damage goes: dealt by type, then what armor and magic
+   resist took, hatched, on one scale with a line at the target's health. */
+function paintMatchup(A, B) {
+  const tab = $('#vs-tab'), flows = $('#flows');
+  if (!A?.target) { tab.innerHTML = flows.innerHTML = ''; return; }
+  const ks = B ? ['a', 'b'] : ['a'], R = {a: A, b: B}, hp = A.target.hp.total;
+  const blocked = (r, t) => { const x = r.combo.byType[t]; return x.raw > 0 ? 1 - x.dealt / x.raw : null; };
+  const pens = (s, t) => (t === 'physical' ? [s.lethality && `${nf(s.lethality)} lethality`, s.armorPenPct && `${pct(s.armorPenPct)} pen`]
+    : [s.magicPenFlat && `${nf(s.magicPenFlat)} pen`, s.magicPenPct && `${pct(s.magicPenPct)} pen`]).filter(Boolean).join(' + ');
+  // a row: its label, then a cell per build; with `best` the lower number is the better build's
+  const row = (label, get, fmt, {cls = '', sub, best, tip} = {}) => `<span class="ta-vl${cls}"${tip ? ` title="${tip}"` : ''}>${label}</span>` + ks.map(k => {
+    const v = get(R[k]), o = B ? get(R[k === 'a' ? 'b' : 'a']) : null;
+    const win = best && B && v !== null && (o === null || fmt(v) !== fmt(o) && v < o), s = v !== null && sub ? sub(R[k]) : '';
+    return `<span class="ta-vv ${k}${cls}${win ? ' win' : ''}">${s ? `<small>${s}</small>` : ''}${v === null ? '–' : fmt(v)}</span>`;
+  }).join('');
+  tab.classList.toggle('two', !!B);
+  tab.style.setProperty('--n', ks.length);
+  tab.innerHTML = `<span class="ta-vh lbl">Against your build${B ? 's' : ''}</span>`
+    + ks.map(k => `<span class="ta-vh ta-vn ${k}">${B ? `<span class="tag ${k} sm">${k.toUpperCase()}</span>` : ''}<span>${esc(nameOf(k))}</span></span>`).join('')
+    + row('Effective HP', r => r.combo.total.dealt > 0 ? hp * r.combo.total.raw / r.combo.total.dealt : null, nf, {cls: ' big', best: true, tip: 'Health × raw damage ÷ damage dealt'})
+    + row('Time to kill', r => r.fight.timeToKill, x => x.toFixed(1) + ' s', {cls: ' big mid', best: true})
+    + '<span class="ta-gap"></span>'
+    + row(`${statMark('armor', 'Armor')}Armor blocks`, r => blocked(r, 'physical'), x => pct(x), {sub: r => pens(r.stats, 'physical')})
+    + row(`${statMark('mr', 'Magic resist')}Magic resist blocks`, r => blocked(r, 'magic'), x => pct(x), {sub: r => pens(r.stats, 'magic')})
+    + row('Lost', r => r.combo.blocked, nf, {sub: r => r.combo.total.raw > 0 ? pct(r.combo.blocked / r.combo.total.raw) : ''});
+  const top = Math.max(hp, ...ks.map(k => R[k].combo.total.raw)) * 1.04, w = x => (Math.max(0, x) / top * 100).toFixed(2) + '%';
+  const any = t => ks.some(k => R[k].combo.byType[t].raw > 0);
+  flows.classList.toggle('two', !!B);
+  flows.innerHTML = '<div class="sec-head"><span class="lbl">Where the damage goes</span><span class="ta-key">'
+    + `<span><i class="ta-sw p"></i>physical</span><span><i class="ta-sw m"></i>magic</span>${any('true') ? '<span><i class="ta-sw t"></i>true</span>' : ''}`
+    + `<span><i class="ta-sw hat"></i>blocked</span><span><i class="ta-sw hpl"></i>${nf(hp)} HP</span></span></div>`
+    + ks.map(k => {
+      const r = R[k], t = r.combo.byType;
+      const segs = [['pd', t.physical.dealt], ['md', t.magic.dealt], ['td', t.true.dealt], ['pb', t.physical.raw - t.physical.dealt], ['mb', t.magic.raw - t.magic.dealt]];
+      const title = ['physical', 'magic', 'true'].filter(x => t[x].raw > 0).map(x => `${x[0].toUpperCase() + x.slice(1)}: ${nf(t[x].dealt)} of ${nf(t[x].raw)}`).join('\n');
+      const left = r.combo.kills ? '<b>Kills</b>' : `<b>${nf(r.combo.hpLeft ?? Math.max(0, hp - r.combo.total.dealt))}</b> left`;
+      return `<div class="ta-fl ${k}">${B ? `<span class="tag ${k} sm">${k.toUpperCase()}</span>` : ''}`
+        + `<div class="ta-fbar" title="${title}">${segs.map(([c, x]) => x > 0 ? `<i class="${c}" style="width:${w(x)}"></i>` : '').join('')}<i class="ta-hpm" style="--x:${w(hp)}"></i></div>`
+        + `<span class="ta-ft">${left}</span></div>`;
+    }).join('');
+}
+/* Raw output has no target, so the Target tab is a card of targets to pick instead: the dummy as it was last set,
+   its presets, and the enemy champion. */
+function paintPicks() {
+  if (S.target !== 'raw') return;
+  const nums = (hp, ar, mr) => `<span><i>${statMark('hp', 'Health')}${nf(hp)}</i><i>${statMark('armor', 'Armor')}${nf(ar)}</i><i>${statMark('mr', 'Magic resist')}${nf(mr)}</i></span>`;
+  const d = S.dummy, e = S.enemy, n = enemyItems().length;
+  $('#picks').innerHTML = `<button class="ta-pick" data-t="dummy"><b>Target dummy</b>${nums(d.hp, d.ar, d.mr)}</button>`
+    + $$('#presets .chip').map(c => `<button class="ta-pick" data-preset="${c.dataset.preset}"><b>${esc(c.textContent)}</b>${nums(...c.dataset.preset.split(',').map(Number))}</button>`).join('')
+    + `<button class="ta-pick face" data-t="champ"><i class="ta-pf">${champIco(e.id)}</i><b>${esc(e.name)}</b><span>Lv ${e.level}${n ? ` + ${n} item${n === 1 ? '' : 's'}` : ''}</span></button>`;
 }
 function setTarget(t) {
   if (S.target === 'dummy') S.dummy = readDials();
@@ -3129,6 +3222,12 @@ function wire() {
     const c = e.target.closest('.chip'); if (!c) return;
     const [hp, ar, mr] = c.dataset.preset.split(',').map(Number);
     writeDials({hp, ar, mr}); paintTarget(); schedule();
+  });
+  // raw output's card of targets: a preset is the dummy with its numbers (the dummy and the enemy are data-t buttons)
+  $('#picks')?.addEventListener('click', e => {
+    const c = e.target.closest('[data-preset]'); if (!c) return;
+    const [hp, ar, mr] = c.dataset.preset.split(',').map(Number);
+    S.dummy = {hp, ar, mr}; setTarget('dummy');
   });
 
   $('#share').addEventListener('click', async e => {
