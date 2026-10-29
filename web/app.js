@@ -2413,11 +2413,14 @@ function notice(html) {
 /* Every visit opens on the live patch. The patch menu, the patch's name in the top bar, switches to the one before
    it or to a preview of the next, made from Riot's test server (src/shared/patch.ts); nothing remembers the choice,
    and a link or a saved build opens on the live patch. Switching reads that patch's champions and items, then the
-   kit and the target again; the build stays, without items that patch does not sell. Off the live patch a tag
-   beside its name and a line over the totals say which patch it is, and a preview says how settled it is: until
+   kit and the target again; the build stays, without items that patch does not sell. On a preview a tag beside
+   its name says so; off the live patch a line over the totals says which patch it is and how settled a preview is: until
    Riot's patch notes for it are out it can still change, and after them little does. */
 let patchNow = '';                  // the patch the numbers are for: the live one until the menu picks another
-const PATCH_KIND = {live: 'Live', previous: 'Previous', preview: 'Preview'};
+const PATCH_KIND = {live: 'Live', previous: '', preview: 'Preview'};
+/* When Riot puts each patch out (support.riotgames.com, patch schedule), for the preview's date in the menu; a patch
+   not listed shows none. */
+const PATCH_DAY = {'26.22': '2026-11-04', '26.23': '2026-11-18', '26.24': '2026-12-09'};
 const patchOf = p => served?.patches?.find(x => x.patch === p);
 const onLive = () => !served || patchNow === served.patch;
 /* The patch for a GET of game data: '?patch=…' ('&patch=…' after a query), or nothing on the live patch. */
@@ -2441,12 +2444,12 @@ function paintPatch() {
   const p = patchOf(patchNow) || {patch: served.patch, displayPatch: served.displayPatch, kind: 'live'}, list = served.patches || [p];
   $('#patch').textContent = p.displayPatch;
   const tag = $('#patch-kind');
-  tag.hidden = p.kind === 'live';
-  tag.innerHTML = PATCH_KIND[p.kind] + (p.kind === 'preview' && !p.preview?.notes ? '<span class="pv-x"> · not final</span>' : '');
+  tag.hidden = p.kind !== 'preview';
+  tag.textContent = PATCH_KIND[p.kind];
   $('#patch-set').dataset.kind = p.kind;
-  $('#patch-btn').title = p.kind === 'live' ? 'Choose the patch' : `${PATCH_KIND[p.kind]}: ${patchSays(p)}`;
+  $('#patch-btn').title = p.kind === 'live' ? 'Choose the patch' : `${PATCH_KIND[p.kind] || 'Patch'}: ${patchSays(p)}`;
   $('#patch-list').innerHTML = list.map(x => `<a href="#" role="menuitemradio" data-patch="${esc(x.patch)}" aria-checked="${x.patch === patchNow}">`
-    + `<b>${esc(x.displayPatch)} · ${PATCH_KIND[x.kind]}${x.kind === 'preview' && !x.preview?.notes ? '<i class="pm-x">not final</i>' : ''}</b><span>${esc(patchSays(x))}</span></a>`).join('');
+    + `<b>${[esc(x.displayPatch), PATCH_KIND[x.kind], x.kind === 'preview' && PATCH_DAY[x.displayPatch] && onDay(PATCH_DAY[x.displayPatch] + 'T12:00')].filter(Boolean).join(' · ')}</b></a>`).join('');
 }
 /* The champions and items the page offers, from GET /champions and /items. */
 function useData(champs, items) {

@@ -142,11 +142,9 @@ body[data-target="raw"] .needs-target{opacity:.26;pointer-events:none}
 .patch-btn .caret{width:.55rem;height:.55rem;flex:none;transition:transform .15s}
 .patch-btn[aria-expanded="true"] .caret{transform:rotate(180deg)}
 .patch .pv{font-style:normal;font-size:.6rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--warn);border:1px solid currentColor;border-radius:2px;padding:0 .25rem}
-.patch[data-kind="previous"] .pv{color:var(--chalk-dim)}
 .menu.patch-menu{width:21rem;font-family:var(--font-ui);font-size:.82rem}
-.menu .pm-x{margin-left:.4rem;font-style:normal;font-size:.62rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--warn)}
 .pn-t a{color:var(--chalk);text-underline-offset:.2em}
-@media (max-width:700px),(max-width:1100px) and (max-height:500px){.patch .pv-x,.patch:not([data-kind="live"]) .pw{display:none}}
+@media (max-width:700px),(max-width:1100px) and (max-height:500px){.patch:not([data-kind="live"]) .pw{display:none}}
 .btn{border:1px solid var(--chalk);border-radius:2px;padding:.36rem .8rem;font-size:.8rem;font-weight:600}
 .btn:hover{background:var(--chalk);color:var(--ink)}
 
@@ -1167,7 +1165,6 @@ input[type=range]::-moz-range-thumb{width:.8rem;height:1.6rem}
         <div class="menu patch-menu" id="patch-menu" role="menu" aria-label="Patch" hidden>
           <span class="eyebrow">Patch</span>
           <div id="patch-list" style="display:contents"></div>
-          <p class="hint">Every visit opens on the live patch.</p>
         </div>
       </div>
       <button class="btn" id="share">Copy build link</button>
