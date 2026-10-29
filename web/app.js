@@ -290,13 +290,13 @@ function paintSplash(el, id) {
   if (!ready.has(url)) el.classList.add('wait');
   warm(url).then(() => { if (el.dataset.src === url) el.src = url; });
 }
-/* The kit strip is set on each part of the page that shows ability icons: the ranks, and on the tabs
-   page also the per-build ranks and the combo's dropdown. */
+/* The kit strip is set on each part of the page that shows ability icons: the ranks, an ability's card, and
+   on the tabs page also the per-build ranks and the combo's dropdown. */
 function paintKit() {
   const row = $('#skill-row'), url = kitUrl(S.champ.id);
   if (row.dataset.kit === url) return;
   row.dataset.kit = url;
-  const els = [row, $('#rank-split'), $('#combo-menu')].filter(Boolean);
+  const els = [row, $('#tip'), $('#rank-split'), $('#combo-menu')].filter(Boolean);
   const put = () => els.forEach(el => { el.style.setProperty('--art-kit', `url("${url}")`); el.classList.add('has-kit'); });
   if (ready.has(url)) return put();
   els.forEach(el => el.classList.remove('has-kit'));
@@ -974,11 +974,13 @@ function splitLabel(label) {
 }
 const inDetails = text => itemDetails && text ? `<p class="im-d">${esc(text)}</p>` : '';
 /* One effect: its name, its type, and what one firing deals after the target's resistances (before them in raw
-   output). A proc or use the visitor can count has its stepper under it. Details says how often it fired in the
-   combo and what that added up to. */
+   output), with the raw number beside it and the mitigation bar of the ability cards (mitBar) under it. A proc or
+   use the visitor can count has its stepper under it. Details says how often it fired in the combo and what that
+   added up to. */
 function effectRow(it, e, R, k) {
   const raw = S.target === 'raw', shown = R?.items.find(x => x.id === it.id)?.effects.find(x => x.id === e.id);
   const val = shown && (raw ? shown.one.raw : shown.one.dealt), ctl = it.controls?.find(c => c.rule === e.id);
+  const one = !raw && shown?.one.raw > 0 ? shown.one : null;
   // what it added up to in the combo: a burn kept alive pays per second, so this is not always one firing times the count
   const part = R?.combo.lines.find(l => l.key === 'items')?.parts.filter(p => p.id === `item:${it.id}/${e.id}`);
   const total = part?.reduce((s, p) => s + (raw ? p.total.raw : p.total.dealt), 0) || 0;
@@ -989,8 +991,8 @@ function effectRow(it, e, R, k) {
     shown.fired ? `${shown.fired === 1 ? 'Once' : `${shown.fired} times`} in the combo, ${nf(total)} in all.` : 'Not set off in the combo.',
     ctl?.kind === 'procs' ? (mine ? 'Procs set by hand.' : 'Procs counted from the combo.') : '',
   ].filter(Boolean).join(' ') : 'Calculating…';
-  return `<div class="ie"><div class="ie-h"><b>${esc(e.label)}</b><span class="ie-t ${e.type}">${TYPE_NAME[e.type] || e.type}</span><span class="ie-n">${val === undefined ? '–' : nf(val)}</span></div>
-    ${inDetails(more)}${ctl ? controlRow(it, ctl, R, k, true) : ''}</div>`;
+  return `<div class="ie ${e.type}"><div class="ie-h"><b>${esc(e.label)}</b><span class="ie-t ${e.type}">${TYPE_NAME[e.type] || e.type}</span><span class="ie-n">${val === undefined ? '–' : nf(val)}</span>${one ? `<span class="ie-r">${nf(one.raw)} raw</span>` : ''}</div>
+    ${one ? mitBar({[e.type]: one}, Math.max(one.raw, one.dealt)) : ''}${inDetails(more)}${ctl ? controlRow(it, ctl, R, k, true) : ''}</div>`;
 }
 /* A setting. Its value is what the user set, else what the last calculation used (a default can depend on the build).
    A proc left to the combo shows the combo's count, dimmed; once set by hand, ↺ gives it back to the combo. */
@@ -1074,52 +1076,98 @@ function wireItemMenu() {
 
 /* ---------- an ability's card ---------- */
 /* Pointing at an ability (its icon among the ranks, its step in the combo, its row in the breakdown)
-   shows a card: its name, what one cast deals with each build, and its cooldown after ability haste.
-   One cast is played on its own against the target at full health, with whatever its build's items and
-   their settings add (Shojin's stacks, Luden's Echo, a Spellblade it arms and spends itself). */
+   shows a card: its icon, name, rank and the types it deals, what one cast deals with each build, its
+   cooldown after ability haste and how often the combo casts it. One cast is played on its own against the
+   target at full health, with whatever its build's items and their settings add (Shojin's stacks, Luden's
+   Echo, a Spellblade it arms and spends itself). Under the number is the mitigation bar: its length is the
+   raw damage, solid where it got through and hatched where armor and magic resist took it, a part per type;
+   two builds share one scale. The passive has no cast, so its card has what it added to the combo. */
 let tipAt = null;                   // the element the card is showing for
 const sec = s => `${+s.toFixed(s < 10 ? 1 : 0)} s`;
+const DMG = ['physical', 'magic', 'true'];
+const DMG_COLOR = {physical: 'var(--phys)', magic: 'var(--magic)', true: 'var(--true)'};
+const CLOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2.5h5"/></svg>';
+/* The mitigation bar of an amount by type ({physical: {raw, dealt}, …}), on a scale of raw damage. */
+function mitBar(byType, scale) {
+  const w = x => `${+(x / scale * 100).toFixed(2)}%`;
+  return `<div class="ka-bar">${DMG.filter(t => byType[t]?.raw > 0).map(t => {
+    const {raw, dealt} = byType[t];
+    return `<i class="${t}" style="width:${w(dealt)}"></i>${raw - dealt >= 0.5 ? `<i class="${t} x" style="width:${w(raw - dealt)}"></i>` : ''}`;
+  }).join('')}</div>`;
+}
 function abilityCard(k) {
-  const v = S.view?.slots[k], name = v?.name || lineLabel(k)[1], raw = S.target === 'raw';
+  const v = S.view?.slots[k], name = v?.name || lineLabel(k)[1], raw = S.target === 'raw', passive = k === 'p';
   const ks = S.res ? (S.compare && S.res.b ? ['a', 'b'] : ['a']) : [], two = ks.length > 1;
   const ranks = b => b === 'b' && S.split ? S.ranksB : S.ranks;
-  const head = `<div class="tip-h"><span class="k">${k.toUpperCase()}</span><b>${esc(name)}</b>`
-    + (k === 'p' ? '<span class="hint">passive</span>' : two && S.split && ranks('a')[k] !== ranks('b')[k]
-      ? `<span class="hint">rank ${ranks('a')[k]} / ${ranks('b')[k]}</span>` : `<span class="hint">rank ${ranks('a')[k]} of ${maxRank(k)}</span>`) + '</div>';
+  const other = b => b === 'a' ? 'b' : 'a';
+  const tag = b => `<span class="tag ${b} xs">${b.toUpperCase()}</span>`;
+  const line = b => S.res[b].combo.lines.find(l => l.key === k);
+  // what the card measures in each build: one cast (null without a rank), or the passive's part of the combo
+  const amt = b => {
+    if (!passive) return S.res[b].abilities[k]?.cast ?? null;
+    const l = line(b);
+    return l ? {...l.total, byType: l.byType} : {raw: 0, dealt: 0, byType: {}};
+  };
+  // the word that stands in for a build's number
+  const none = b => { const x = amt(b); return !x ? 'not learned' : x.raw > 0 || x.dealt > 0 ? '' : v?.status === 'unmodeled' ? 'not counted' : 'no damage'; };
+
+  // the head: icon and key, name, rank pips (each build's when they differ) and the types it deals, under a stripe of its mix
+  const pips = r => `<span class="ka-pips">${Array.from({length: maxRank(k)}, (_, i) => `<i${i < r ? ' class="on"' : ''}></i>`).join('')}</span>`;
+  const split = S.compare && S.split && ranks('a')[k] !== ranks('b')[k];
+  const rank = passive ? '<span>passive</span>' : split ? ['a', 'b'].map(b => `<span class="ka-rk">${tag(b)}${pips(ranks(b)[k])}</span>`).join('') : pips(ranks('a')[k]);
+  const off = !passive && !ranks('a')[k] && !(split && ranks('b')[k]);
+  const mixOf = t => ks.reduce((s, b) => s + (amt(b)?.byType[t]?.raw || 0), 0), used = DMG.filter(t => mixOf(t) > 0);
+  const sum = used.reduce((s, t) => s + mixOf(t), 0);
+  let at = 0;
+  const stripe = !used.length ? '' : used.length === 1 ? DMG_COLOR[used[0]]
+    : `linear-gradient(90deg,${used.map(t => `${DMG_COLOR[t]} ${+(at * 100).toFixed(1)}% ${+((at += mixOf(t) / sum) * 100).toFixed(1)}%`).join(',')})`;
+  const head = (stripe ? `<i class="ka-stripe" style="background:${stripe}"></i>` : '')
+    + `<div class="ka-h"><span class="aico${off ? ' off' : ''}"><i class="ico kit ${k}"></i><i class="k">${k.toUpperCase()}</i></span>`
+    + `<div class="ka-t"><b>${esc(name)}</b><span class="ka-sub">${rank}${used.map(t => `<span class="ka-dt ${t}">${t}</span>`).join('')}</span></div></div>`;
   if (!ks.length) return head;
-  const cols = two ? `<span></span>${ks.map(b => `<span class="tag ${b} xs">${b.toUpperCase()}</span>`).join('')}` : '';
-  const row = (label, cells, sub) => `<span class="tl">${label}</span>${cells.join('')}${sub ? `<span class="ts">${sub}</span>` : ''}`;
-  const cell = (b, text, win) => `<span class="tv ${b}${win ? ' win' : ''}">${text}</span>`;
-  let body = '';
-  if (k === 'p') {
-    const line = b => S.res[b].combo.lines.find(l => l.key === 'p');
-    const val = b => line(b) ? (raw ? line(b).total.raw : line(b).total.dealt) : 0;
-    body = row('In the combo', ks.map(b => cell(b, val(b) ? nf(val(b)) : '–', two && val(b) > val(b === 'a' ? 'b' : 'a'))));
+
+  // one cast of a line that can crit: without a crit, on average and with one; the way the combo counts them is marked
+  const critRow = b => {
+    const l = line(b), n = l?.qty, c = l?.crits;
+    if (!c || !n || !c.always.dealt || none(b)) return '';
+    const cell = (m, word) => `<span${S.res[b].combo.crits === m ? ' class="on"' : ''}>${word} <b>${nf(c[m].dealt / n)}</b></span>`;
+    return `<div class="ka-crit">${two ? tag(b) : ''}${cell('never', 'no crit')}${cell('average', 'avg')}${cell('always', 'crit')}</div>`;
+  };
+  const words = [...new Set(ks.map(none))];
+  let body;
+  if (words.length === 1 && words[0]) body = `<p class="ka-none">${words[0]}</p>`;
+  else if (ks.every(none)) body = `<div class="ka-cmp raw">${ks.map(b => `${tag(b)}<span class="ka-n none">${none(b)}</span>`).join('')}</div>`;
+  else if (!two) {
+    // one build: the number dealt, and the raw number, the bar, what was mitigated and the parts per type when there is a target
+    const x = amt('a'), ts = DMG.filter(t => x.byType[t]?.raw > 0), lost = x.raw - x.dealt;
+    body = `<div class="ka-num ${ts.length === 1 ? ts[0] : 'true'}"><b>${nf(x.dealt)}</b><span>${passive ? 'in the combo' : 'per cast'}</span>${raw ? '' : `<em>${nf(x.raw)} raw</em>`}</div>`;
+    if (!raw) {
+      body += mitBar(x.byType, Math.max(x.raw, x.dealt));
+      if (lost >= 0.5) body += `<div class="ka-leg"><b>−${nf(lost)}</b> mitigated · ${Math.round(lost / x.raw * 100)}%</div>`;
+      if (ts.length > 1) body += `<div class="ka-types">${ts.map(t => `<span class="${t}"><i></i><b>${nf(x.byType[t].dealt)}</b>${t}</span>`).join('')}</div>`;
+    }
+    body += critRow('a');
   } else {
-    const info = b => S.res[b].abilities[k], dead = v && !v.damaging;
-    const dmg = b => info(b).cast ? (raw ? info(b).cast.raw : info(b).cast.dealt) : null;
-    const cd = b => info(b).cooldown;
-    const typeOf = b => {
-      const t = info(b).cast?.byType; if (!t) return '';
-      const used = ['physical', 'magic', 'true'].filter(x => t[x].raw > 0);
-      return used.length === 1 ? used[0] : used.length ? 'mixed' : '';
-    };
-    const other = b => b === 'a' ? 'b' : 'a';
-    // an ability that deals no damage still has its cooldown to show
-    body = dead ? row('One cast', ks.map(b => cell(b, info(b).cast ? 'no damage' : 'not learned')))
-      : row('One cast', ks.map(b => cell(b, dmg(b) === null ? 'not learned' : nf(dmg(b)), two && dmg(b) > (dmg(other(b)) ?? 0))),
-        ks.map(b => typeOf(b)).filter((t, i, all) => t && all.indexOf(t) === i).join(' / ') + (raw ? ', before resistances' : ', after resistances'));
-    const why = ks.map(b => cd(b) && `${two ? b.toUpperCase() + ': ' : ''}${cd(b).base} s, ${Math.round(cd(b).haste)} haste`).filter(Boolean);
-    body += row('Cooldown', ks.map(b => cell(b, cd(b) ? sec(cd(b).seconds) : '–', two && cd(b) && cd(other(b)) && cd(b).seconds < cd(other(b)).seconds - 0.005)),
-      [...new Set(why)].join(' · '));
-    // the line's own total in the combo, when the combo casts it
-    const line = b => S.res[b].combo.lines.find(l => l.key === k);
-    if (!dead && ks.some(b => line(b)?.qty)) body += row(`In the combo, ${line('a')?.qty || 0}×`, ks.map(b => cell(b, line(b)?.total.dealt ? nf(raw ? line(b).total.raw : line(b).total.dealt) : '–')));
+    // two builds: a row each, the bars on the scale of the larger raw number; the better number dealt is in its build's colour
+    const scale = Math.max(...ks.map(b => amt(b) ? Math.max(amt(b).raw, amt(b).dealt) : 0)) || 1;
+    const val = b => none(b) ? null : amt(b).dealt;
+    const win = b => val(b) !== null && Math.round(val(b)) > Math.round(val(other(b)) ?? 0);
+    body = `<div class="ka-cmp${raw ? ' raw' : ''}"><span></span><span class="ka-hd">${raw ? 'raw' : 'dealt'}</span>`
+      + (raw ? '' : '<span class="ka-hd"><i class="ka-sw"></i>mitigated</span><span class="ka-hd">raw</span>')
+      + ks.map(b => none(b) ? `${tag(b)}<span class="ka-n none">${raw ? none(b) : '–'}</span>${raw ? '' : `<span class="ka-w">${none(b)}</span>`}`
+        : `${tag(b)}<span class="ka-n ${b}${win(b) ? ' win' : ''}">${nf(val(b))}</span>${raw ? '' : `${mitBar(amt(b).byType, scale)}<span class="ka-rw">${nf(amt(b).raw)}</span>`}`).join('')
+      + `</div>${ks.map(critRow).join('')}`;
   }
-  // what the combo's line is made of, as the breakdown row's tooltip used to say, when it is more than one thing
-  const of = b => S.res[b].combo.lines.find(l => l.key === k);
-  const parts = ks.some(b => (of(b)?.parts.length || 0) > 1) ? lineParts(of('a'), two ? of('b') : null) : '';
-  return `${head}<div class="tip-g${two ? ' two' : ''}">${cols}${body}</div>${parts ? `<div class="tip-p">${esc(parts).replace(/\n/g, '<br>')}</div>` : ''}`;
+
+  // the foot: the cooldown after haste (each build's when they differ), and how many times the combo casts it
+  const cd = b => passive ? null : S.res[b].abilities[k]?.cooldown?.seconds ?? null;
+  const cds = ks.filter(b => cd(b) !== null);
+  const same = cds.length === 1 && !two || cds.length === 2 && Math.abs(cd('a') - cd('b')) < 0.005;
+  const cdText = !cds.length ? '' : same ? `<b>${sec(cd(cds[0]))}</b>`
+    : cds.map(b => `<span>${b.toUpperCase()} <b class="${b}${cds.length === 2 && cd(b) < cd(other(b)) ? ' win' : ''}">${sec(cd(b))}</b></span>`).join('<i>·</i>');
+  const qty = passive ? 0 : line(ks[0])?.qty || 0;
+  const foot = cdText || qty ? `<div class="ka-f">${cdText ? `<span class="ka-cd">${CLOCK}${cdText}</span>` : ''}${qty ? `<span class="ka-cmb">combo <b>×${qty}</b></span>` : ''}</div>` : '';
+  return `${head}<div class="ka-b">${body}</div>${foot}`;
 }
 /* ---------- an item's card ---------- */
 /* Pointing at an item (in a build's slot, the enemy's, the picker or an auto-build result) shows a card: its
@@ -1153,8 +1201,13 @@ function showTip(el) {
   const k = el.dataset.ab, id = +el.dataset.it, tip = $('#tip');
   if (!tip || !(k || id)) return;
   tipAt = el;
-  tip.innerHTML = k ? abilityCard(k) : itemCard(id, el.dataset.hint);
+  // on a phone an ability's card is a sheet above the tab bar, with a close button; inside a menu it stays a card
+  const sheet = !!k && PHONE.matches && !el.closest('.menu, .imenu');
+  tip.classList.toggle('ka', !!k);
+  tip.classList.toggle('sheet', sheet);
+  tip.innerHTML = k ? abilityCard(k) + (sheet ? '<button class="ka-x" data-tip-x aria-label="Close">×</button>' : '') : itemCard(id, el.dataset.hint);
   tip.hidden = false;
+  if (sheet) { tip.style.left = tip.style.top = ''; return; }
   const r = el.getBoundingClientRect(), m = tip.getBoundingClientRect(), gap = 8;
   // an item in the picker has its card beside it, so the row under it stays in view
   if (!k && el.closest('#item-grid')) {
@@ -1191,11 +1244,16 @@ const tipOf = t => {
   return el?.dataset.it && (touched() || t.closest('[data-cfg], [data-rm]')) ? null : el;
 };
 function wireTip() {
+  // only a phone's sheet can be pointed at or tapped: what happens inside it leaves it open, and its × closes it
+  const inTip = t => !!t.closest?.('#tip');
   document.addEventListener('mouseover', e => {
+    if (inTip(e.target)) return;
     const el = tipOf(e.target);
     if (el && el !== tipAt) showTip(el); else if (!el && tipAt) hideTip();
   });
+  document.addEventListener('click', e => { if (e.target.closest('[data-tip-x]')) hideTip(); });
   document.addEventListener('focusin', e => {
+    if (inTip(e.target)) return;
     const el = tipOf(e.target);
     // a click focuses a slot too; an item's card comes with focus only from the keyboard
     if (el?.dataset.it && !el.matches(':focus-visible')) return;
@@ -1203,7 +1261,7 @@ function wireTip() {
   });
   document.addEventListener('scroll', hideTip, true);
   // clicking a rank pip keeps the card, which then shows the new rank's numbers; clicking an item puts its card away
-  document.addEventListener('mousedown', e => { if (tipAt && (!tipAt.contains(e.target) || tipAt.dataset.it)) hideTip(); });
+  document.addEventListener('mousedown', e => { if (tipAt && !inTip(e.target) && (!tipAt.contains(e.target) || tipAt.dataset.it)) hideTip(); });
 }
 
 /* ---------- phones and touch ---------- */
@@ -1219,6 +1277,7 @@ const touched = () => pointer === 'touch';
 function showNote(el) {
   const tip = $('#tip');
   hideTip(); noteAt = el;
+  tip.classList.remove('ka', 'sheet');
   tip.innerHTML = `<div class="tip-note">${el.title.split('\n').map(p => `<p>${esc(p)}</p>`).join('')}</div>`;
   tip.hidden = false;
   const r = el.getBoundingClientRect(), m = tip.getBoundingClientRect(), gap = 8;
@@ -1471,7 +1530,7 @@ function paintLines() {
     $('.n.b', row).classList.toggle('win', !!B && vb > va);
     gap($('.g', row), va, vb);
     $('.sh', row).textContent = va && A.combo.total.dealt ? Math.round(va / A.combo.total.dealt * 100) + '%' : '–';
-    // an ability's row has its card instead (abilityCard), which lists the same parts
+    // an ability's row has its card instead (abilityCard)
     if (!$('.src[data-ab]', row)) $('.nm', row).title = lineParts(a, b);
     const cr = $(`.critrow[data-k="${k}"]`);
     if (!cr) continue;
