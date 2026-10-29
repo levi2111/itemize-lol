@@ -1,5 +1,5 @@
-/* Stage 2b: items. Data Dragon decides which items exist in each shop and gives names,
-   prices and tags; the game files give complete stats (Data Dragon omits haste, lethality
+/* Stage 2b: items. Data Dragon decides which items exist in each shop and gives names
+   and tags; the game files give prices, complete stats (Data Dragon omits haste, lethality
    and penetration) and the passives' numbers.
 
    Three shops are kept: Summoner's Rift, ARAM and Arena. Data Dragon lists the maps an item
@@ -148,12 +148,28 @@ export function compileItems(ddItems: Raw, bin: Raw, table: StringTable, log: Co
     return ROLE_FLAGS.map(([, role]) => role).filter(role => from.includes(role));
   };
 
+  // the price from the game files too: the item's own and its recipe's, all the way down, which is what Data Dragon
+  // adds up as its total. A preview of the next patch (fetch.ts, PBE) has no Data Dragon of its own to say it
+  const goldOf = (id: number, depth = 0): number | undefined => {
+    const g = game.get(id);
+    if (typeof g?.price !== 'number' || depth > 6) return undefined;
+    let total = g.price;
+    for (const link of g.recipeItemLinks ?? []) {
+      const part = goldOf(Number(String(link).replace(/^Items\//, '')), depth + 1);
+      if (part === undefined) return undefined;
+      total += part;
+    }
+    return total;
+  };
+
   const items: CompiledItem[] = [];
   for (const [id, shops] of shopsOf) {
     const it = dd[id]!;
     const tags: string[] = it.tags ?? [];
     const g = game.get(id);
     if (!g) { warnings.push(`item ${id} ${it.name}: in Data Dragon but not in game data, skipped`); continue; }
+    const gold = goldOf(id) ?? it.gold.total;
+    if (gold !== it.gold.total) warnings.push(`item ${id} ${it.name}: Data Dragon gold=${it.gold.total} but game data has ${gold}`);
 
     const stats: ItemData['stats'] = {};
     for (const [field, stat] of Object.entries(STAT_FIELDS)) {
@@ -177,7 +193,7 @@ export function compileItems(ddItems: Raw, bin: Raw, table: StringTable, log: Co
     const find = (pool: Record<string, unknown>, name: string) => Object.keys(pool).find(k => k.toLowerCase() === name.toLowerCase());
 
     const item: CompiledItem = {
-      id, name: it.name, gold: it.gold.total, tags, plaintext: it.plaintext ?? '', shops,
+      id, name: it.name, gold, tags, plaintext: it.plaintext ?? '', shops,
       // only a component if it builds into something one of its shops sells: boots "build into" upgrades they do not
       component: Array.isArray(it.into) && it.into.some((to: string) => shops.some(s => sells(s, to))),
       roles: rolesFrom(id),

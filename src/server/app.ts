@@ -11,6 +11,7 @@ import { SLOTS } from '../shared/types.ts';
 import type { ServedData } from './dataset.ts';
 import { createLink, readLinkBody, type LinkStore } from './links.ts';
 import { championSlugs } from './pages.ts';
+import { onePatch, patchEntries, type PatchSet } from './patches.ts';
 
 /** Riot requires this wording, readily visible, on every product that uses its assets. */
 export const LEGAL = 'itemize.lol isn\'t endorsed by Riot Games and doesn\'t reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.';
@@ -65,9 +66,11 @@ function fixedWindow(perMinute: number) {
   };
 }
 
-export function createApp(data: ServedData, opts: AppOptions = {}) {
+/* Every route that reads game data reads the live patch, or the one its `patch` names: the query's on a GET, the
+   body's on POST /calc (src/server/patches.ts says which are served). */
+export function createApp(served: PatchSet | ServedData, opts: AppOptions = {}) {
   const app = new Hono();
-  const etag = `"${data.manifest.patch}-${Date.parse(data.manifest.builtAt).toString(36)}"`;
+  const patches = 'all' in served ? served : onePatch(served);
   const limit = opts.calcPerMinute ? fixedWindow(opts.calcPerMinute) : undefined;
   const linkLimit = opts.linksPerMinute ? fixedWindow(opts.linksPerMinute) : undefined;
   const refuse = (c: Context, retryAfter: number) => { c.header('Retry-After', String(retryAfter)); return c.json({ error: { message: 'too many requests' } }, 429); };
@@ -89,37 +92,52 @@ export function createApp(data: ServedData, opts: AppOptions = {}) {
   const api = new Hono();
 
   /** Static data changes only when a new dataset is built, so it is cached hard and revalidated by ETag. */
-  const cached = (c: Context, body: unknown) => {
+  const tagOf = (...sets: ServedData[]) => `"${sets.map(d => `${d.manifest.patch}-${Date.parse(d.manifest.builtAt).toString(36)}`).join('+')}"`;
+  const cached = (c: Context, body: unknown, etag: string) => {
     c.header('ETag', etag);
     c.header('Cache-Control', 'public, max-age=300, stale-while-revalidate=86400');
     if (c.req.header('If-None-Match') === etag) return c.body(null, 304);
     return c.json(body as object);
   };
+  const noPatch = (c: Context) => c.json({ error: { field: 'patch', message: 'no such patch' } }, 404);
 
-  const meta = { ...data.manifest, legal: LEGAL };
-  // each with the address of its page (/vayne), which the page moves to when that champion is chosen
-  const slugs = championSlugs(data.index);
-  const champions = data.index.map(c => ({ ...c, slug: slugs.get(c.id) }));
-  const items = data.items.map(itemView);
+  // what each patch serves, made once: the list of every patch served goes with each one's meta, for the patch menu
+  const list = patchEntries(patches), metaTag = tagOf(...patches.all.map(p => p.data));
+  const views = new Map(patches.all.map(({ data }) => {
+    // each with the address of its page (/vayne), which the page moves to when that champion is chosen
+    const slugs = championSlugs(data.index);
+    return [data.patch, {
+      data, etag: tagOf(data),
+      meta: { ...data.manifest, legal: LEGAL, live: patches.live.patch, patches: list },
+      champions: data.index.map(c => ({ ...c, slug: slugs.get(c.id) })),
+      items: data.items.map(itemView),
+    }];
+  }));
+  /** The patch a request names, the live one when it names none, or undefined for one not served. */
+  const viewOf = (patch: string | undefined) => views.get(patch || patches.live.patch);
 
-  api.get('/meta', c => cached(c, meta));
-  api.get('/champions', c => cached(c, champions));
-  api.get('/items', c => cached(c, items));
+  api.get('/meta', c => { const v = viewOf(c.req.query('patch')); return v ? cached(c, v.meta, metaTag) : noPatch(c); });
+  api.get('/champions', c => { const v = viewOf(c.req.query('patch')); return v ? cached(c, v.champions, v.etag) : noPatch(c); });
+  api.get('/items', c => { const v = viewOf(c.req.query('patch')); return v ? cached(c, v.items, v.etag) : noPatch(c); });
   api.get('/champions/:id', c => {
-    const champ = data.champion(c.req.param('id'));
-    return champ ? cached(c, championView(champ)) : c.json({ error: { message: 'no such champion' } }, 404);
+    const v = viewOf(c.req.query('patch'));
+    if (!v) return noPatch(c);
+    const champ = v.data.champion(c.req.param('id'));
+    return champ ? cached(c, championView(champ), v.etag) : c.json({ error: { message: 'no such champion' } }, 404);
   });
   /* A champion's health, armor and magic resist at a level, as the target: its own, with its items' added when
      `items` lists them (ids separated by commas) */
   api.get('/champions/:id/target', c => {
-    const champ = data.champion(c.req.param('id'));
+    const v = viewOf(c.req.query('patch'));
+    if (!v) return noPatch(c);
+    const data = v.data, champ = data.champion(c.req.param('id'));
     if (!champ) return c.json({ error: { message: 'no such champion' } }, 404);
     const level = Math.round(Number(c.req.query('level') ?? 1));
     if (!(level >= 1 && level <= 18)) return c.json({ error: { field: 'level', message: 'level must be between 1 and 18' } }, 400);
     const list = c.req.query('items');
     try {
       const items = targetItems(data, list ? list.split(',').map(Number) : [], 'items');
-      return cached(c, championAsTarget(champ, level, items));
+      return cached(c, championAsTarget(champ, level, items), v.etag);
     } catch (err) {
       if (err instanceof CalcError) return c.json({ error: { field: err.field, message: err.message } }, 400);
       throw err;
@@ -133,6 +151,9 @@ export function createApp(data: ServedData, opts: AppOptions = {}) {
     try { body = await c.req.json(); } catch { return c.json({ error: { message: 'body must be JSON' } }, 400); }
     try {
       if (!body || typeof body !== 'object') throw new CalcError('body', 'body must be an object');
+      if (body.patch !== undefined && typeof body.patch !== 'string') throw new CalcError('patch', 'patch must be a string');
+      const data = viewOf(body.patch)?.data;
+      if (!data) return noPatch(c);
       const builds: unknown = body.builds;
       if (!Array.isArray(builds) || builds.length < 1 || builds.length > MAX_BUILDS) throw new CalcError('builds', `builds must list 1 to ${MAX_BUILDS} builds`);
 

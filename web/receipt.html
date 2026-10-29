@@ -135,6 +135,17 @@ body[data-target="raw"] .needs-target{opacity:.26;pointer-events:none}
 .wf.warn{color:var(--warn);border-color:var(--warn)}
 .patch{font-family:var(--font-mono);font-size:.74rem;color:var(--chalk-dim)}
 .patch b{color:var(--chalk);font-weight:600}
+/* the patch menu's button: the patch shown, and a tag when it is not the live one */
+.patch-btn{display:inline-flex;align-items:center;gap:.35rem;height:1.85rem;padding:0 .45rem 0 .55rem;border:1px solid transparent;border-radius:2px;white-space:nowrap}
+.patch-btn:hover,.patch-btn[aria-expanded="true"]{border-color:var(--rule);color:var(--chalk)}
+.patch-btn .caret{width:.55rem;height:.55rem;flex:none;transition:transform .15s}
+.patch-btn[aria-expanded="true"] .caret{transform:rotate(180deg)}
+.patch .pv{font-style:normal;font-size:.6rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--warn);border:1px solid currentColor;border-radius:2px;padding:0 .25rem}
+.patch[data-kind="previous"] .pv{color:var(--chalk-dim)}
+.menu.patch-menu{width:21rem;font-family:var(--font-ui);font-size:.82rem}
+.menu .pm-x{margin-left:.4rem;font-style:normal;font-size:.62rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--warn)}
+.pn-t a{color:var(--chalk);text-underline-offset:.2em}
+@media (max-width:700px),(max-width:1100px) and (max-height:500px){.patch .pv-x,.patch:not([data-kind="live"]) .pw{display:none}}
 .btn{border:1px solid var(--chalk);border-radius:2px;padding:.36rem .8rem;font-size:.8rem;font-weight:600}
 .btn:hover{background:var(--chalk);color:var(--ink)}
 
@@ -1061,7 +1072,14 @@ input[type=range]::-moz-range-thumb{width:.8rem;height:1.6rem}
     </div>
     <div class="bar-r">
       <span class="wf" id="quality" hidden></span>
-      <span class="patch">Patch <b id="patch">…</b></span>
+      <div class="set patch" id="patch-set">
+        <button class="menu-btn patch-btn" id="patch-btn" aria-haspopup="true" aria-expanded="false" aria-controls="patch-menu" title="Choose the patch"><span class="pw">Patch </span><b id="patch">…</b><i class="pv" id="patch-kind" hidden></i><svg class="caret" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+        <div class="menu patch-menu" id="patch-menu" role="menu" aria-label="Patch" hidden>
+          <span class="eyebrow">Patch</span>
+          <div id="patch-list" style="display:contents"></div>
+          <p class="hint">Every visit opens on the live patch.</p>
+        </div>
+      </div>
       <button class="btn" id="share">Copy build link</button>
       <button class="help" id="intro-btn" aria-label="How this page works" title="How this page works (?)">
         <svg viewBox="5 4.5 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>

@@ -1,9 +1,9 @@
 /* The engine as a browser runs it, for the auto-build (src/autobuild/): its Web Worker and every module the
    worker imports, as JavaScript, next to the data they read. The modules are this repository's own TypeScript
    with the types taken out and nothing else changed, so the page scores builds with the very code the API uses.
-   Laid out as in src/, with the data beside it:
+   Laid out as in src/, with the data of each patch served beside it:
      autobuild/worker.js, engine/calc.js, shared/types.js, ...
-     data/items.json, data/champions/<id>.json
+     data/<patch>/items.json, data/<patch>/champions/<id>.json
    The Node server serves them under /engine/ (src/server/main.ts); scripts/site.ts writes them into the site
    under a name made from their contents, and points the pages at it. */
 import { readFileSync } from 'node:fs';
@@ -39,10 +39,9 @@ export function engineModules(): Map<string, string> {
   return out;
 }
 
-/** The data path a request under the engine's base names, or null: data/items.json, data/champions/<id>.json. */
-export function engineData(path: string): { items: true } | { champion: string } | null {
-  const p = posix.normalize(path);
-  if (p === 'data/items.json') return { items: true };
-  const m = /^data\/champions\/([A-Za-z0-9]+)\.json$/.exec(p);
-  return m ? { champion: m[1]! } : null;
+/** The data path a request under the engine's base names, or null: data/<patch>/items.json, data/<patch>/champions/<id>.json. */
+export function engineData(path: string): { patch: string; items: true } | { patch: string; champion: string } | null {
+  const m = /^data\/(\d+\.\d+(?:\.\d+|-pbe))\/(?:(items)|champions\/([A-Za-z0-9]+))\.json$/.exec(posix.normalize(path));
+  if (!m) return null;
+  return m[2] ? { patch: m[1]!, items: true } : { patch: m[1]!, champion: m[3]! };
 }

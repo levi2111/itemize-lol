@@ -4,14 +4,13 @@
    web/_headers. */
 import type { ExecutionContext } from 'hono';
 import { createApp } from '../server/app.ts';
-import type { ChampionIndexEntry, ServedData } from '../server/dataset.ts';
-import type { ChampionData, DatasetManifest, ItemData } from '../shared/types.ts';
 import { warmUp } from '../og/card.ts';
 import { readAtlas } from '../og/font.ts';
 import { decodeShare, readShare } from '../server/share.ts';
 import { preview as describe } from '../server/preview.ts';
 import { previews, type PreviewEnv } from './preview.ts';
 import { d1Links, type D1 } from './links.ts';
+import { readBundle } from './data.ts';
 import text from '../../.build/data.txt';
 import glyphs from '../../.build/glyphs.bin';
 import version from '../../.build/og-version.txt';
@@ -25,15 +24,8 @@ interface Env extends PreviewEnv {
   LINKS: D1;
 }
 
-// parsed once per isolate, as it starts, so no request pays for it
-const bundle: { patch: string; manifest: DatasetManifest; index: ChampionIndexEntry[]; items: ItemData[]; champions: Record<string, ChampionData> } = JSON.parse(text);
-const ids = new Map(bundle.index.map(c => [c.id.toLowerCase(), c.id]));
-const itemById = new Map(bundle.items.map(i => [i.id, i]));
-const data: ServedData = {
-  patch: bundle.patch, manifest: bundle.manifest, index: bundle.index, items: bundle.items,
-  champion: id => bundle.champions[ids.get(String(id).toLowerCase()) ?? ''],
-  item: id => itemById.get(id),
-};
+// read once per isolate, as it starts (data.ts); the pages, short links and previews are the live patch's
+const patches = readBundle(text), data = patches.live;
 // the glyphs too, and a few cards and a calculation are done for nothing: an isolate's first runs of that code
 // are several times slower than later ones (src/og/card.ts, warmUp), and here the startup limit pays for them
 const fonts = readAtlas(new Uint8Array(glyphs));
@@ -42,7 +34,7 @@ describe(data, readShare(data, decodeShare('eyJtIjoxfQ')!, 'tabs'));      // {"m
 const preview = previews(data, () => fonts, version.trim(), env => d1Links((env as Env).LINKS));
 
 const client = (c: { req: { header(name: string): string | undefined } }) => ({ key: c.req.header('cf-connecting-ip') ?? 'unknown' });
-const app = createApp(data, {
+const app = createApp(patches, {
   calcGate: async c => (await (c.env as Env).CALC_LIMIT.limit(client(c))).success,
   linkGate: async c => (await (c.env as Env).LINK_LIMIT.limit(client(c))).success,
   links: c => d1Links((c.env as Env).LINKS),

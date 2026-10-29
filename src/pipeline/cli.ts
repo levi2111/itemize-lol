@@ -1,4 +1,5 @@
-/* npm run data:<command> -- [--patch 16.20.1] [--champion Samira] [--draft] [--item 3153] [--games 1000] [--accept] [--force] */
+/* npm run data:<command> -- [--patch 16.20.1] [--preview] [--champion Samira] [--draft] [--item 3153] [--games 1000] [--accept] [--force]
+     --preview   fetch and build the next patch from the test server (src/pipeline/fetch.ts, PBE) */
 import { fetchPatch } from './fetch.ts';
 
 const [command, ...rest] = process.argv.slice(2);
@@ -9,11 +10,11 @@ const log = (msg: string) => console.log(msg);
 try {
   switch (command) {
     case 'fetch':
-      await fetchPatch({ patch: arg('patch'), force: flag('force'), log });
+      await fetchPatch({ patch: arg('patch'), preview: flag('preview'), force: flag('force'), log });
       break;
     case 'build': {
       const { buildDataset } = await import('./build.ts');
-      await buildDataset({ patch: arg('patch'), accept: flag('accept'), force: flag('force'), log });
+      await buildDataset({ patch: arg('patch'), preview: flag('preview'), accept: flag('accept'), force: flag('force'), log });
       break;
     }
     case 'art': {
@@ -38,7 +39,7 @@ try {
       break;
     }
     default:
-      console.error('usage: node src/pipeline/cli.ts <fetch|build|art|popularity|report|crosscheck> [--patch X.Y.Z] [--champion Id] [--item id|name] [--status auto] [--games N] [--accept] [--force]');
+      console.error('usage: node src/pipeline/cli.ts <fetch|build|art|popularity|report|crosscheck> [--patch X.Y.Z] [--preview] [--champion Id] [--item id|name] [--status auto] [--games N] [--accept] [--force]');
       process.exit(2);
   }
 } catch (err) {

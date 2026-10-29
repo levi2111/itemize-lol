@@ -1,0 +1,110 @@
+{
+ "patch": "16.22-pbe",
+ "anchors": {
+  "failed": [],
+  "missing": [],
+  "passed": 13
+ },
+ "modelIssues": [
+  {
+   "where": "Mel.q",
+   "message": "unknown name \"InitialExplosionDamage\" (not a calculation, data value or effect of MelQ)"
+  },
+  {
+   "where": "Orianna.q",
+   "message": "unknown name \"TotalDamageTooltip\" (not a calculation, data value or effect of OrianaIzunaCommand)"
+  },
+  {
+   "where": "Varus.vars.chargeAmp",
+   "message": "\"MaxChargeAmp\" is not a calculation, data value or effect of VarusQ"
+  },
+  {
+   "where": "item 6697 Hubris",
+   "message": "unknown name \"ADPerStatue\" (not a calculation, data value or effect of item 6697)"
+  }
+ ],
+ "stale": [
+  "AurelionSol.e",
+  "Aurora.r",
+  "Mel.p",
+  "Mel.e",
+  "Mel.r",
+  "Taric.e",
+  "item 2501 Overlord's Bloodmail",
+  "item 2520 Bastionbreaker",
+  "item 222502 Unending Despair (arena copy of 2502)",
+  "item 222503 Blackfire Torch (arena copy of 2503)",
+  "item 222522 Actualizer (arena copy of 2522)",
+  "item 223003 Archangel's Staff (arena copy of 3003)",
+  "item 223004 Manamune (arena copy of 3004)",
+  "item 223032 Yun Tal Wildarrows (arena copy of 3032)",
+  "item 223053 Sterak's Gage (arena copy of 3053)",
+  "item 223068 Sunfire Aegis (arena copy of 3068)",
+  "item 223073 Experimental Hexplate (arena copy of 3073)",
+  "item 223074 Ravenous Hydra (arena copy of 3074)",
+  "item 223075 Thornmail (arena copy of 3075)",
+  "item 223078 Trinity Force (arena copy of 3078)",
+  "item 223084 Heartsteel (arena copy of 3084)",
+  "item 223085 Runaan's Hurricane (arena copy of 3085)",
+  "item 223087 Statikk Shiv (arena copy of 3087)",
+  "item 223091 Wit's End (arena copy of 3091)",
+  "item 223094 Rapid Firecannon (arena copy of 3094)",
+  "item 223095 Stormrazor (arena copy of 3095)",
+  "item 223115 Nashor's Tooth (arena copy of 3115)",
+  "item 223118 Malignance (arena copy of 3118)",
+  "item 223124 Guinsoo's Rageblade (arena copy of 3124)",
+  "item 223146 Hextech Gunblade (arena copy of 3146)",
+  "item 223152 Hextech Rocketbelt (arena copy of 3152)",
+  "item 223153 Blade of The Ruined King (arena copy of 3153)",
+  "item 223181 Hullbreaker (arena copy of 3181)",
+  "item 223302 Terminus (arena copy of 3302)",
+  "item 223742 Dead Man's Plate (arena copy of 3742)",
+  "item 223748 Titanic Hydra (arena copy of 3748)",
+  "item 224628 Horizon Focus (arena copy of 4628)",
+  "item 224645 Shadowflame (arena copy of 4645)",
+  "item 224646 Stormsurge (arena copy of 4646)",
+  "item 226631 Stridebreaker (arena copy of 6631)",
+  "item 226657 Rod of Ages (arena copy of 6657)",
+  "item 226664 Hollow Radiance (arena copy of 6664)",
+  "item 226672 Kraken Slayer (arena copy of 6672)",
+  "item 226676 The Collector (arena copy of 6676)",
+  "item 226698 Profane Hydra (arena copy of 6698)",
+  "item 228020 Abyssal Mask (arena copy of 8020)"
+ ],
+ "unlocked": [],
+ "unknownParts": {
+  "PercentageOfBuffNameElapsed": 3
+ },
+ "unknownStats": {
+  "19": 1
+ },
+ "sourceMismatches": {
+  "attackdamageperlevel": 172,
+  "hp": 1,
+  "hpperlevel": 2,
+  "attackdamage": 2,
+  "armorperlevel": 1,
+  "attackspeedperlevel": 1,
+  "mp": 1,
+  "FlatPhysicalDamageMod": 2
+ },
+ "warnings": [],
+ "coverage": {
+  "abilities": {
+   "verified": 0,
+   "curated": 851,
+   "stale": 6,
+   "auto": 7,
+   "none": 1,
+   "unmodeled": 0
+  },
+  "items": {
+   "verified": 0,
+   "curated": 84,
+   "stale": 40,
+   "auto": 0,
+   "none": 225,
+   "unmodeled": 37
+  }
+ }
+}

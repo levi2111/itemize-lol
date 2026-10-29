@@ -342,4 +342,14 @@ export interface DatasetManifest {
   champions: number;
   items: number;
   coverage: Record<ModelStatus, number>;
+  /** set on a preview of the next patch, made from the test server's files (src/pipeline/fetch.ts, PBE) */
+  preview?: PreviewInfo;
+}
+export interface PreviewInfo {
+  /** the test server's game build the numbers come from */
+  build: string;
+  /** when its files were fetched */
+  fetchedAt: string;
+  /** Riot's patch notes for it, once they are out (src/pipeline/notes.ts): the patch is close to final then */
+  notes?: string;
 }

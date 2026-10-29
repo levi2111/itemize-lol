@@ -1,6 +1,7 @@
 /* Stage 3: the pictures. The site serves its own copies of the game art, packed so that a
    whole picker arrives in one request: one sheet of every item icon, one of every champion
-   portrait, one strip of five ability icons per champion and one splash per champion,
+   portrait (the items of every patch served, so the page can switch patches), one strip of five
+   ability icons per champion and one splash per champion,
    and one strip of the game's stat icons (the ones item tooltips put beside a stat), cut from its texticons.png.
    Originals are mirrored into data/raw/<patch>/art/; the packed files go to web/art/<version>/,
    where <version> is a hash of their contents, so they can be cached forever. */
@@ -9,7 +10,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import sharp from 'sharp';
-import type { ChampionIndexEntry } from '../server/dataset.ts';
+import { servedFromDisk, type ChampionIndexEntry } from '../server/dataset.ts';
 import type { ChampionData, ItemData, Slot } from '../shared/types.ts';
 import { CDRAGON, CDRAGON_CDN, DDRAGON, cdragonPath, get, pool } from './fetch.ts';
 import { DATA_DIR, ROOT, distDir, rawDir } from './paths.ts';
@@ -42,7 +43,13 @@ export async function buildArt(opts: ArtOptions = {}): Promise<ArtIndex> {
   const patch: string = opts.patch ?? JSON.parse(await readFile(join(DATA_DIR, 'dist', 'latest.json'), 'utf8')).patch;
   const dist = distDir(patch), mirror = join(rawDir(patch), 'art');
   const index: ChampionIndexEntry[] = JSON.parse(await readFile(join(dist, 'champions.json'), 'utf8'));
-  const items: ItemData[] = JSON.parse(await readFile(join(dist, 'items.json'), 'utf8'));
+  // each item from the Data Dragon of the first patch served that sells it, the live one before the others
+  const itemFrom = new Map<number, string>();
+  for (const { patch: p } of servedFromDisk(patch).sort((a, b) => Number(b.kind === 'live') - Number(a.kind === 'live'))) {
+    const dd: string = JSON.parse(await readFile(join(distDir(p), 'manifest.json'), 'utf8')).sources.ddragon;
+    const items: ItemData[] = JSON.parse(await readFile(join(distDir(p), 'items.json'), 'utf8'));
+    for (const it of items) if (!itemFrom.has(it.id)) itemFrom.set(it.id, dd);
+  }
   const missing: string[] = [];
 
   /** An original from the mirror, downloading it first if needed; undefined if no source has it. */
@@ -72,8 +79,8 @@ export async function buildArt(opts: ArtOptions = {}): Promise<ArtIndex> {
   const out = new Map<string, Buffer>();
 
   log(`art for patch ${patch}`);
-  const itemIds = items.map(i => i.id).sort((a, b) => a - b);
-  const itemTiles = await pool(itemIds, 12, async id => tile(await original(`item/${id}.png`, `${DDRAGON}/cdn/${patch}/img/item/${id}.png`), ITEM_PX));
+  const itemIds = [...itemFrom.keys()].sort((a, b) => a - b);
+  const itemTiles = await pool(itemIds, 12, async id => tile(await original(`item/${id}.png`, `${DDRAGON}/cdn/${itemFrom.get(id)}/img/item/${id}.png`), ITEM_PX));
   const itemCols = Math.ceil(Math.sqrt(itemIds.length));
   out.set('items.webp', await sheet(itemTiles, ITEM_PX, itemCols));
   log(`  items ${itemIds.length}`);
