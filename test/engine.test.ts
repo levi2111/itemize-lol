@@ -40,6 +40,61 @@ test('default combo order weaves autos between casts', () => {
   assert.deepEqual(defaultSequence({ q: 2, r: 1 }), ['q', 'q', 'r']);
 });
 
+test('the combo step by step: each action with all it sets off, and the health it leaves', () => {
+  const target = { hp: 2400, armor: 80, mr: 50 };
+  const run = (combo: CalcRequest['combo']) => calculate(data, req({ champion: 'Kaisa', items: [6672, 3006, 3124, 3115] }, combo, target));
+  const res = run({ counts: { aa: 3, q: 1, w: 1 } }), steps = res.combo.steps;
+  assert.deepEqual(steps.map(s => s.action), res.sequence);
+  // the steps add up to the combo, and each leaves the health the ones before it left, less its own
+  near(steps.reduce((t, s) => t + s.total.dealt, 0), res.combo.total.dealt, 0.05);
+  near(steps.reduce((t, s) => t + s.total.raw, 0), res.combo.total.raw, 0.05);
+  let hp = target.hp;
+  for (const s of steps) { near(s.hpLeft!, Math.max(0, hp - s.total.dealt), 0.02); hp = s.hpLeft!; }
+  near(steps.at(-1)!.hpLeft!, res.combo.hpLeft!);
+  // an attack's step holds what it set off (her plasma, the items' on-hit), not just the attack
+  const one = run({ sequence: ['aa'] });
+  assert.deepEqual(one.combo.steps[0]!.total, one.combo.total);
+  assert.ok(one.combo.steps[0]!.total.dealt > line(one, 'aa').total.dealt);
+  // the order is the engine's to play as given: the third attack in a row is Kraken Slayer's
+  const autos = run({ sequence: ['aa', 'aa', 'aa'] }).combo.steps;
+  assert.ok(autos[2]!.total.dealt > autos[1]!.total.dealt);
+  // the same five actions in another order are other steps, and the same lines
+  const mine = run({ sequence: ['q', 'w', 'aa', 'aa', 'aa'] });
+  assert.deepEqual(mine.combo.steps.map(s => s.action), ['q', 'w', 'aa', 'aa', 'aa']);
+  assert.deepEqual(mine.combo.lines.map(l => l.qty), res.combo.lines.map(l => l.qty));
+  // no target, no health; no combo, no steps
+  const raw = calculate(data, req({}, { counts: { aa: 2, q: 1 } }));
+  assert.equal(raw.combo.steps.length, 3);
+  assert.ok(raw.combo.steps.every(s => s.hpLeft === null && s.total.raw > 0));
+  assert.deepEqual(calculate(data, req({}, {}, target)).combo.steps, []);
+});
+
+test('the combo step by step: an active used at the start counts to the first action, a proc counted by hand to the last', () => {
+  const akali = (bolt: number) => calculate(data, req({ champion: 'Akali', items: [3146], itemOptions: { 3146: { bolt } } }, { sequence: ['aa', 'aa'] }));
+  const none = akali(0), one = akali(1), bolt = line(one, 'items').parts.find(p => p.id === 'item:3146/bolt')!;
+  near(one.combo.steps[0]!.total.raw - none.combo.steps[0]!.total.raw, bolt.total.raw);
+  near(one.combo.steps[1]!.total.raw, none.combo.steps[1]!.total.raw);
+  const garen = (spellblade: number) => calculate(data, req({ champion: 'Garen', ranks: { q: 5, w: 3, e: 5, r: 2 }, items: [3057], itemOptions: { 3057: { spellblade } } }, { counts: { aa: 2, q: 1 } }));
+  const [zero, four] = [garen(0), garen(4)];
+  near(four.combo.steps.at(-1)!.total.raw - zero.combo.steps.at(-1)!.total.raw, 4 * four.stats.ad.base);
+  for (let i = 0; i < 2; i++) assert.deepEqual(four.combo.steps[i], zero.combo.steps[i]);
+});
+
+test('the combo step by step: on the clock, damage over time counts to the action that set it off', () => {
+  const cass = data.champion('Cassiopeia')!, build = { champion: 'Cassiopeia', level: 13, ranks: { q: 5, w: 1, e: 1, r: 1 }, items: [] };
+  const f = new Fight(cass, [], build, resolveTarget(data, { hp: 5000, armor: 0, mr: 0 }), { sustained: true, timed: true });
+  f.time = 0;
+  f.act('q');
+  f.landTicks(0.4);
+  f.act('aa');
+  f.landTicks(10);
+  // the poison lands after the attack, and is still the cast's
+  const at = f.hits.findIndex(h => h.owner === 'aa');
+  assert.equal(f.hits[at]!.step, 1);
+  const later = f.hits.slice(at + 1).filter(h => h.owner === 'q');
+  assert.ok(later.length > 0 && later.every(h => h.step === 0));
+});
+
 test('Samira R: ten shots of the per-shot calculation', () => {
   const samira = data.champion('Samira')!;
   const r = samira.spells.SamiraR!;

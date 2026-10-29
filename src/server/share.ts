@@ -5,8 +5,8 @@
    POST /api/v1/calc for its numbers (recalc). This file repeats those steps, defaults and quirks
    included, so that a preview never shows other numbers than the page it links to. When app.js
    changes how it reads a link, this changes with it; test/share.test.ts pins the pairs down. */
-import { championAsTarget } from '../engine/calc.ts';
-import type { CalcRequest, CritMode, TargetInput } from '../engine/types.ts';
+import { championAsTarget, LIMITS } from '../engine/calc.ts';
+import type { Action, CalcRequest, CritMode, TargetInput } from '../engine/types.ts';
 import type { ChampionIndexEntry, ServedData } from './dataset.ts';
 
 /** The two pages. The receipt has no switch for crits and one set of ranks, so it reads less of a link. */
@@ -50,7 +50,8 @@ export interface CalcBody {
   champion: string; level: number; ranks: Ranks; options: Record<string, number>;
   builds: { items: number[]; ranks?: Ranks; itemOptions?: Record<string, Record<string, number>> }[];
   target: TargetInput | null;
-  combo: { counts: Record<(typeof ACTIONS)[number], number>; crits: CritMode };
+  /** a count per action, which the engine plays in its own order; or, when the link's maker set one, the order itself */
+  combo: { counts?: Record<(typeof ACTIONS)[number], number>; sequence?: Action[]; crits: CritMode };
 }
 
 /** What a page opened from the link shows, and what it asks the API. */
@@ -113,8 +114,14 @@ export function readShare(data: ServedData, s: Record<string, unknown>, layout: 
   let enemy = { champion: byId(PAGE_DEFAULTS.enemy.id)!, level: PAGE_DEFAULTS.enemy.level as number, items: build(undefined) };
   const e = Array.isArray(s.e) ? byId(s.e[0]) : undefined;
   if (e) enemy = { champion: e, level: int((s.e as unknown[])[1], 1, 18, 13), items: build((s.e as unknown[])[2]) };
-  const combo = { ...PAGE_DEFAULTS.combo } as CalcBody['combo']['counts'];
+  const combo: Record<(typeof ACTIONS)[number], number> = { ...PAGE_DEFAULTS.combo };
   if (Array.isArray(s.q)) ACTIONS.forEach((k, i) => combo[k] = int((s.q as unknown[])[i], 0, 30, 0));
+  // the combo's own order, a letter per action (`a` an auto attack), when the link's maker set one; the receipt
+  // has no order of its own, and plays the counts in the engine's
+  let sequence: Action[] | null = null;
+  if (!receipt && typeof s.qs === 'string' && s.qs.length <= LIMITS.sequence && /^[aqwer]*$/.test(s.qs)) {
+    sequence = [...s.qs].map(ch => ch === 'a' ? 'aa' : ch as Action);
+  }
   const options = new Map<string, number>();
   for (const [id, v] of own(s.x).slice(0, 24)) if (finite(v)) options.set(id, Math.round(Number(v)));
   let crits: CritMode = 'average';
@@ -171,7 +178,7 @@ export function readShare(data: ServedData, s: Record<string, unknown>, layout: 
       for (const [id, set] of itemOpts[k]) if (held.has(Number(id)) && Object.keys(set).length) io[id] = set;
       return { items: builds[k].filter(Boolean) as number[], ...(k === 'b' && ranksB && { ranks: ranksB }), ...(Object.keys(io).length && { itemOptions: io }) };
     }),
-    target: targetBody, combo: { counts: combo, crits },
+    target: targetBody, combo: sequence ? { sequence, crits } : { counts: combo, crits },
   };
   // as POST /api/v1/calc turns the body into one request per build (src/server/app.ts)
   const requests: CalcRequest[] = body.builds.map(b => ({

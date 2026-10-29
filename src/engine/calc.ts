@@ -3,7 +3,7 @@
 import type { CastSlot, ChampionData, DamageType, ItemData, Slot } from '../shared/types.ts';
 import { CAST_SLOTS, SLOTS } from '../shared/types.ts';
 import { defaultSequence, Fight, type Hit } from './sim.ts';
-import { CalcError, CRIT_MODES, type AbilityInfo, type Action, type Amount, type BuildInput, type ByType, type CalcRequest, type CalcResult, type CritMode, type DataSource, type FightResult, type ItemInfo, type SourceLine, type StatLine, type TargetInput, type TargetStats } from './types.ts';
+import { CalcError, CRIT_MODES, type AbilityInfo, type Action, type Amount, type BuildInput, type ByType, type CalcRequest, type CalcResult, type ComboStep, type CritMode, type DataSource, type FightResult, type ItemInfo, type SourceLine, type StatLine, type TargetInput, type TargetStats } from './types.ts';
 
 export const LIMITS = {
   items: 6,
@@ -152,6 +152,24 @@ function lines(champ: ChampionData, hits: Hit[], spread: Fight['spread'], sequen
   return [...out.values()];
 }
 function round(a: Amount): Amount { a.raw = r2(a.raw); a.dealt = r2(a.dealt); return a; }
+
+/** The combo action by action (see ComboStep): each hit counts to the action it belongs to, an active used before
+    the first action to the first. */
+function comboSteps(hits: Hit[], sequence: Action[], hp: number | null): ComboStep[] {
+  const out: ComboStep[] = sequence.map(action => ({ action, total: zero(), hpLeft: hp }));
+  if (!out.length) return out;
+  for (const h of hits) {
+    const s = out[Math.min(out.length - 1, Math.max(0, h.step))]!;
+    s.total.raw += h.raw; s.total.dealt += h.dealt;
+  }
+  // health only goes down, and never below zero: what is left after each action is what the ones so far left
+  let left = hp;
+  for (const s of out) {
+    if (left !== null) s.hpLeft = r2(left = Math.max(0, left - s.total.dealt));
+    round(s.total);
+  }
+  return out;
+}
 
 /** Sustained basic attacks from a fresh start: damage per second and, against a target, how long a kill takes. */
 function sustain(c: Checked): { dps: Amount; timeToKill: number | null; caveats: Set<string> } {
@@ -342,6 +360,7 @@ export function calculate(data: DataSource, req: CalcRequest): CalcResult {
       lines: comboLines,
       hpLeft: fight.targetHp === null ? null : r2(fight.targetHp),
       kills: fight.targetHp === 0,
+      steps: comboSteps(fight.hits, c.sequence, t ? t.hp.total : null),
     },
     dps: round(s.dps),
     timeToKill: s.timeToKill === null ? null : r2(s.timeToKill),
