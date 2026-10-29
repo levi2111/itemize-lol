@@ -70,7 +70,7 @@ body:not([data-target="dummy"]) .only-dummy,
 body:not([data-target="champ"]) .only-champ,
 body:not([data-target="raw"]) .only-raw,
 body[data-target="champ"] .not-champ{display:none!important}
-body[data-target="raw"] .needs-target{opacity:.28;pointer-events:none}
+body[data-target="raw"] .needs-target{display:none!important}
 
 .a{--c:var(--a)} .b{--c:var(--b)}
 
@@ -393,54 +393,98 @@ button.ab-it:hover,button.ab-it:focus-visible{outline:2px solid var(--text);outl
 }
 
 /* ---------- target tab ---------- */
-.pane-target{display:grid;grid-template-columns:28rem minmax(0,1fr);gap:1.5rem 3.5rem;align-content:start}
-.raw-note{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:1.5rem;padding:.8rem 1rem;border:1px dashed var(--faint);border-radius:4px;color:var(--dim)}
-.raw-note b{color:var(--text)}
-.raw-acts{display:flex;gap:.5rem}
-.who{display:flex;align-items:center;gap:1.1rem;padding:1.1rem 1.2rem;border:1px solid var(--rule);border-radius:4px;background:var(--well)}
-.who-ico{flex:none;width:4.2rem;height:4.2rem;border:1px solid var(--rule);border-radius:3px;overflow:hidden;background:var(--bg);color:var(--dim)}
-.who-txt{display:grid;gap:.35rem;min-width:0;justify-items:start}
-.who-name{font-size:1.5rem;font-weight:800;letter-spacing:-.01em;line-height:1.1}
-button.who-name:hover{text-decoration:underline;text-underline-offset:.2em}
-.who-sub{font-size:.86rem;color:var(--dim)}
-.enemy-row{display:flex;align-items:center;gap:.6rem}
+/* Two columns: the target, set in one compact column (who, the enemy's items, a row per stat), and how it meets
+   each build (a small table, then where each build's damage goes against its health). Raw output has no target,
+   so the tab is then one card of targets to pick. */
+.pane-target{display:grid;grid-template-columns:33rem minmax(0,1fr);gap:1.5rem 3.5rem;align-content:start}
+.ta-who{display:grid;gap:.95rem;align-content:start}
+.ta-id{display:grid;grid-template-columns:3.4rem minmax(0,1fr) auto;gap:.9rem;align-items:center}
+.ta-face{width:3.4rem;height:3.4rem;border:1px solid var(--rule);border-radius:3px;overflow:hidden;background:var(--well);color:var(--dim)}
+.ta-face svg{width:100%;height:100%;padding:.45rem}
+.ta-txt{display:grid;gap:.3rem;justify-items:start;min-width:0}
+.ta-name{max-width:100%;font-size:1.45rem;font-weight:800;letter-spacing:-.01em;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+button.ta-name:hover{text-decoration:underline;text-underline-offset:.2em}
+.ta-sub{display:flex;align-items:center;gap:.6rem}
 .mini{display:inline-flex;align-items:center;gap:.45rem;font-family:var(--font-mono);font-size:.8rem;border:1px solid var(--rule);border-radius:3px;padding:.1rem .2rem;background:var(--bg)}
 .mini b{font-weight:600}
 .mini button{width:1.3rem;height:1.3rem;display:grid;place-items:center;color:var(--dim);border-radius:2px}
 .mini button:hover{color:var(--ink);background:var(--text)}
-.tune{display:grid;gap:.7rem;align-content:start}
 .presets{display:flex;gap:.3rem}
-.dials{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2.4rem}
-.dial{display:grid;gap:.25rem;min-width:0}
-.dial input[type=number]{width:100%;min-width:0;padding:0 0 .05rem;border:0;border-bottom:1px dashed var(--faint);background:none;font-family:var(--font-mono);font-size:2.3rem;font-weight:600;letter-spacing:-.03em;appearance:textfield;-moz-appearance:textfield}
-.dial input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
-.dial input[type=number]:hover{border-bottom-color:var(--text)}
-.dial input[type=number]:focus{outline:0;border-bottom:1px solid var(--text)}
+/* the enemy's six slots, and what they add beside them */
+.t-inv{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr);gap:.8rem;align-items:center}
+.t-slots{display:grid;grid-template-columns:repeat(6,2.6rem);gap:.4rem}
+.ta-isum{display:grid;gap:.2rem;font-size:.76rem;color:var(--dim);white-space:nowrap}
+.ta-isum b{font-family:var(--font-mono);font-weight:600;color:var(--text)}
+.ta-isum .est{margin-left:.5rem}
+/* the item picker, opened for the target: under its slots, over the matchup */
+.t-inv .picker{top:calc(100% + .6rem);bottom:auto;left:0;right:auto;width:56rem}
+/* a row per stat: its number to type, its slider, and under them where it comes from and what it does */
+.ta-stats{display:grid;padding-top:.3rem;border-top:1px solid var(--rule)}
+.ta-st{display:grid;grid-template-columns:1.1rem 6.6rem 5.8rem minmax(0,1fr);column-gap:.75rem;row-gap:.15rem;align-items:center;padding:.55rem 0;border-bottom:1px solid rgba(37,80,77,.6)}
+.ta-st:last-child{border-bottom:0}
+.ta-sl{font-size:.88rem;font-weight:700}
+.ta-st input[type=number]{width:100%;min-width:0;padding:0 0 .05rem;border:0;border-bottom:1px dashed var(--faint);background:none;font-family:var(--font-mono);font-size:1.45rem;font-weight:600;line-height:1.15;text-align:right;appearance:textfield;-moz-appearance:textfield}
+.ta-st input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+.ta-st input[type=number]:hover{border-bottom-color:var(--text)}
+.ta-st input[type=number]:focus{outline:0;border-bottom:1px solid var(--text)}
 input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:1.1rem;background:none;cursor:pointer}
 input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--rule)}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:.85rem;height:.85rem;margin-top:calc(1px - .425rem);background:var(--text);border-radius:50%}
 input[type=range]::-moz-range-track{height:2px;background:var(--rule)}
 input[type=range]::-moz-range-thumb{width:.85rem;height:.85rem;border:0;background:var(--text);border-radius:50%}
-.dial-note{font-size:.8rem;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.t-row2{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4rem;padding-top:1.3rem;border-top:1px solid var(--rule)}
-.hits{display:grid;gap:.55rem;align-content:start}
-.hp{display:grid;grid-template-columns:1.35rem minmax(0,1fr) 9rem;gap:.7rem;align-items:center}
-.hpbar{position:relative;height:1.1rem;border:1px solid var(--faint);border-radius:2px;overflow:hidden;background:color-mix(in srgb,var(--c) 50%,transparent)}
-.hpbar i{position:absolute;inset:0 auto 0 0;width:var(--left);background:var(--text);transition:width .2s}
-.hpbar::after{content:"";position:absolute;inset:0;background:
-  repeating-linear-gradient(90deg,transparent 0 calc(100000%/var(--hpv) - 2px),rgba(8,28,27,.95) 0 calc(100000%/var(--hpv))),
-  repeating-linear-gradient(90deg,transparent 0 calc(10000%/var(--hpv) - 1px),rgba(8,28,27,.45) 0 calc(10000%/var(--hpv)))}
-.hp-txt{font-family:var(--font-mono);font-size:.82rem;color:var(--dim);white-space:nowrap}
-.hp-txt b{color:var(--text);font-weight:600}
-.t-inv{position:relative;display:grid;gap:.55rem;align-content:start;max-width:24rem}
-.t-inv .sec-head{justify-content:flex-start}
-.t-inv .b-gold{font-family:var(--font-mono);font-size:.76rem;color:var(--dim)}
-.t-inv .b-gold b{color:var(--text);font-weight:600}
-.t-slots{display:grid;grid-template-columns:repeat(6,3.3rem);gap:.45rem}
-.t-inv p{margin:0;font-size:.8rem;color:var(--faint)}
-.t-inv p .swap{margin-left:.3rem}
-/* the item picker, opened for the target: over the dials, from the items' right edge */
-.t-inv .picker{left:auto;right:0;width:56rem}
+.ta-sn{grid-column:2/-1;display:flex;flex-wrap:wrap;justify-content:space-between;gap:.1rem .8rem;min-height:1.2em;font-size:.76rem;color:var(--faint);white-space:nowrap}
+.ta-sn b{color:var(--text);font-weight:600}
+/* against your builds: a label column, then a column per build */
+.ta-vs{display:grid;gap:1.7rem;align-content:start}
+.ta-vt{display:grid;grid-template-columns:minmax(0,1fr) repeat(var(--n,1),10rem)}
+.ta-vt>*{display:flex;align-items:center;min-width:0;padding:.45rem 0 .45rem 1.2rem;border-bottom:1px solid rgba(37,80,77,.6)}
+.ta-vt>.ta-vl,.ta-vt>.lbl{padding-left:0}
+.ta-vh{padding-top:0;border-bottom-color:var(--rule)}
+.ta-vn{justify-content:flex-end;gap:.45rem;font-size:.84rem;font-weight:700}
+.ta-vn span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ta-vl{gap:.5rem;color:var(--dim)}
+.ta-vv{flex-wrap:wrap;justify-content:flex-end;align-content:center;align-items:baseline;font-family:var(--font-mono);font-size:1.05rem;font-weight:500;color:var(--text);white-space:nowrap}
+.ta-vv small{margin-right:.55rem;font-size:.68rem;color:var(--faint)}
+/* the answer: effective health and time to kill, larger, the better build's number in its colour */
+.ta-vl.big{color:var(--text);font-size:.95rem;font-weight:700}
+.ta-vv.big{font-size:1.6rem;font-weight:600}
+.ta-vv.big.mid{font-size:1.2rem}
+.ta-vt.two .ta-vv.big{color:var(--dim)}
+.ta-vt.two .ta-vv.big.win{color:var(--c);font-weight:700}
+.ta-vt .ta-gap{grid-column:1/-1;height:.9rem;padding:0;border:0}
+/* where each build's damage goes: dealt by type, solid, then what armor and magic resist took, hatched, on one
+   scale with a line at the target's health */
+.ta-flow{display:grid;gap:.75rem}
+.ta-flow .sec-head{align-items:center}
+.ta-key{display:flex;flex-wrap:wrap;align-items:center;gap:.25rem 1rem;font-size:.74rem;color:var(--faint)}
+.ta-key span{display:inline-flex;align-items:center;gap:.4rem}
+.ta-sw{display:inline-block;width:1.1rem;height:.5rem;border-radius:1px;background:var(--c)}
+.ta-sw.hat{--c:var(--dim)}
+.ta-sw.hpl{width:2px;height:.9rem;background:var(--text)}
+.ta-fl{display:grid;grid-template-columns:minmax(0,1fr) 6.5rem;gap:.9rem;align-items:center}
+.ta-flow.two .ta-fl{grid-template-columns:1.35rem minmax(0,1fr) 6.5rem}
+.ta-fbar{position:relative;display:flex;height:1.5rem}
+.ta-fbar i{flex:none;display:block;height:100%}
+.ta-fbar .pd,.ta-sw.p{--c:var(--phys);background:var(--phys)}
+.ta-fbar .md,.ta-sw.m{--c:var(--magic);background:var(--magic)}
+.ta-fbar .td,.ta-sw.t{--c:var(--text);background:var(--text)}
+.ta-fbar .pb{--c:var(--phys)} .ta-fbar .mb{--c:var(--magic)}
+.ta-fbar .pb,.ta-fbar .mb,.ta-sw.hat{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--c) 45%,transparent) 0 2px,transparent 2px 5px);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c) 40%,transparent)}
+.ta-fbar .ta-hpm{position:absolute;top:-.3rem;bottom:-.3rem;left:var(--x);width:2px;height:auto;margin-left:-1px;background:var(--text)}
+.ta-ft{font-size:.8rem;color:var(--dim);white-space:nowrap}
+.ta-ft b{font-family:var(--font-mono);font-size:1rem;font-weight:600;color:var(--text)}
+/* raw output: the card of targets */
+.ta-raw{grid-column:1/-1;justify-self:start;display:grid;gap:.9rem;padding:1.1rem 1.3rem 1.25rem;border:1px dashed var(--faint);border-radius:4px}
+.ta-raw-h{font-size:1.25rem;font-weight:800}
+.ta-picks{display:flex;flex-wrap:wrap;gap:.5rem}
+.ta-pick{display:grid;grid-template-columns:auto;align-content:center;column-gap:.6rem;row-gap:.15rem;min-height:3.2rem;padding:.5rem .8rem;border:1px solid var(--rule);border-radius:4px;background:var(--well);text-align:left}
+.ta-pick:hover{border-color:var(--text)}
+.ta-pick b{font-size:.86rem}
+.ta-pick>span{display:flex;align-items:center;gap:.25rem .6rem;font-family:var(--font-mono);font-size:.72rem;color:var(--faint);white-space:nowrap}
+.ta-pick>span>i{display:inline-flex;align-items:center;gap:.25rem;font-style:normal}
+.ta-pick .si{width:.85rem;height:.85rem}
+.ta-pick.face{grid-template-columns:2.2rem auto}
+.ta-pick .ta-pf{grid-row:1/3;width:2.2rem;height:2.2rem;border:1px solid var(--rule);border-radius:2px;overflow:hidden}
 
 /* ---------- breakdown tab ---------- */
 .pane-break{display:grid;grid-template-columns:minmax(0,1fr) 27rem;gap:3.5rem}
@@ -1073,32 +1117,39 @@ body[data-compare="off"] .tot{min-width:0;padding-right:var(--pr)}
 .rs .pips{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,3.5rem);gap:.3rem;height:1.1rem}
 .rs .pip{width:auto}
 
-/* target */
-.pane-target{grid-template-columns:minmax(0,1fr);gap:1.4rem}
-.raw-note{flex-direction:column;align-items:stretch;gap:.8rem}
-.raw-acts{flex-wrap:wrap}
-.raw-acts .btn{flex:1 1 auto}
-.who{padding:.9rem;gap:.9rem}
-.who-ico{width:3.5rem;height:3.5rem}
-/* the dummy's numbers are under it in one column, not to its right */
-.who-sub{font-size:0}
-.who-sub::after{content:"Stands still. Set its numbers below.";content:"Stands still. Set its numbers below."/"";font-size:.86rem}
+/* target: who, the enemy's items and the stat rows, each slider the row's full width, then the matchup */
+.ta-id{grid-template-columns:3rem minmax(0,1fr) auto;gap:.7rem}
+.ta-face{width:3rem;height:3rem}
+.ta-name{font-size:1.3rem}
+.ta-sub{flex-wrap:wrap}
 .mini button{width:2.5rem;height:2.5rem}
-.tune .sec-head{flex-wrap:wrap;gap:.5rem}
-.dials{grid-template-columns:minmax(0,1fr);gap:1.2rem}
-.dial{grid-template-columns:minmax(0,1fr) 7.5rem;column-gap:1rem;row-gap:.1rem;align-items:end}
-.dial .lbl{grid-row:1;align-self:center}
-.dial input[type=number]{grid-area:1/2;font-size:1.75rem;text-align:right}
-.dial input[type=range],.dial-note{grid-column:1/-1}
-.dial-note{white-space:normal}
+.t-inv{grid-template-columns:minmax(0,1fr);gap:.55rem}
+.t-slots{grid-template-columns:repeat(6,minmax(0,1fr));gap:.45rem}
+.ta-isum{grid-auto-flow:column;justify-content:space-between}
+.t-inv .picker{top:auto;bottom:0;left:0;right:0;width:auto}
+.ta-st{grid-template-columns:1.1rem minmax(0,1fr) 6.5rem;row-gap:.1rem}
+.ta-st input[type=number]{font-size:1.6rem}
+.ta-st input[type=range]{grid-column:1/-1}
+.ta-sn{grid-column:1/-1;white-space:normal}
 input[type=range]{height:2.5rem}
 input[type=range]::-webkit-slider-thumb{width:1.5rem;height:1.5rem;margin-top:calc(1px - .75rem)}
 input[type=range]::-moz-range-thumb{width:1.5rem;height:1.5rem}
-.t-row2{grid-template-columns:minmax(0,1fr);gap:1.6rem}
-.hp{grid-template-columns:1.35rem minmax(0,1fr) auto}
-.t-inv{max-width:none}
-.t-inv .picker{left:0;width:auto}
-.t-slots{grid-template-columns:repeat(6,minmax(0,1fr));gap:.45rem}
+.ta-vt{grid-template-columns:minmax(0,1fr) repeat(var(--n,1),6.2rem)}
+.ta-vt>*{padding-left:.6rem}
+/* two builds' columns are headed by their tags alone: the strip pinned above names them */
+.ta-vn{align-items:flex-start;text-align:right}
+.ta-vn span:last-child{white-space:normal}
+.ta-vt.two .ta-vn span:last-child{display:none}
+.ta-vv{font-size:.95rem}
+.ta-vv small{order:1;flex-basis:100%;margin:0;text-align:right;line-height:1.2}
+.ta-vv.big{font-size:1.3rem}
+.ta-vv.big.mid{font-size:1.05rem}
+.ta-flow .sec-head{flex-direction:column;align-items:flex-start;gap:.4rem}
+.ta-fl{grid-template-columns:minmax(0,1fr);row-gap:.35rem}
+.ta-flow.two .ta-fl{grid-template-columns:1.35rem minmax(0,1fr)}
+.ta-flow.two .ta-ft{grid-column:2}
+.ta-raw{padding:1rem}
+.ta-pick{flex:1 1 9rem}
 
 /* breakdown: each source is two lines, its numbers on the first, its type and bars under them */
 .pane-break{grid-template-columns:minmax(0,1fr);gap:2rem}
@@ -1189,9 +1240,10 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
 .pane>*,.setup>*,.loadout{margin-left:var(--col);margin-right:var(--col)}
 .tab{height:2.75rem}
 .slots{grid-template-columns:repeat(6,minmax(0,4.5rem))}
-.dials{grid-template-columns:repeat(3,minmax(0,1fr))}
-.dial{grid-template-columns:minmax(0,1fr)}
-.dial input[type=number]{grid-area:auto;text-align:left}
+.t-slots{grid-template-columns:repeat(6,minmax(0,4.5rem))}
+.ta-st{grid-template-columns:1.1rem 7rem 6.5rem minmax(0,1fr)}
+.ta-st input[type=range]{grid-column:auto}
+.ta-sn{grid-column:2/-1}
 .more-grid{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:2.5rem}
 }
 }
@@ -1421,66 +1473,55 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
 
     <!-- 2. target -->
     <section class="pane pane-target" data-pane="target" role="tabpanel" aria-label="Target" hidden>
-      <div class="raw-note only-raw">
-        <div><b>Raw output is on.</b> Damage is shown before armor and magic resist, so nothing here applies.</div>
-        <div class="raw-acts"><button class="btn" data-t="dummy">Use a target dummy</button><button class="btn" data-t="champ">Use an enemy champion</button></div>
+      <!-- raw output has no target: a card of targets to pick, drawn by app.js (paintPicks) -->
+      <div class="ta-raw only-raw">
+        <b class="ta-raw-h">No target</b>
+        <div class="ta-picks" id="picks"></div>
       </div>
 
-      <div class="who needs-target">
-        <svg class="who-ico not-champ" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <circle cx="24" cy="12" r="5.5"/><path d="M10 23h28M24 18v24M17 42h14"/><circle cx="24" cy="29" r="5"/>
-        </svg>
-        <div class="who-txt not-champ"><span class="who-name">Target dummy</span><span class="who-sub">Stands still. Set its numbers on the right.</span></div>
-
-        <span class="who-ico only-champ" id="enemy-img"></span>
-        <div class="who-txt only-champ">
-          <button class="who-name" id="enemy-btn" title="Change target champion">Ornn</button>
-          <div class="enemy-row">
-            <span class="mini"><button id="el-dn" aria-label="Lower target level">−</button><span>Lv <b id="el">13</b></span><button id="el-up" aria-label="Raise target level">+</button></span>
-            <button class="swap" id="enemy-swap">Change</button>
+      <section class="ta-who needs-target" aria-label="The target">
+        <div class="ta-id">
+          <span class="ta-face not-champ"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="24" cy="12" r="5.5"/><path d="M10 23h28M24 18v24M17 42h14"/><circle cx="24" cy="29" r="5"/></svg></span>
+          <span class="ta-face only-champ" id="enemy-img"></span>
+          <div class="ta-txt">
+            <span class="ta-name not-champ">Target dummy</span>
+            <button class="ta-name only-champ" id="enemy-btn" title="Change target champion">Ornn</button>
+            <div class="ta-sub">
+              <span class="mini only-champ"><button id="el-dn" aria-label="Lower target level">−</button><span>Lv <b id="el">13</b></span><button id="el-up" aria-label="Raise target level">+</button></span>
+              <div class="presets only-dummy" id="presets">
+                <button class="chip" data-preset="1800,50,40" aria-pressed="false">Squishy</button>
+                <button class="chip" data-preset="2800,110,70" aria-pressed="false">Bruiser</button>
+                <button class="chip" data-preset="4000,200,120" aria-pressed="false">Tank</button>
+              </div>
+            </div>
           </div>
+          <button class="swap only-champ" id="enemy-swap">Change</button>
         </div>
-      </div>
-
-      <div class="tune needs-target">
-        <div class="sec-head">
-          <span class="lbl">Target stats</span>
-          <div class="presets only-dummy" id="presets">
-            <button class="chip" data-preset="1800,50,40" aria-pressed="false">Squishy</button>
-            <button class="chip" data-preset="2800,110,70" aria-pressed="false">Bruiser</button>
-            <button class="chip" data-preset="4000,200,120" aria-pressed="false">Tank</button>
-          </div>
-          <span class="hint only-champ" id="auto-note">Base stats at level 13. Anything you add counts as bonus.</span>
+        <div class="t-inv only-champ" id="t-inv">
+          <div class="t-slots" id="t-slots"></div>
+          <div class="ta-isum"><span id="t-adds"></span><span><b id="t-gold">0</b> gold<span class="est" id="t-only" title="Their items count for health, armor and magic resist; what their passives do isn't counted">stats only</span></span></div>
         </div>
-        <div class="dials">
-          <div class="dial"><label class="lbl" for="t-hp">Health</label>
+        <div class="ta-stats">
+          <div class="ta-st"><span id="i-hp"></span><label class="ta-sl" for="t-hp">Health</label>
             <input type="number" id="t-hp" value="2400" min="100" max="10000" step="50">
             <input type="range" id="t-hp-r" value="2400" min="500" max="8000" step="50" aria-label="Health slider">
-            <span class="dial-note" id="n-hp"></span></div>
-          <div class="dial"><label class="lbl" for="t-ar">Armor</label>
+            <span class="ta-sn"><span id="f-hp"></span><span id="n-hp"></span></span></div>
+          <div class="ta-st"><span id="i-ar"></span><label class="ta-sl" for="t-ar">Armor</label>
             <input type="number" id="t-ar" value="80" min="0" max="600" step="5">
             <input type="range" id="t-ar-r" value="80" min="0" max="400" step="5" aria-label="Armor slider">
-            <span class="dial-note" id="n-ar"></span></div>
-          <div class="dial"><label class="lbl" for="t-mr">Magic resist</label>
+            <span class="ta-sn"><span id="f-ar"></span><span id="n-ar"></span></span></div>
+          <div class="ta-st"><span id="i-mr"></span><label class="ta-sl" for="t-mr">Magic resist</label>
             <input type="number" id="t-mr" value="50" min="0" max="600" step="5">
             <input type="range" id="t-mr-r" value="50" min="0" max="400" step="5" aria-label="Magic resist slider">
-            <span class="dial-note" id="n-mr"></span></div>
+            <span class="ta-sn"><span id="f-mr"></span><span id="n-mr"></span></span></div>
         </div>
-      </div>
+      </section>
 
-      <div class="t-row2 needs-target">
-        <div class="hits" id="hits" style="--hpv:2400">
-          <div class="sec-head"><span class="lbl">Health after the combo</span><span class="hint">one tick = 100 HP</span></div>
-          <div class="hp a"><span class="tag a sm">A</span><div class="hpbar" id="bar-a"><i></i></div><span class="hp-txt"><b id="left-a">–</b> left</span></div>
-          <div class="hp b only-cmp"><span class="tag b sm">B</span><div class="hpbar" id="bar-b"><i></i></div><span class="hp-txt"><b id="left-b">–</b> left</span></div>
-        </div>
-        <div class="t-inv" id="t-inv">
-          <div class="sec-head"><span class="lbl">Target items</span><span class="b-gold only-champ"><b id="t-gold">0</b> gold</span></div>
-          <div class="t-slots only-champ" id="t-slots"></div>
-          <p class="only-champ">Their health, armor and magic resist add to the stats above. What their passives do isn't counted.</p>
-          <p class="only-dummy">Only an enemy champion holds items. <button class="swap" data-t="champ">Use an enemy champion</button></p>
-        </div>
-      </div>
+      <!-- how the target meets each build, drawn by app.js (paintMatchup) -->
+      <section class="ta-vs needs-target" aria-label="Against your builds">
+        <div class="ta-vt" id="vs-tab"></div>
+        <div class="ta-flow" id="flows"></div>
+      </section>
     </section>
 
     <!-- 3. breakdown -->
