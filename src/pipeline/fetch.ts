@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { PBE, previewId } from '../shared/patch.ts';
 import { rawDir } from './paths.ts';
 
 export const DDRAGON = 'https://ddragon.leagueoflegends.com';
@@ -67,8 +68,20 @@ export async function latestPatch(): Promise<string> {
 /** 16.20.1 -> 16.20: Community Dragon keys its mirrors by major.minor. */
 export const cdragonPath = (ddragonVersion: string) => ddragonVersion.split('.').slice(0, 2).join('.');
 
+/* The next patch, before it ships: Community Dragon mirrors the test server (the PBE), where it is played for the two
+   weeks before. Data Dragon has nothing of it, so a preview takes the live patch's Data Dragon files (names, icons,
+   which shop sells what) and every number from the test server's game files. Its id: src/shared/patch.ts. */
+/** The game build the test server runs now, e.g. 16.22.8331392+branch.main.content.beta. */
+export async function pbeBuild(): Promise<string> {
+  const v = JSON.parse((await get(`${CDRAGON}/${PBE}/content-metadata.json`)).toString('utf8')).version;
+  if (typeof v !== 'string' || !/^\d+\.\d+\./.test(v)) throw new Error(`Community Dragon's test server reports no version (${v})`);
+  return v;
+}
+
 export interface FetchOptions {
   patch?: string;
+  /** the test server's next patch instead (see PBE), with the Data Dragon files of `patch` or else the newest */
+  preview?: boolean;
   /** re-download files that are already in the mirror */
   force?: boolean;
   log?: (msg: string) => void;
@@ -77,14 +90,22 @@ export interface FetchOptions {
 export async function fetchPatch(opts: FetchOptions = {}): Promise<RawManifest> {
   const log = opts.log ?? (() => {});
   const dd = opts.patch ?? await latestPatch();
-  const cd = cdragonPath(dd);
-  const dir = rawDir(dd);
+  let cd = cdragonPath(dd), id = dd, force = opts.force;
+  if (opts.preview) {
+    const build = await pbeBuild();
+    cd = PBE; id = previewId(build);
+    // the test server's files keep their names from one build to the next, so a mirror of another build is fetched again
+    const at = join(rawDir(id), 'manifest.json');
+    const was: RawManifest | null = existsSync(at) ? JSON.parse(await readFile(at, 'utf8')) : null;
+    if (was?.cdragon.build !== build || was.ddragon !== dd) force = true;
+  }
+  const dir = rawDir(id);
   const files: RawFile[] = [];
 
   const grab = async (source: RawFile['source'], path: string, url: string): Promise<Buffer> => {
     const dest = join(dir, path);
     let buf: Buffer;
-    if (!opts.force && existsSync(dest)) buf = await readFile(dest);
+    if (!force && existsSync(dest)) buf = await readFile(dest);
     else {
       buf = await get(url);
       await mkdir(dirname(dest), { recursive: true });
@@ -94,7 +115,7 @@ export async function fetchPatch(opts: FetchOptions = {}): Promise<RawManifest> 
     return buf;
   };
 
-  log(`patch ${dd} (Community Dragon ${cd})`);
+  log(opts.preview ? `preview ${id} (Community Dragon ${cd}, Data Dragon ${dd})` : `patch ${dd} (Community Dragon ${cd})`);
   const champIndex = JSON.parse((await grab('ddragon', 'ddragon/champion.json', `${DDRAGON}/cdn/${dd}/data/en_US/champion.json`)).toString('utf8'));
   await grab('ddragon', 'ddragon/championFull.json', `${DDRAGON}/cdn/${dd}/data/en_US/championFull.json`);
   await grab('ddragon', 'ddragon/item.json', `${DDRAGON}/cdn/${dd}/data/en_US/item.json`);
@@ -112,7 +133,7 @@ export async function fetchPatch(opts: FetchOptions = {}): Promise<RawManifest> 
   });
 
   files.sort((a, b) => a.path.localeCompare(b.path));
-  const manifest: RawManifest = { patch: dd, ddragon: dd, cdragon: { path: cd, build }, fetchedAt: new Date().toISOString(), files };
+  const manifest: RawManifest = { patch: id, ddragon: dd, cdragon: { path: cd, build }, fetchedAt: new Date().toISOString(), files };
   await writeFile(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 1));
   log(`mirrored ${files.length} files, ${(files.reduce((s, f) => s + f.bytes, 0) / 1e6).toFixed(1)} MB -> ${dir}`);
   return manifest;

@@ -5,12 +5,13 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { ChampionModelFile, ItemModelFile } from '../models/dsl.ts';
-import type { ChampionData, DatasetManifest, ItemData, ModelStatus, Slot } from '../shared/types.ts';
+import type { ChampionData, DatasetManifest, ItemData, ModelStatus, PreviewInfo, Slot } from '../shared/types.ts';
 import { SLOTS } from '../shared/types.ts';
 import { checkAnchors } from './anchors.ts';
 import { newLog } from './calc.ts';
 import { compileChampion } from './champion.ts';
 import type { RawManifest } from './fetch.ts';
+import { isPreview, newer } from '../shared/patch.ts';
 import { compileItems } from './items.ts';
 import { resolveChampion, resolveItem, type Lock, type ModelIssue } from './models.ts';
 import { DATA_DIR, distDir, rawDir, ROOT } from './paths.ts';
@@ -38,14 +39,16 @@ export interface BuildReport {
 
 const readJson = async (path: string) => JSON.parse(await readFile(path, 'utf8'));
 const emptyCoverage = (): Record<ModelStatus, number> => ({ verified: 0, curated: 0, stale: 0, auto: 0, none: 0, unmodeled: 0 });
-/** 16.20.1 -> 26.20: since 2025 the client's patch names run ten ahead of the data version. */
-export const displayPatch = (v: string) => { const [maj, min] = v.split('.'); return `${Number(maj) >= 15 ? Number(maj) + 10 : maj}.${min}`; };
+/** 16.20.1 -> 26.20: since 2025 the client's patch names run ten ahead of the data version. A preview's id
+    (16.22-pbe) reads as the patch it previews. */
+export const displayPatch = (v: string) => { const [maj, min] = v.split(/[.-]/); return `${Number(maj) >= 15 ? Number(maj) + 10 : maj}.${min}`; };
 
-export async function latestMirroredPatch(): Promise<string> {
+/** The newest patch in data/raw, or with `preview` the newest preview of the next one. */
+export async function latestMirroredPatch(preview = false): Promise<string> {
   const dir = join(DATA_DIR, 'raw');
-  const patches = existsSync(dir) ? (await readdir(dir)).filter(p => existsSync(join(dir, p, 'manifest.json'))) : [];
+  const patches = existsSync(dir) ? (await readdir(dir)).filter(p => isPreview(p) === preview && existsSync(join(dir, p, 'manifest.json'))) : [];
   const newest = patches.sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).at(-1);
-  if (!newest) throw new Error('no mirrored patch found: run `npm run data:fetch` first');
+  if (!newest) throw new Error(`no mirrored ${preview ? 'preview' : 'patch'} found: run \`npm run data:fetch${preview ? ' -- --preview' : ''}\` first`);
   return newest;
 }
 
@@ -64,16 +67,20 @@ async function loadModels<T>(sub: string): Promise<T[]> {
 
 export interface BuildOptions {
   patch?: string;
+  /** without a patch, build the newest preview of the next patch in data/raw */
+  preview?: boolean;
   /** record the current shape of every hand-written model as reviewed */
   accept?: boolean;
   /** write the dataset even if an anchor fails */
   force?: boolean;
+  /** a preview's patch notes, as last looked for (notes.ts), to keep in its manifest */
+  notes?: Pick<PreviewInfo, 'notes'>;
   log?: (msg: string) => void;
 }
 
 export async function buildDataset(opts: BuildOptions = {}): Promise<BuildReport> {
   const log = opts.log ?? (() => {});
-  const patch = opts.patch ?? await latestMirroredPatch();
+  const patch = opts.patch ?? await latestMirroredPatch(opts.preview);
   const raw = rawDir(patch);
   const manifest: RawManifest = await readJson(join(raw, 'manifest.json'));
   const table: Record<string, string> = (await readJson(join(raw, 'cdragon', 'stringtable.json'))).entries;
@@ -192,19 +199,24 @@ export async function buildDataset(opts: BuildOptions = {}): Promise<BuildReport
   await writeFile(join(out, 'items.json'), JSON.stringify(items));
   const coverage = emptyCoverage();
   for (const k of Object.keys(coverage) as ModelStatus[]) coverage[k] = report.coverage.abilities[k];
+  const preview = isPreview(patch);
   const dist: DatasetManifest = {
     patch, displayPatch: displayPatch(patch), builtAt: new Date().toISOString(),
     sources: { ddragon: manifest.ddragon, cdragon: manifest.cdragon },
     champions: champions.length, items: items.length, coverage,
+    ...(preview && { preview: { build: manifest.cdragon.build, fetchedAt: manifest.fetchedAt, ...opts.notes } }),
   };
   await writeFile(join(out, 'manifest.json'), JSON.stringify(dist, null, 1));
   await writeFile(join(out, 'report.json'), JSON.stringify(report, null, 1));
-  // and the day the patch arrived here, kept through rebuilds: the update samples popularity some days into a patch
+  // latest.json names the live patch, the one the site opens on; a preview or an earlier patch built again leaves it.
+  // It keeps the day the patch arrived here through rebuilds: the update samples popularity some days into a patch
   const latestPath = join(DATA_DIR, 'dist', 'latest.json');
   const was = existsSync(latestPath) ? await readJson(latestPath) : {};
-  const since = was.patch === patch && was.since ? was.since : new Date().toISOString().slice(0, 10);
-  await writeFile(latestPath, JSON.stringify({ patch, since }));
-  if (opts.accept) {
+  if (!preview && !(was.patch && newer(was.patch, patch))) {
+    const since = was.patch === patch && was.since ? was.since : new Date().toISOString().slice(0, 10);
+    await writeFile(latestPath, JSON.stringify({ patch, since }));
+  }
+  if (opts.accept && !preview) {
     await writeFile(LOCK_PATH, JSON.stringify(newLock, null, 1) + '\n');
     report.unlocked = [];
   }

@@ -1,0 +1,26 @@
+{
+ "patch": "16.22-pbe",
+ "displayPatch": "26.22",
+ "builtAt": "2026-10-29T19:22:06.467Z",
+ "sources": {
+  "ddragon": "16.21.1",
+  "cdragon": {
+   "path": "pbe",
+   "build": "16.22.8331392+branch.main.content.beta"
+  }
+ },
+ "champions": 173,
+ "items": 386,
+ "coverage": {
+  "verified": 0,
+  "curated": 851,
+  "stale": 6,
+  "auto": 7,
+  "none": 1,
+  "unmodeled": 0
+ },
+ "preview": {
+  "build": "16.22.8331392+branch.main.content.beta",
+  "fetchedAt": "2026-10-29T17:27:23.450Z"
+ }
+}

@@ -2,7 +2,9 @@ name: patch
 
 # Follows Riot's patches (scripts/patch-update.ts). Every three hours it asks Data Dragon for the newest patch. When
 # there is one, it mirrors and builds it, runs the tests, commits the dataset and the art to main and deploys (ci.yml),
-# and when hand-written models stopped binding or their spell changed, it opens an issue that lists them. With a
+# and when hand-written models stopped binding or their spell changed, it opens an issue that lists them. It also keeps
+# the preview of the next patch from the test server up to date, and says once Riot's patch notes for it are out;
+# a preview's changes are committed and deployed the same way, and never open an issue. With a
 # RIOT_API_KEY secret (a personal key: a development key lasts a day) it also samples item popularity some days into
 # each patch. Where a person has to look first (a format canary failed, a stat icon changed, a test failed), it ships
 # nothing and opens an issue.
@@ -13,6 +15,10 @@ on:
     inputs:
       popularity:
         description: Sample item popularity now (needs the RIOT_API_KEY secret)
+        type: boolean
+        default: false
+      preview:
+        description: Fetch and build the preview of the next patch again now
         type: boolean
         default: false
 
@@ -39,7 +45,7 @@ jobs:
       - id: update
         run: node scripts/patch-update.ts $FLAGS
         env:
-          FLAGS: ${{ inputs.popularity && '--popularity' || '' }}
+          FLAGS: ${{ inputs.popularity && '--popularity' || '' }} ${{ inputs.preview && '--preview' || '' }}
           RIOT_API_KEY: ${{ secrets.RIOT_API_KEY }}
       - if: steps.update.outputs.changed == 'true'
         run: npm run typecheck && npm test

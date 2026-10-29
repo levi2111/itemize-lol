@@ -18,7 +18,7 @@ import { dirname, join } from 'node:path';
 import { ROOT } from '../src/pipeline/paths.ts';
 import type { ArtIndex } from '../src/pipeline/art.ts';
 import { buildOg } from './og.ts';
-import { Dataset } from '../src/server/dataset.ts';
+import { loadPatches } from '../src/server/dataset.ts';
 import { ENGINE_BASE, engineModules } from '../src/server/engine-files.ts';
 import { championPage, championSite, redirectsFile, robots, sitemap, SOURCE } from '../src/server/pages.ts';
 
@@ -45,12 +45,14 @@ const named = (file: string) => {
 };
 const app = named('app.js'), layout = named('layout.js');
 
-// the engine for the auto-build's worker, with the data it reads, in a folder named after all of it
-// (src/server/engine-files.ts); its modules import each other by relative paths, so the folder moves as one
-const dataset = new Dataset(process.env.ITEMIZE_PATCH);
+// the engine for the auto-build's worker, with the data it reads for each patch served, in a folder named after all
+// of it (src/server/engine-files.ts); its modules import each other by relative paths, so the folder moves as one
+const patches = loadPatches(process.env.ITEMIZE_PATCH), dataset = patches.live;
 const engine = new Map<string, string>(engineModules());
-engine.set('data/items.json', JSON.stringify(dataset.items));
-for (const c of dataset.index) engine.set(`data/champions/${c.id}.json`, JSON.stringify(dataset.champion(c.id)));
+for (const { data: d } of patches.all) {
+  engine.set(`data/${d.patch}/items.json`, JSON.stringify(d.items));
+  for (const c of d.index) engine.set(`data/${d.patch}/champions/${c.id}.json`, JSON.stringify(d.champion(c.id)));
+}
 const engineHash = createHash('sha256');
 for (const [path, text] of [...engine].sort(([a], [b]) => a.localeCompare(b))) engineHash.update(path).update('\0').update(text).update('\0');
 const engineDir = `assets/engine.${engineHash.digest('hex').slice(0, 10)}/`;
@@ -75,7 +77,7 @@ for (const page of PAGES) {
   made[page] = html;
 }
 
-// the champion pages, from the dataset the Worker is bundled with (scripts/bundle.ts reads the same ITEMIZE_PATCH)
+// the champion pages, from the live patch the Worker is bundled with (scripts/bundle.ts reads the same ITEMIZE_PATCH)
 const data = dataset;
 const site = championSite(data.index);
 mkdirSync(join(out, 'receipt'), { recursive: true });

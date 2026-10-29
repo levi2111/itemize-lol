@@ -125,8 +125,8 @@ test('the browser gets the worker and what it imports as JavaScript, beside the 
     assert.ok(!/from\s*['"][^'"]+\.ts['"]/.test(code), `${p} still imports a .ts file`);
     assert.ok(!/^\s*(export\s+)?(interface|type)\s+\w+/m.test(code), `${p} still has types`);
   }
-  assert.deepEqual(engineData('data/items.json'), { items: true });
-  assert.deepEqual(engineData('data/champions/Kaisa.json'), { champion: 'Kaisa' });
-  assert.equal(engineData('data/champions/../../package.json'), null);
+  assert.deepEqual(engineData('data/16.21.1/items.json'), { patch: '16.21.1', items: true });
+  assert.deepEqual(engineData('data/16.21.1/champions/Kaisa.json'), { patch: '16.21.1', champion: 'Kaisa' });
+  assert.equal(engineData('data/16.21.1/champions/../../package.json'), null);
   assert.equal(engineData('data/../package.json'), null);
 });

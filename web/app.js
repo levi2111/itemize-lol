@@ -177,6 +177,7 @@ async function recalc() {
   document.body.classList.add('loading');
   runAuto(true);
   const body = {
+    ...(!onLive() && {patch: patchNow}),
     champion: S.champ.id, level: S.level, ranks: S.ranks, options: S.options,
     builds: (S.compare ? ['a', 'b'] : ['a']).map(k => {
       const io = itemOptsOf(k);
@@ -541,7 +542,7 @@ function nameKit() {
 async function loadKit() {
   const c = S.champ;
   try {
-    const view = await api(`/champions/${encodeURIComponent(c.id)}`);
+    const view = await api(`/champions/${encodeURIComponent(c.id)}${pq()}`);
     if (S.champ !== c) return;
     S.view = view;
   } catch (e) { if (S.champ === c) S.view = null; }
@@ -734,7 +735,7 @@ async function enemyKit() {
   const id = S.enemy.id;
   if (S.enemyView?.id === id) return;
   try {
-    const v = await api(`/champions/${encodeURIComponent(id)}`);
+    const v = await api(`/champions/${encodeURIComponent(id)}${pq()}`);
     if (S.enemy.id !== id) return;
     S.enemyView = v;
     if (pick?.b === 't') renderItems();
@@ -956,7 +957,7 @@ const AB = {
 };
 let abWorker = null, abTimer = 0, abSeq = 0;
 let abFlying = false, abNext = null;  // a search the worker is running; the one asked for since, which waits for it
-let abWarm = '';                    // the champion the worker last loaded ahead of time
+let abWarm = '';                    // the patch and champion the worker last loaded ahead of time
 const buildGold = k => S.builds[k].reduce((s, id) => s + (S.items.get(id)?.gold || 0), 0);
 function openAuto(k) {
   if (AB.for === k) { closeAuto(); return; }
@@ -987,15 +988,16 @@ function autoWorker() {
 }
 /* Pointing at an Auto-build button starts the worker and its data loading, so the first search starts at once. */
 function warmAuto() {
-  if (abWarm === S.champ.id) return;
-  abWarm = S.champ.id;
-  autoWorker().postMessage({warm: S.champ.id});
+  if (abWarm === `${patchNow} ${S.champ.id}`) return;
+  abWarm = `${patchNow} ${S.champ.id}`;
+  autoWorker().postMessage({warm: S.champ.id, patch: patchNow});
 }
 function paintAutoBtns() { $$('[data-auto]').forEach(b => b.setAttribute('aria-pressed', AB.for === b.dataset.auto)); }
 /* What the worker is asked: the page's build without its items, the kept ones apart. */
 function autoAsk() {
   const k = AB.for, keep = S.builds[k].filter(id => id && AB.keep.has(id));
   return {
+    patch: patchNow,
     req: {
       build: {champion: S.champ.id, level: S.level, ranks: k === 'b' && S.split ? S.ranksB : S.ranks, options: S.options, items: [], itemOptions: itemOptsOf(k)},
       target: targetBody(), combo: comboBody(),
@@ -1625,7 +1627,7 @@ async function enemyStats() {
   if (note) note.textContent = `Base stats at level ${e.level}${held.length ? ', with its items' : ''}. Anything you add counts as bonus.`;
   paintTarget();
   try {
-    const t = await api(`/champions/${encodeURIComponent(e.id)}/target?level=${e.level}${held.length ? `&items=${held.join(',')}` : ''}`);
+    const t = await api(`/champions/${encodeURIComponent(e.id)}/target?level=${e.level}${held.length ? `&items=${held.join(',')}` : ''}${pq(true)}`);
     if (S.enemy !== e || S.target !== 'champ') return;
     S.held = {key: heldKey(), hp: t.hp, ar: t.armor, mr: t.mr};
     writeDials({hp: t.hp, ar: t.armor, mr: t.mr});
@@ -2331,10 +2333,10 @@ function remember() {
     if (!pressed || opened === null) { opened = now; review(); return; }
     if (now === opened) return;
     owned = true;
-    notice(null);
+    notice(patchLine());
   }
   if (now === kept) return;
-  try { localStorage.setItem(KEEP, JSON.stringify({s: now, data: dataOf(served), seen: seenNow(), dps: SEEN})); kept = now; dropLink(); } catch (e) {}
+  try { localStorage.setItem(KEEP, JSON.stringify(onLive() ? {s: now, data: dataOf(served), seen: seenNow(), dps: SEEN} : {s: now})); kept = now; dropLink(); } catch (e) {}
 }
 function wireRemember() {
   const touch = () => { pressed = true; };
@@ -2405,6 +2407,83 @@ function notice(html) {
   el.innerHTML = html ? `<span class="pn-t">${html}</span><button class="pn-x" aria-label="Dismiss" title="Dismiss">×</button>` : '';
   // cut short when the line is longer than its room: the whole of it is the tooltip
   if (html) $('.pn-t', el).title = $('.pn-t', el).textContent;
+}
+
+/* ---------- the patch ---------- */
+/* Every visit opens on the live patch. The patch menu, the patch's name in the top bar, switches to the one before
+   it or to a preview of the next, made from Riot's test server (src/shared/patch.ts); nothing remembers the choice,
+   and a link or a saved build opens on the live patch. Switching reads that patch's champions and items, then the
+   kit and the target again; the build stays, without items that patch does not sell. Off the live patch a tag
+   beside its name and a line over the totals say which patch it is, and a preview says how settled it is: until
+   Riot's patch notes for it are out it can still change, and after them little does. */
+let patchNow = '';                  // the patch the numbers are for: the live one until the menu picks another
+const PATCH_KIND = {live: 'Live', previous: 'Previous', preview: 'Preview'};
+const patchOf = p => served?.patches?.find(x => x.patch === p);
+const onLive = () => !served || patchNow === served.patch;
+/* The patch for a GET of game data: '?patch=…' ('&patch=…' after a query), or nothing on the live patch. */
+const pq = and => onLive() ? '' : `${and ? '&' : '?'}patch=${encodeURIComponent(patchNow)}`;
+const onDay = iso => new Date(iso).toLocaleDateString('en-US', {month: 'short', day: 'numeric'});
+function patchSays(p) {
+  if (p.kind === 'live') return 'The patch played now';
+  if (p.kind === 'previous') return 'The patch before the live one';
+  return p.preview?.notes ? `Its patch notes are out, so close to final. From Riot's test server, ${onDay(p.preview.fetchedAt)}`
+    : `From Riot's test server, ${onDay(p.preview.fetchedAt)}. It can still change before it is out`;
+}
+/* The line over the totals off the live patch, or null on it. */
+function patchLine() {
+  const p = patchOf(patchNow);
+  if (!p || p.kind === 'live') return null;
+  if (p.kind === 'previous') return `<strong>Patch ${esc(p.displayPatch)}:</strong> the one before the live patch, ${esc(served.displayPatch)}.`;
+  if (!p.preview?.notes) return `<strong>Patch ${esc(p.displayPatch)} preview, not final:</strong> Riot's test server, ${onDay(p.preview.fetchedAt)}. It can still change.`;
+  return `<strong>Patch ${esc(p.displayPatch)} preview:</strong> the <a href="${esc(p.preview.notes)}" target="_blank" rel="noopener">patch notes</a> are out, so it is close to final. Riot's test server, ${onDay(p.preview.fetchedAt)}.`;
+}
+function paintPatch() {
+  const p = patchOf(patchNow) || {patch: served.patch, displayPatch: served.displayPatch, kind: 'live'}, list = served.patches || [p];
+  $('#patch').textContent = p.displayPatch;
+  const tag = $('#patch-kind');
+  tag.hidden = p.kind === 'live';
+  tag.innerHTML = PATCH_KIND[p.kind] + (p.kind === 'preview' && !p.preview?.notes ? '<span class="pv-x"> · not final</span>' : '');
+  $('#patch-set').dataset.kind = p.kind;
+  $('#patch-btn').title = p.kind === 'live' ? 'Choose the patch' : `${PATCH_KIND[p.kind]}: ${patchSays(p)}`;
+  $('#patch-list').innerHTML = list.map(x => `<a href="#" role="menuitemradio" data-patch="${esc(x.patch)}" aria-checked="${x.patch === patchNow}">`
+    + `<b>${esc(x.displayPatch)} · ${PATCH_KIND[x.kind]}${x.kind === 'preview' && !x.preview?.notes ? '<i class="pm-x">not final</i>' : ''}</b><span>${esc(patchSays(x))}</span></a>`).join('');
+}
+/* The champions and items the page offers, from GET /champions and /items. */
+function useData(champs, items) {
+  S.champs = champs.map(c => ({id: c.id, key: c.key, name: c.name, title: c.title, tags: c.tags || [], ranged: !!c.ranged, critDamage: c.stats?.critDamage, slug: c.slug}))
+    .sort((x, y) => x.name.localeCompare(y.name));
+  S.items = new Map(items.map(i => [i.id, i]));
+}
+let patchSeq = 0;
+async function setPatch(p) {
+  setMenu(null);
+  if (p === patchNow || !patchOf(p)) return;
+  const was = patchNow, mine = ++patchSeq;
+  patchNow = p;
+  paintPatch();
+  document.body.classList.add('loading');
+  let champs, items;
+  try {
+    [champs, items] = await Promise.all([api(`/champions${pq()}`), api(`/items${pq()}`)]);
+  } catch (e) {
+    if (mine !== patchSeq) return;
+    patchNow = was; paintPatch();
+    document.body.classList.remove('loading');
+    notice(`<strong>Patch ${esc(patchOf(p).displayPatch)} could not be loaded.</strong> ${esc(e.message)}`);
+    return;
+  }
+  if (mine !== patchSeq) return;
+  useData(champs, items);
+  S.champ = S.champs.find(c => c.id === S.champ.id) || S.champ;
+  // what this patch does not sell leaves the builds and the enemy's slots
+  for (const k of ['a', 'b']) S.builds[k] = S.builds[k].map(id => id && S.items.has(id) ? id : null);
+  S.enemy.items = S.enemy.items.map(id => id && S.items.has(id) ? id : null);
+  S.view = null; S.enemyView = null;
+  notice(patchLine());
+  renderBuilds(); renderTargetItems();
+  if (S.target === 'champ') enemyStats();
+  if (pick) renderItems();
+  await loadKit();
 }
 
 /* ---------- saved builds ---------- */
@@ -3089,6 +3168,7 @@ function wire() {
     if (b) setMenu(b); else if (menu && !e.target.closest('.menu')) setMenu(null);
   });
   $('#set-menu').addEventListener('click', e => { const a = e.target.closest('a[data-layout]'); if (a) { e.preventDefault(); setLayout(a); } });
+  $('#patch-menu').addEventListener('click', e => { const a = e.target.closest('a[data-patch]'); if (a) { e.preventDefault(); setPatch(a.dataset.patch); } });
   $('#cmp-seg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setCompare(b.dataset.cmp === 'on'); });
   $('#add-b').addEventListener('click', () => setCompare(true));
   $('#rm-b').addEventListener('click', () => setCompare(false));
@@ -3290,12 +3370,10 @@ async function boot() {
   const [meta, champs, items, art] = await Promise.all([api('/meta'), api('/champions'), api('/items'),
     inline ? JSON.parse(inline.textContent) : fetch('/art/index.json').then(r => r.json())]);
   useArt(art);
-  $('#patch').textContent = meta.displayPatch;
   $('#legal-text').textContent = meta.legal;
-  served = meta;
-  S.champs = champs.map(c => ({id: c.id, key: c.key, name: c.name, title: c.title, tags: c.tags || [], ranged: !!c.ranged, critDamage: c.stats?.critDamage, slug: c.slug}))
-    .sort((x, y) => x.name.localeCompare(y.name));
-  S.items = new Map(items.map(i => [i.id, i]));
+  served = meta; patchNow = meta.patch;
+  paintPatch();
+  useData(champs, items);
   S.champ = S.champs.find(c => c.id === S.champ.id) || S.champs[0];
   startOnPageChamp();
 

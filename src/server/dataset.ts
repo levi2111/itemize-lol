@@ -1,10 +1,12 @@
 /* Loads a compiled dataset from disk for the API. The index and items are small and
    read up front; champion files are read on first use and kept. */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DataSource } from '../engine/types.ts';
 import { DATA_DIR, distDir } from '../pipeline/paths.ts';
+import { servedPatches, type PatchKind } from '../shared/patch.ts';
 import type { BaseStats, ChampionData, DatasetManifest, ItemData, ModelStatus, Slot } from '../shared/types.ts';
+import { patchSet, type PatchSet } from './patches.ts';
 
 export interface ChampionIndexEntry {
   id: string; key: number; name: string; title: string; tags: string[]; ranged: boolean;
@@ -31,9 +33,7 @@ export class Dataset implements ServedData {
   private readonly champions = new Map<string, ChampionData>();
 
   constructor(patch?: string) {
-    const latest = join(DATA_DIR, 'dist', 'latest.json');
-    if (!patch && !existsSync(latest)) throw new Error('no dataset found: run `npm run data:fetch` and `npm run data:build` first');
-    this.patch = patch ?? JSON.parse(readFileSync(latest, 'utf8')).patch;
+    this.patch = patch ?? livePatch();
     this.dir = distDir(this.patch);
     const read = (f: string) => JSON.parse(readFileSync(join(this.dir, f), 'utf8'));
     this.manifest = read('manifest.json');
@@ -59,3 +59,21 @@ export class Dataset implements ServedData {
     return this.itemById.get(id);
   }
 }
+
+/** The patch the site opens on, as data/dist/latest.json names it. */
+export const livePatch = (): string => {
+  const latest = join(DATA_DIR, 'dist', 'latest.json');
+  if (!existsSync(latest)) throw new Error('no dataset found: run `npm run data:fetch` and `npm run data:build` first');
+  return JSON.parse(readFileSync(latest, 'utf8')).patch;
+};
+
+/** The patches to serve from data/dist (src/shared/patch.ts, servedPatches), around `live` or else the live patch. */
+export function servedFromDisk(live = livePatch()): { patch: string; kind: PatchKind }[] {
+  const dir = join(DATA_DIR, 'dist');
+  const compiled = readdirSync(dir).filter(p => existsSync(join(dir, p, 'manifest.json')));
+  return servedPatches(compiled, live);
+}
+
+/** Every patch served, read from disk. */
+export const loadPatches = (live?: string): PatchSet =>
+  patchSet(servedFromDisk(live).map(({ patch, kind }) => ({ data: new Dataset(patch), kind })));
