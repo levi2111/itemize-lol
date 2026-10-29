@@ -2449,7 +2449,8 @@ function paintPatch() {
   $('#patch-set').dataset.kind = p.kind;
   $('#patch-btn').title = p.kind === 'live' ? 'Choose the patch' : `${PATCH_KIND[p.kind] || 'Patch'}: ${patchSays(p)}`;
   $('#patch-list').innerHTML = list.map(x => `<a href="#" role="menuitemradio" data-patch="${esc(x.patch)}" aria-checked="${x.patch === patchNow}">`
-    + `<b>${[esc(x.displayPatch), PATCH_KIND[x.kind], x.kind === 'preview' && PATCH_DAY[x.displayPatch] && onDay(PATCH_DAY[x.displayPatch] + 'T12:00')].filter(Boolean).join(' · ')}</b></a>`).join('');
+    + `<b>${esc(x.displayPatch)}</b>${PATCH_KIND[x.kind] ? `<i class="pk" data-kind="${x.kind}">${PATCH_KIND[x.kind]}</i>` : ''}`
+    + `${x.kind === 'preview' && PATCH_DAY[x.displayPatch] ? `<small>${onDay(PATCH_DAY[x.displayPatch] + 'T12:00')}</small>` : ''}</a>`).join('');
 }
 /* The champions and items the page offers, from GET /champions and /items. */
 function useData(champs, items) {
