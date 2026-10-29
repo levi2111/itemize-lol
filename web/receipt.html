@@ -690,6 +690,15 @@ label.ic{cursor:pointer}
 .tip-p{padding-top:.5rem;border-top:1px solid var(--rule);font-family:var(--font-mono);font-size:.66rem;line-height:1.45;color:var(--chalk-faint)}
 [data-ab]{cursor:help}
 .skill[data-ab] .pip{cursor:pointer}
+/* an item's card: its icon, name and cost, then its stats */
+.tip-h .ti{flex:none;width:2.1rem;border:1px solid var(--chalk-faint);border-radius:2px;overflow:hidden}
+.tip-h .tn{display:grid;min-width:0}
+.tip-h .tn small{font-family:var(--font-mono);font-size:.64rem;color:var(--chalk-faint)}
+.tip-h .gold{color:var(--chalk)}
+.si{display:inline-block;width:1rem;height:1rem;vertical-align:-.15rem;background:var(--art-stats) no-repeat;background-size:calc(var(--stats-n,7)*100%) 100%;opacity:0;transition:opacity .18s}
+.has-stats .si{opacity:1}
+.tl .si{margin-right:.4rem}
+.si.no{visibility:hidden}
 
 /* ---------- the introduction: a welcome on a first visit, then a short tour of the page ---------- */
 /* app.js draws it into #intro. The veil is the shadow of .in-hole, which is the welcome card itself and then

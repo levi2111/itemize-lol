@@ -437,7 +437,7 @@ function renderBuilds() {
       const sel = pick && pick.b === k && pick.i === i ? ' sel' : '';
       if (!id) return `<div class="slot empty${sel}" role="button" tabindex="0" data-b="${k}" data-i="${i}" aria-label="Build ${K}, slot ${i + 1}, empty"></div>`;
       const it = S.items.get(id), name = esc(it?.name || 'Item ' + id), shop = shopOf(it);
-      return `<div class="slot${other.has(id) ? '' : ' uniq'}${sel}" role="button" tabindex="0" data-b="${k}" data-i="${i}" title="${name}${shop ? `, ${SHOP[shop]} item` : ''}" aria-label="Build ${K}, slot ${i + 1}, ${name}">${itemIco(id)}${badge(it)}${cfgBtn(k, i, it)}<button class="rm" data-rm aria-label="Remove ${name}">×</button></div>`;
+      return `<div class="slot${other.has(id) ? '' : ' uniq'}${sel}" role="button" tabindex="0" data-b="${k}" data-i="${i}" data-it="${id}" aria-label="Build ${K}, slot ${i + 1}, ${name}${shop ? `, ${SHOP[shop]} item` : ''}">${itemIco(id)}${badge(it)}${cfgBtn(k, i, it)}<button class="rm" data-rm aria-label="Remove ${name}">×</button></div>`;
     }).join('');
     $('.b-gold b', row).textContent = nf(S.builds[k].reduce((s, id) => s + (S.items.get(id)?.gold || 0), 0));
   }
@@ -453,6 +453,7 @@ function renderBuilds() {
       : `Both builds use the champion, level and ranks ${PHONE.matches ? 'on this tab' : 'above'}. Underlined items differ.`;
   }
   paintTabs();
+  if (tipAt) paintTip();
 }
 /* The enemy champion's six slots, on the Target tab: the same picker fills them ('t' where a build is 'a' or 'b'),
    and their stats go into the dials (enemyStats). */
@@ -464,7 +465,7 @@ function renderTargetItems() {
     const sel = pick && pick.b === 't' && pick.i === i ? ' sel' : '';
     if (!id) return `<div class="slot empty${sel}" role="button" tabindex="0" data-b="t" data-i="${i}" aria-label="${name}'s items, slot ${i + 1}, empty"></div>`;
     const it = S.items.get(id), item = esc(it?.name || 'Item ' + id), shop = shopOf(it);
-    return `<div class="slot${sel}" role="button" tabindex="0" data-b="t" data-i="${i}" title="${item}${shop ? `, ${SHOP[shop]} item` : ''}" aria-label="${name}'s items, slot ${i + 1}, ${item}">${itemIco(id)}${badge(it)}<button class="rm" data-rm aria-label="Remove ${item}">×</button></div>`;
+    return `<div class="slot${sel}" role="button" tabindex="0" data-b="t" data-i="${i}" data-it="${id}" aria-label="${name}'s items, slot ${i + 1}, ${item}${shop ? `, ${SHOP[shop]} item` : ''}">${itemIco(id)}${badge(it)}<button class="rm" data-rm aria-label="Remove ${item}">×</button></div>`;
   }).join('');
   $('#t-gold').textContent = nf(S.enemy.items.reduce((s, id) => s + (S.items.get(id)?.gold || 0), 0));
 }
@@ -644,11 +645,11 @@ function renderItems() {
   const top = shown[0], next = shown.find(r => r.it.name !== top?.it.name);
   bestFind = toks.length && top && top.top >= 40 && (!next || top.s > next.s) ? top : null;
 
-  const cell = (it, away) => `<button class="pi${away ? ' away' : ''}" data-id="${it.id}" aria-label="${esc(it.name)}, ${nf(it.gold)} gold${shopOf(it) ? ', ' + SHOP[shopOf(it)] : ''}">${itemIco(it.id)}${badge(it)}</button>`;
+  const cell = (it, away) => `<button class="pi${away ? ' away' : ''}" data-id="${it.id}" data-it="${it.id}" aria-label="${esc(it.name)}, ${nf(it.gold)} gold${shopOf(it) ? ', ' + SHOP[shopOf(it)] : ''}">${itemIco(it.id)}${badge(it)}</button>`;
   let html = '';
   if (bestFind) {
     const it = bestFind.it, by = foundBy(bestFind);
-    html += `<button class="pbest" data-id="${it.id}" aria-label="Best match: ${esc(it.name)}, ${nf(it.gold)} gold"><span class="pi">${itemIco(it.id)}${badge(it)}</span>
+    html += `<button class="pbest" data-id="${it.id}" data-it="${it.id}" aria-label="Best match: ${esc(it.name)}, ${nf(it.gold)} gold"><span class="pi">${itemIco(it.id)}${badge(it)}</span>
       <span class="pb-t"><b>${esc(it.name)}</b><span>${[...by, nf(it.gold) + ' gold', !inRole(it, role) && it.roles?.length ? `${it.roles[0]} item` : ''].filter(Boolean).join(' · ')}</span></span>${touched() ? '' : '<kbd>Enter</kbd>'}</button>`;
   }
   const here = shown.filter(r => r !== bestFind && inRole(r.it, role)).map(r => r.it);
@@ -680,6 +681,7 @@ function renderItems() {
   $$('#item-chips [data-w]').forEach(c => c.setAttribute('aria-pressed', toks.some(t => !t.part && t.stat?.[0] === STAT_WORD.get(c.dataset.w))));
   paintReading(toks);
   footIdle();
+  if (tipAt) paintTip();
 }
 function choose(id) {
   if (!pick) return;
@@ -846,7 +848,7 @@ function paintAutoKeep() {
   const K = AB.for.toUpperCase(), held = S.builds[AB.for].filter(Boolean);
   for (const id of AB.keep) if (!held.includes(id)) AB.keep.delete(id);
   const tile = id => { const it = S.items.get(id), on = AB.keep.has(id);
-    return `<button class="ab-it" data-keep="${id}" aria-pressed="${on}" title="${esc(it?.name || '')}: ${on ? 'kept' : 'click to keep'}" aria-label="Keep ${esc(it?.name || 'item')}">${itemIco(id)}</button>`; };
+    return `<button class="ab-it" data-keep="${id}" aria-pressed="${on}" data-it="${id}" data-hint="${on ? 'Kept. Click to let the search replace it.' : 'Click to keep it.'}" aria-label="Keep ${esc(it?.name || 'item')}">${itemIco(id)}</button>`; };
   const never = [...AB.never].map(id => S.items.get(id)).filter(Boolean);
   $('#ab-keep').innerHTML = `<span class="lbl">Keep from <span class="tag ${AB.for} xs">${K}</span></span>
     ${held.length ? `<div class="ab-keeps">${held.map(tile).join('')}</div><p class="hint">${AB.keep.size ? 'Kept items stay, and their gold counts toward the limit.' : 'Click an item to keep it. Nothing kept starts from an empty build.'}</p>` : `<p class="hint">Build ${K} is empty, so the search starts from nothing.</p>`}
@@ -867,8 +869,8 @@ function paintAutoRes() {
     const kept = new Set(), tiles = b.items.map(id => {
       const it = S.items.get(id), name = esc(it?.name || 'Item ' + id);
       // the kept items lead the build, each once
-      if (AB.keep.has(id) && !kept.has(id) && S.builds[k].includes(id)) { kept.add(id); return `<span class="ab-it kept" title="${name}, kept">${itemIco(id)}</span>`; }
-      return `<button class="ab-it${it?.component ? ' part' : ''}" data-never="${id}" title="${name}, ${nf(it?.gold || 0)} gold${it?.component ? ', a component' : ''}. Click to leave it out." aria-label="Leave out ${name}">${itemIco(id)}</button>`;
+      if (AB.keep.has(id) && !kept.has(id) && S.builds[k].includes(id)) { kept.add(id); return `<span class="ab-it kept" role="img" data-it="${id}" data-hint="Kept from the build." aria-label="${name}, kept">${itemIco(id)}</span>`; }
+      return `<button class="ab-it${it?.component ? ' part' : ''}" data-never="${id}" data-it="${id}" data-hint="Click to leave it out." aria-label="Leave out ${name}">${itemIco(id)}</button>`;
     }).join('');
     const d = now ? (b.score / now - 1) * 100 : null;
     const put = x => sameItems(S.builds[x], b.items) ? `<span class="ab-in">In ${x.toUpperCase()}</span>` : `<button class="ab-put ${x}" data-put="${x}" data-n="${n}">Put in ${x.toUpperCase()}</button>`;
@@ -1099,13 +1101,39 @@ function abilityCard(k) {
   const parts = ks.some(b => (of(b)?.parts.length || 0) > 1) ? lineParts(of('a'), two ? of('b') : null) : '';
   return `${head}<div class="tip-g${two ? ' two' : ''}">${cols}${body}</div>${parts ? `<div class="tip-p">${esc(parts).replace(/\n/g, '<br>')}</div>` : ''}`;
 }
+/* ---------- an item's card ---------- */
+/* Pointing at an item (in a build's slot, the enemy's, the picker or an auto-build result) shows a card: its
+   name, what it costs and the stats it gives, in the shop's order. [stat, name, its icon, shown as a percent] */
+const ITEM_STATS = [
+  ['ad', 'Attack damage', 'ad'], ['attackSpeed', 'Attack speed', null, 1], ['critChance', 'Crit chance', 'crit', 1], ['critDamage', 'Crit damage', null, 1],
+  ['lethality', 'Lethality'], ['armorPenPct', 'Armor penetration', null, 1], ['ap', 'Ability power', 'ap'], ['magicPenFlat', 'Magic penetration'],
+  ['magicPenPct', 'Magic penetration', null, 1], ['abilityHaste', 'Ability haste'], ['basicHaste', 'Basic ability haste'], ['ultHaste', 'Ultimate haste'],
+  ['hp', 'Health', 'hp'], ['mana', 'Mana', 'mana'], ['armor', 'Armor', 'armor'], ['mr', 'Magic resist', 'mr'],
+  ['lifeSteal', 'Life steal', null, 1], ['omnivamp', 'Omnivamp', null, 1], ['moveSpeed', 'Move speed'], ['movePct', 'Move speed', null, 1],
+];
+function itemCard(id, hint) {
+  const it = S.items.get(id);
+  if (!it) return '';
+  const shop = shopOf(it), about = [it.component && 'Component', shop && `${SHOP[shop]} item`].filter(Boolean).join(' · ');
+  const stats = ITEM_STATS.filter(([k]) => it.stats?.[k]).map(([k, name, ico, per]) =>
+    `<span class="tl">${ico ? statIco(ico, name) : '<i class="si no"></i>'}${name}</span><span class="tv">+${per ? pct(it.stats[k], 1) : nf(it.stats[k])}</span>`).join('');
+  return `<div class="tip-h"><span class="ti">${itemIco(id)}</span><span class="tn"><b>${esc(it.name)}</b>${about ? `<small>${about}</small>` : ''}</span><span class="hint gold">${nf(it.gold)} gold</span></div>`
+    + `<div class="tip-g">${stats || '<span class="tl">No stats</span>'}</div>${hint ? `<div class="tip-p">${esc(hint)}</div>` : ''}`;
+}
 function showTip(el) {
-  const k = el.dataset.ab, tip = $('#tip');
-  if (!tip || !k) return;
+  const k = el.dataset.ab, id = +el.dataset.it, tip = $('#tip');
+  if (!tip || !(k || id)) return;
   tipAt = el;
-  tip.innerHTML = abilityCard(k);
+  tip.innerHTML = k ? abilityCard(k) : itemCard(id, el.dataset.hint);
   tip.hidden = false;
   const r = el.getBoundingClientRect(), m = tip.getBoundingClientRect(), gap = 8;
+  // an item in the picker has its card beside it, so the row under it stays in view
+  if (!k && el.closest('#item-grid')) {
+    const right = r.right + gap + m.width <= innerWidth - gap;
+    tip.style.left = `${right ? r.right + gap : Math.max(gap, r.left - gap - m.width)}px`;
+    tip.style.top = `${Math.max(gap, Math.min(r.top, innerHeight - m.height - gap))}px`;
+    return;
+  }
   // inside a dropdown the card sits beside it, so the rest of the list stays in view
   const menuBox = el.closest('.menu')?.getBoundingClientRect();
   // a menu as wide as the screen (a phone's sheet) has no side to spare, and the card goes above it
@@ -1125,16 +1153,28 @@ function showTip(el) {
   tip.style.left = `${Math.max(gap, Math.min(r.left + r.width / 2 - m.width / 2, innerWidth - m.width - gap))}px`;
 }
 function hideTip() { tipAt = null; const tip = $('#tip'); if (tip) tip.hidden = true; }
-function paintTip() { if (tipAt?.isConnected) showTip(tipAt); else hideTip(); }
+// drawn again, or put away when what it was showing for is gone or hidden (a closed picker)
+function paintTip() { if (tipAt?.isConnected && tipAt.getClientRects().length) showTip(tipAt); else hideTip(); }
+/* What a card would show for: an ability, or an item. A finger taps an item to pick or change it, so an item's
+   card is the mouse's and the keyboard's; a slot's own buttons (settings, remove) go without it. */
+const tipOf = t => {
+  const el = t.closest('[data-ab], [data-it]');
+  return el?.dataset.it && (touched() || t.closest('[data-cfg], [data-rm]')) ? null : el;
+};
 function wireTip() {
   document.addEventListener('mouseover', e => {
-    const el = e.target.closest('[data-ab]');
+    const el = tipOf(e.target);
     if (el && el !== tipAt) showTip(el); else if (!el && tipAt) hideTip();
   });
-  document.addEventListener('focusin', e => { const el = e.target.closest('[data-ab]'); if (el) showTip(el); else if (tipAt) hideTip(); });
+  document.addEventListener('focusin', e => {
+    const el = tipOf(e.target);
+    // a click focuses a slot too; an item's card comes with focus only from the keyboard
+    if (el?.dataset.it && !el.matches(':focus-visible')) return;
+    if (el) showTip(el); else if (tipAt) hideTip();
+  });
   document.addEventListener('scroll', hideTip, true);
-  // clicking a rank pip keeps the card, which then shows the new rank's numbers
-  document.addEventListener('mousedown', e => { if (tipAt && !tipAt.contains(e.target)) hideTip(); });
+  // clicking a rank pip keeps the card, which then shows the new rank's numbers; clicking an item puts its card away
+  document.addEventListener('mousedown', e => { if (tipAt && (!tipAt.contains(e.target) || tipAt.dataset.it)) hideTip(); });
 }
 
 /* ---------- phones and touch ---------- */
