@@ -447,10 +447,7 @@ function renderBuilds() {
   if (now) {
     const on = Object.keys(S.shops).filter(m => S.shops[m]);
     now.textContent = on.length ? `Summoner's Rift + ${on.map(m => SHOP[m]).join(' + ')}` : "Summoner's Rift items";
-    $('#items-hint').textContent = !S.compare ? 'Click a slot to change it'
-      : S.split ? 'Both builds use the champion and level above; ranks are per build. Underlined items differ.'
-      // a phone's layout puts the ranks after the builds
-      : `Both builds use the champion, level and ranks ${PHONE.matches ? 'on this tab' : 'above'}. Underlined items differ.`;
+    $('#items-hint').textContent = S.compare ? '' : 'Click a slot to change it';
   }
   paintTabs();
   if (tipAt) paintTip();
@@ -922,10 +919,11 @@ function wireAuto() {
 }
 
 /* ---------- an item's settings ---------- */
-/* An item whose passive stacks, procs or has an active carries a small button on its slot. It opens a
-   menu with what one firing of each of its effects deals, as the last calculation found, and the item's
-   settings: a toggle, stacks, uses of the active, or a proc's count in the combo (left unset, the combo
-   decides). Settings are per build; the API takes them as itemOptions. */
+/* An item whose passive stacks, procs or has an active carries a small button on its slot. It opens the
+   item's card (itemCard) with more under it: what one firing of each of its effects deals, as the last
+   calculation found, and the item's settings: a toggle, stacks, uses of the active, or a proc's count in the
+   combo (left unset, the combo decides). The menu is kept short; what explains the numbers is behind its
+   Details button. Settings are per build; the API takes them as itemOptions. */
 const GEAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>';
 const hasMenu = it => !!(it?.controls?.length || it?.effects?.length);
 function cfgBtn(k, i, it) {
@@ -961,58 +959,79 @@ function placeItemMenu() {
   el.style.left = `${Math.max(gap, Math.min(r.left, innerWidth - m.width - gap))}px`;
 }
 const TYPE_NAME = {physical: 'physical', magic: 'magic', true: 'true'};
-/* One effect: what one firing deals after the target's resistances (before them in raw output), and how
-   often it fired in the combo. A proc the user counts has its stepper on the same line. */
+let itemDetails = false;            // the menu's Details: off at first, then as the visitor left it, for this visit
+const UNDO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>';
+const CHEVRON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
+/* A setting's name as the menu shows it, and the rest of it for Details: "Seething Strike stacks when the combo
+   starts" is "Seething Strike stacks", at the start of the combo; "Distance to the target when attacking, in
+   hundreds of units" is the distance, in hundreds of units. */
+function splitLabel(label) {
+  let [name, ...rest] = label.split(', ');
+  const start = / when the (combo|fight) starts$/.exec(name);
+  if (start) name = name.slice(0, start.index);
+  const more = [start && 'At the start of the combo', ...rest].filter(Boolean).join(', ');
+  return [name, more && more[0].toUpperCase() + more.slice(1) + '.'];
+}
+const inDetails = text => itemDetails && text ? `<p class="im-d">${esc(text)}</p>` : '';
+/* One effect: its name, its type, and what one firing deals after the target's resistances (before them in raw
+   output). A proc or use the visitor can count has its stepper under it. Details says how often it fired in the
+   combo and what that added up to. */
 function effectRow(it, e, R, k) {
   const raw = S.target === 'raw', shown = R?.items.find(x => x.id === it.id)?.effects.find(x => x.id === e.id);
   const val = shown && (raw ? shown.one.raw : shown.one.dealt), ctl = it.controls?.find(c => c.rule === e.id);
-  const amount = val === undefined ? '–' : nf(val);
   // what it added up to in the combo: a burn kept alive pays per second, so this is not always one firing times the count
   const part = R?.combo.lines.find(l => l.key === 'items')?.parts.filter(p => p.id === `item:${it.id}/${e.id}`);
   const total = part?.reduce((s, p) => s + (raw ? p.total.raw : p.total.dealt), 0) || 0;
-  const sum = shown ? `${ctl ? '' : `${shown.fired}× · `}${total ? nf(total) : '0'} in the combo` : '';
-  // a share of missing health, an execute: nothing against a target at full health
-  const note = shown && val === 0 ? '<em>nothing against a target at full health</em>' : '';
-  return `<div class="ie"><div class="ie-h"><b>${esc(e.label)}</b><span class="ie-t ${e.type}">${TYPE_NAME[e.type] || e.type}</span></div>
-    <div class="ie-v"><span class="ie-n"><i>${amount}</i>each${ctl?.kind === 'uses' ? ' use' : ''}, ${raw ? 'raw' : 'after resistances'}</span>
-    <span class="ie-f">${sum}</span>${note}</div>
-    ${ctl ? controlRow(it, ctl, R, k, shown) : ''}</div>`;
+  const mine = ctl && S.itemOpts[k][it.id]?.[ctl.id] !== undefined;
+  const more = shown ? [
+    // a share of missing health, an execute: nothing against a target at full health
+    `${ctl?.kind === 'uses' ? 'Each use' : 'Each time it fires'}, ${raw ? 'before' : 'after'} armor and magic resist${val === 0 ? ': nothing against a target at full health' : ''}.`,
+    shown.fired ? `${shown.fired === 1 ? 'Once' : `${shown.fired} times`} in the combo, ${nf(total)} in all.` : 'Not set off in the combo.',
+    ctl?.kind === 'procs' ? (mine ? 'Procs set by hand.' : 'Procs counted from the combo.') : '',
+  ].filter(Boolean).join(' ') : 'Calculating…';
+  return `<div class="ie"><div class="ie-h"><b>${esc(e.label)}</b><span class="ie-t ${e.type}">${TYPE_NAME[e.type] || e.type}</span><span class="ie-n">${val === undefined ? '–' : nf(val)}</span></div>
+    ${inDetails(more)}${ctl ? controlRow(it, ctl, R, k, true) : ''}</div>`;
 }
-/* A setting. Its value is what the user set, else what the last calculation used (a default can depend on the build). */
-function controlRow(it, c, R, k, effect) {
+/* A setting. Its value is what the user set, else what the last calculation used (a default can depend on the build).
+   A proc left to the combo shows the combo's count, dimmed; once set by hand, ↺ gives it back to the combo. */
+function controlRow(it, c, R, k, inEffect) {
   const mine = S.itemOpts[k][it.id]?.[c.id], used = R?.items.find(x => x.id === it.id)?.settings?.[c.id];
-  const v = mine ?? used, id = `io-${k}-${it.id}-${c.id}`;
-  if (c.kind === 'bool') {
-    return `<label class="ic" for="${id}"><span>${esc(c.label)}</span><input type="checkbox" id="${id}" data-c="${esc(c.id)}"${v ? ' checked' : ''}></label>`;
-  }
-  const auto = c.kind === 'procs' && mine === undefined, n = auto ? (effect?.fired ?? 0) : (v ?? 0);
-  const label = c.kind === 'procs' ? 'In the combo' : c.kind === 'uses' ? 'Uses in the combo' : esc(c.label);
+  const v = mine ?? used, id = `io-${k}-${it.id}-${c.id}`, [short, more] = splitLabel(c.label);
+  const name = c.kind === 'procs' ? (inEffect ? 'Procs' : `${short} procs`) : c.kind === 'uses' ? (inEffect ? 'Uses' : `${short} uses`) : short;
+  const label = `<span${name !== c.label ? ` title="${esc(c.label)}"` : ''}>${esc(name)}</span>`;
+  if (c.kind === 'bool') return `<label class="ic" for="${id}">${label}<input type="checkbox" id="${id}" data-c="${esc(c.id)}"${v ? ' checked' : ''}></label>${inDetails(more)}`;
+  const fired = R?.items.find(x => x.id === it.id)?.effects.find(x => x.id === c.rule)?.fired;
+  const auto = c.kind === 'procs' && mine === undefined, n = auto ? (fired ?? 0) : (v ?? 0);
   // a count of procs or uses has a cap only to keep requests small; stacks have the game's own limit
-  const max = c.kind === 'int' && c.max !== undefined ? `<small>of ${c.max}</small>` : '';
-  return `<div class="ic${auto ? ' auto' : ''}"><span>${label}</span><span class="stp">
+  const max = c.kind === 'int' && c.max !== undefined ? `<small>/ ${c.max}</small>` : '';
+  const back = (c.kind === 'procs' || c.kind === 'uses') && mine !== undefined
+    ? `<button class="ireset" data-reset="${esc(c.id)}" title="${c.kind === 'procs' ? "Back to the combo's own count" : 'Back to the default'}" aria-label="${c.kind === 'procs' ? "Back to the combo's own count" : 'Back to the default'}: ${esc(c.label)}">${UNDO}</button>` : '';
+  return `<div class="ic${auto ? ' auto' : ''}">${label}${back}<span class="stp">
       <button data-c="${esc(c.id)}" data-d="-1" aria-label="One fewer: ${esc(c.label)}"${n <= (c.min ?? 0) ? ' disabled' : ''}>−</button>
-      <output>${auto ? `<em>auto</em>${n}` : n}</output>
-      <button data-c="${esc(c.id)}" data-d="1" aria-label="One more: ${esc(c.label)}"${c.max !== undefined && n >= c.max ? ' disabled' : ''}>+</button>${max}</span>
-    ${c.kind === 'procs' || c.kind === 'uses' ? (mine === undefined ? '' : `<button class="act" data-reset="${esc(c.id)}" title="${c.kind === 'procs' ? 'Let the combo decide' : 'Back to the default'}">${c.kind === 'procs' ? 'Auto' : 'Reset'}</button>`) : ''}</div>`;
+      <output${auto ? ' title="Counted from the combo"' : ''}>${n}</output>
+      <button data-c="${esc(c.id)}" data-d="1" aria-label="One more: ${esc(c.label)}"${c.max !== undefined && n >= c.max ? ' disabled' : ''}>+</button>${max}</span></div>${inEffect ? '' : inDetails(more)}`;
 }
 function paintItemMenu() {
   const el = $('#item-menu');
   if (!itemMenu || !el) return;
   const {b: k, id} = itemMenu, it = S.items.get(id), R = S.res?.[k];
   if (!it) return closeItemMenu();
-  const states = (it.controls || []).filter(c => !c.rule);
   // an effect without a firing in this build is still listed: its proc may be set by hand
   const effects = (it.effects || []).map(e => effectRow(it, e, R, k)).join('');
-  const lone = (it.controls || []).filter(c => c.rule && !(it.effects || []).some(e => e.id === c.rule));
-  const set = Object.keys(S.itemOpts[k][id] || {}).length;
-  el.innerHTML = `<div class="im-head"><span class="im-ico">${itemIco(id)}</span><div><b>${esc(it.name)}</b>
-      <span class="hint">${S.compare ? `<span class="tag ${k} xs">${k.toUpperCase()}</span> ` : ''}Slot ${itemMenu.i + 1}${R ? '' : ', calculating…'}</span></div>
-      <button class="esc" data-close aria-label="Close">Esc</button></div>
-    ${effects ? `<div class="im-sec"><span class="lbl">Effects</span>${effects}</div>` : ''}
-    ${lone.length ? `<div class="im-sec">${lone.map(c => controlRow(it, c, R, k)).join('')}</div>` : ''}
-    ${states.length ? `<div class="im-sec"><span class="lbl">Going into the combo</span>${states.map(c => controlRow(it, c, R, k)).join('')}</div>` : ''}
-    ${it.notes?.length ? `<div class="im-notes">${it.notes.map(n => `<p>${esc(n)}</p>`).join('')}</div>` : ''}
-    ${set ? '<div class="im-foot"><button class="act" data-reset-all>Reset all</button></div>' : ''}`;
+  // the rest of the settings: states the combo starts in, and counts of an effect the item doesn't list
+  const rest = (it.controls || []).filter(c => !c.rule || !(it.effects || []).some(e => e.id === c.rule));
+  const set = Object.keys(S.itemOpts[k][id] || {}).length, stats = itemStats(it);
+  const where = `${S.compare ? `Build ${k.toUpperCase()}, slot` : 'Slot'} ${itemMenu.i + 1}.`;
+  // a redraw keeps the focus on the same control
+  const f = document.activeElement, back = el.contains(f) && f.matches('button')
+    && (f.dataset.d ? `[data-c="${CSS.escape(f.dataset.c)}"][data-d="${f.dataset.d}"]` : f.matches('[data-details]') ? '[data-details]' : null);
+  el.innerHTML = itemHead(it, {build: S.compare && k, after: '<button class="esc" data-close aria-label="Close">Esc</button>'})
+    + (stats ? `<div class="tip-g">${stats}</div>` : '')
+    + (effects ? `<div class="im-sec">${effects}</div>` : '')
+    + (rest.length ? `<div class="im-sec">${rest.map(c => controlRow(it, c, R, k)).join('')}</div>` : '')
+    + (itemDetails ? `<div class="im-notes">${[...(it.notes || []), where].map(n => `<p>${esc(n)}</p>`).join('')}</div>` : '')
+    + `<div class="im-foot"><button class="im-det" data-details aria-expanded="${itemDetails}">${CHEVRON}Details</button>${set ? '<button class="act" data-reset-all>Reset all</button>' : ''}</div>`;
+  if (back) $(back, el)?.focus();
   placeItemMenu();
 }
 function setItemOpt(c, v) {
@@ -1028,6 +1047,7 @@ function wireItemMenu() {
   el.addEventListener('click', e => {
     if (!itemMenu) return;
     if (e.target.closest('[data-close]')) { const slot = $(`.slot[data-b="${itemMenu.b}"][data-i="${itemMenu.i}"] [data-cfg]`); closeItemMenu(); slot?.focus(); return; }
+    if (e.target.closest('[data-details]')) { itemDetails = !itemDetails; paintItemMenu(); return; }
     if (e.target.closest('[data-reset-all]')) { delete S.itemOpts[itemMenu.b][itemMenu.id]; renderBuilds(); paintItemMenu(); schedule(); return; }
     const r = e.target.closest('[data-reset]');
     if (r) { const c = control(r.dataset.reset); if (c) setItemOpt(c, undefined); return; }
@@ -1103,22 +1123,31 @@ function abilityCard(k) {
 }
 /* ---------- an item's card ---------- */
 /* Pointing at an item (in a build's slot, the enemy's, the picker or an auto-build result) shows a card: its
-   name, what it costs and the stats it gives, in the shop's order. [stat, name, its icon, shown as a percent] */
+   name, what it costs and the stats it gives, in the shop's order. An item's settings menu opens on the same
+   card. [stat, name, its icon, shown as a percent]. The game has one icon for a stat's flat and percent forms,
+   and none of its own for crit damage or basic and ultimate haste, which take crit's and ability haste's. */
 const ITEM_STATS = [
-  ['ad', 'Attack damage', 'ad'], ['attackSpeed', 'Attack speed', null, 1], ['critChance', 'Crit chance', 'crit', 1], ['critDamage', 'Crit damage', null, 1],
-  ['lethality', 'Lethality'], ['armorPenPct', 'Armor penetration', null, 1], ['ap', 'Ability power', 'ap'], ['magicPenFlat', 'Magic penetration'],
-  ['magicPenPct', 'Magic penetration', null, 1], ['abilityHaste', 'Ability haste'], ['basicHaste', 'Basic ability haste'], ['ultHaste', 'Ultimate haste'],
+  ['ad', 'Attack damage', 'ad'], ['attackSpeed', 'Attack speed', 'as', 1], ['critChance', 'Crit chance', 'crit', 1], ['critDamage', 'Crit damage', 'crit', 1],
+  ['lethality', 'Lethality', 'armorpen'], ['armorPenPct', 'Armor penetration', 'armorpen', 1], ['ap', 'Ability power', 'ap'], ['magicPenFlat', 'Magic penetration', 'magicpen'],
+  ['magicPenPct', 'Magic penetration', 'magicpen', 1], ['abilityHaste', 'Ability haste', 'haste'], ['basicHaste', 'Basic ability haste', 'haste'], ['ultHaste', 'Ultimate haste', 'haste'],
   ['hp', 'Health', 'hp'], ['mana', 'Mana', 'mana'], ['armor', 'Armor', 'armor'], ['mr', 'Magic resist', 'mr'],
-  ['lifeSteal', 'Life steal', null, 1], ['omnivamp', 'Omnivamp', null, 1], ['moveSpeed', 'Move speed'], ['movePct', 'Move speed', null, 1],
+  ['lifeSteal', 'Life steal', 'lifesteal', 1], ['omnivamp', 'Omnivamp', 'omnivamp', 1], ['moveSpeed', 'Move speed', 'ms'], ['movePct', 'Move speed', 'ms', 1],
 ];
+// a stat's icon, or an empty one of the same size so that the names line up while the art index is an older one
+const statMark = (ico, name) => statIco(ico, name) || '<i class="si no"></i>';
+/* The card's head: the item's icon, name, what kind of item it is and its cost; `build` adds its build's tag,
+   `after` goes at the end of the line (the settings menu's Esc). */
+function itemHead(it, {build, after = ''} = {}) {
+  const shop = shopOf(it), about = [it.component && 'Component', shop && `${SHOP[shop]} item`].filter(Boolean).join(' · ');
+  const tag = build ? `<span class="tag ${build} xs">${build.toUpperCase()}</span>` : '';
+  return `<div class="tip-h"><span class="ti">${itemIco(it.id)}</span><span class="tn"><b>${esc(it.name)}</b>${tag || about ? `<small>${tag}${about}</small>` : ''}</span><span class="hint gold">${nf(it.gold)} gold</span>${after}</div>`;
+}
+const itemStats = it => ITEM_STATS.filter(([k]) => it.stats?.[k]).map(([k, name, ico, per]) =>
+  `<span class="tl">${statMark(ico, name)}${name}</span><span class="tv">+${per ? pct(it.stats[k], 1) : nf(it.stats[k])}</span>`).join('');
 function itemCard(id, hint) {
   const it = S.items.get(id);
   if (!it) return '';
-  const shop = shopOf(it), about = [it.component && 'Component', shop && `${SHOP[shop]} item`].filter(Boolean).join(' · ');
-  const stats = ITEM_STATS.filter(([k]) => it.stats?.[k]).map(([k, name, ico, per]) =>
-    `<span class="tl">${ico ? statIco(ico, name) : '<i class="si no"></i>'}${name}</span><span class="tv">+${per ? pct(it.stats[k], 1) : nf(it.stats[k])}</span>`).join('');
-  return `<div class="tip-h"><span class="ti">${itemIco(id)}</span><span class="tn"><b>${esc(it.name)}</b>${about ? `<small>${about}</small>` : ''}</span><span class="hint gold">${nf(it.gold)} gold</span></div>`
-    + `<div class="tip-g">${stats || '<span class="tl">No stats</span>'}</div>${hint ? `<div class="tip-p">${esc(hint)}</div>` : ''}`;
+  return itemHead(it) + `<div class="tip-g">${itemStats(it) || '<span class="tl">No stats</span>'}</div>${hint ? `<div class="tip-p">${esc(hint)}</div>` : ''}`;
 }
 function showTip(el) {
   const k = el.dataset.ab, id = +el.dataset.it, tip = $('#tip');
@@ -1260,8 +1289,6 @@ function wireTouch() {
     if (l !== S.level) setLevel(l);
   });
   for (const t of ['pointerup', 'pointercancel']) ruler.addEventListener(t, () => { slide = null; });
-  // turning the phone can cross into or out of its layout, and the builds' hint says where the ranks are
-  PHONE.addEventListener('change', renderBuilds);
 }
 
 /* ---------- champion picker ---------- */
@@ -1326,9 +1353,10 @@ function paintTarget() {
     $(`#left-${k}`).textContent = r ? nf(left) : '–';
     if (RECEIPT) continue;
     $(`#h-bar-${k}`).style.setProperty('--w', (r ? share : 0).toFixed(1) + '%');
-    const when = {never: ', no crits', always: ', all crits'}[r?.combo.crits] || '';
-    $(`#h-cap-${k}`).innerHTML = !r ? '' : (raw ? 'Before armor and magic resist'
-      : r.combo.kills ? `<b>Kills</b> the target, ${nf(v.hp)} HP` : `<b>${Math.round(share)}%</b> of the target's ${nf(v.hp)} HP`) + when;
+    // raw output has no target to measure against: only how crits are counted, if it isn't the average
+    const when = {never: 'no crits', always: 'all crits'}[r?.combo.crits] || '';
+    $(`#h-cap-${k}`).innerHTML = !r ? '' : raw ? (when && when[0].toUpperCase() + when.slice(1))
+      : (r.combo.kills ? `<b>Kills</b> the target, ${nf(v.hp)} HP` : `<b>${Math.round(share)}%</b> of the target's ${nf(v.hp)} HP`) + (when && ', ' + when);
   }
   $$('#presets .chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.preset === `${v.hp},${v.ar},${v.mr}`));
   const e = S.enemy, eb = $('#enemy-btn');
@@ -1464,13 +1492,6 @@ function paintLines() {
 /* ---------- crits ---------- */
 const pct = (x, d = 0) => (Math.round(x * 100 * 10 ** d) / 10 ** d) + '%';
 const buildItems = k => S.builds[k].filter(Boolean).map(id => S.items.get(id)).filter(Boolean);
-/* How a build's crit chance is made: what its items give, and what the champion's kit makes of it. */
-function chanceWhy(k, R) {
-  const items = buildItems(k).reduce((s, it) => s + (it.stats?.critChance || 0), 0), total = R.stats.critChance;
-  if (!items && !total) return 'No crit chance';
-  if (Math.abs(items - total) < 0.0005) return `Crit chance: ${pct(items)} from items`;
-  return `Crit chance: ${pct(items)} from items, ${pct(total)} with ${S.champ.name}'s kit${total >= 1 && items < 1 ? ' (at most 100%)' : ''}`;
-}
 /* How a build's crit multiplier is made: the champion's base, crit damage from items added to it, then the kit. */
 function multWhy(k, R) {
   const base = S.champ.critDamage ?? 2, extra = buildItems(k).filter(it => it.stats?.critDamage), total = R.stats.critDamage;
@@ -1495,20 +1516,15 @@ function critCells(k, b, line, R) {
     <span class="cv${on('always')}" title="${esc(why)}"><b>${one('always')}</b>crit${mult ? `<em>${mult}</em>` : ''}</span>
     <span class="cv${on('average')}"><b>${one('average')}</b>avg at ${pct(R.stats.critChance)}</span>`;
 }
-/* The Breakdown's side column on crits: each build's chance and multiplier, and which sources can crit. */
+/* The Breakdown's side column on crits, when anything in the combo can crit: each build's chance and multiplier,
+   and the abilities that can crit, if any (auto attacks always can). */
 function critSide(A, B) {
-  const of = (r, k) => r?.combo.lines.find(l => l.key === k);
-  const can = [], cannot = [];
-  for (const k of LINES) {
-    const a = of(A, k), b = of(B, k);
-    if (!a) continue;
-    if (a.crits || b?.crits) can.push(lineLabel(k)[1]);
-    else if (a.total.raw || b?.total.raw) cannot.push(lineLabel(k)[1]);
-  }
-  if (!can.length) return '';
-  const cb = (k, R) => `<div class="cb"><span class="tag ${k} sm">${k.toUpperCase()}</span><span><b>${pct(R.stats.critChance)}</b> chance, crits deal <b>${pct(R.stats.critDamage, 1)}</b></span><p>${esc(chanceWhy(k, R))}. ${esc(multWhy(k, R))}.</p></div>`;
+  const of = (r, k) => r?.combo.lines.find(l => l.key === k), crits = k => !!(of(A, k)?.crits || of(B, k)?.crits);
+  if (!LINES.some(crits)) return '';
+  const can = LINES.filter(k => (k === 'p' || SLOTS.includes(k)) && crits(k)).map(k => lineLabel(k)[1]);
+  const cb = (k, R) => `<div class="cb"><span class="tag ${k} sm">${k.toUpperCase()}</span><span><b>${pct(R.stats.critChance)}</b> chance, crits deal <b>${pct(R.stats.critDamage, 1)}</b></span></div>`;
   return `<div class="bs"><span class="lbl">Crits</span>${cb('a', A)}${B ? cb('b', B) : ''}
-    <div class="notes"><p><b>Can crit:</b> ${esc(can.join(', '))}.</p>${cannot.length ? `<p><b>Can't crit:</b> ${esc(cannot.join(', '))}.</p>` : ''}
+    <div class="notes">${can.length ? `<p><b>Can crit:</b> ${esc(can.join(', '))}.</p>` : ''}
       <p>"Crits" above the totals counts them at the average, never or always. DPS and time to kill stay on the average.</p></div></div>`;
 }
 
@@ -1576,19 +1592,19 @@ function paintSide() {
       <div class="pair">
         <span class="mv a"><span class="tag a sm only-cmp">A</span><i>${raw ? '–' : nf(A.combo.blocked)}</i></span>
         ${B ? `<span class="mv b only-cmp"><span class="tag b sm">B</span><i>${raw ? '–' : nf(B.combo.blocked)}</i></span>` : ''}
-      </div><span class="hint">Damage lost to armor and magic resist</span></div>
+      </div></div>
     ${B ? `<div class="bs only-cmp"><span class="lbl">Where each build wins</span>${verdicts(A, B)}</div>` : ''}
     ${notes.length ? `<div class="bs"><span class="lbl">What these numbers assume</span><div class="notes">${notes.map(n => `<p>${esc(n)}</p>`).join('')}</div></div>` : ''}`;
 }
 const killTime = r => !r || S.target === 'raw' || r.fight.timeToKill === null ? '–' : r.fight.timeToKill.toFixed(1) + ' s';
 /* DPS and time to kill are the fight's (FightResult in src/engine/types.ts): autos, and the combo's abilities again
-   each time they are ready, from full health until the target dies. Its label says which abilities, its tooltip how. */
+   each time they are ready, from full health until the target dies. Its label is just DPS; its tooltip says how. */
 function paintFightLabel(A, B) {
   const el = $('#dps-lbl');
   if (!el) return;
   const used = SLOTS.filter(k => [A, B].some(r => r?.fight.abilities.includes(k))), names = used.map(k => k.toUpperCase());
   const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names.at(-1) : names[0];
-  el.textContent = used.length ? `DPS, autos + ${names.join(' ')}` : 'DPS, autos and procs';
+  el.textContent = 'DPS';
   el.title = (S.target === 'raw' ? 'Over 10 seconds, as there is nothing to kill: ' : 'From full health until the target dies: ')
     + (used.length ? `basic attacks, and ${list} again each time ${used.length > 1 ? 'they come' : 'it comes'} back off cooldown. ` : 'basic attacks and what they set off. Put abilities in the combo and the fight casts them too. ')
     + (S.target === 'raw' ? '' : 'A tanky target makes a long fight, where steady damage counts; a squishy one a short fight, where burst does.');
@@ -1728,33 +1744,33 @@ function statGroups(A, B) {
 /* A stat is a number, or text that starts with one ("25%", "18 + 35%"). */
 const statText = x => typeof x === 'number' ? (Number.isInteger(x) ? nf(x) : x.toFixed(2)) : x;
 const statNum = x => typeof x === 'number' ? x : parseFloat(x) || 0;
-/* The tabs page's More stats: every stat the calculation returns, as [label, value, format, note]. */
+/* The tabs page's More stats: every stat the calculation returns, as [label, value, format, note, the game's icon for it]. */
 const n0 = v => nf(v), p0 = v => pct(v), p1 = v => pct(v, 1), as2 = v => v.toFixed(2);
 const baseNote = l => l.bonus ? `${nf(l.base)} base + ${nf(l.bonus)}` : `base at level ${S.level}`;
 const MORE = [
   ['Offense', [
-    ['Attack damage', s => s.ad.total, n0, s => baseNote(s.ad)],
-    ['Ability power', s => s.ap.total, n0, s => s.ap.total ? 'all of it bonus' : 'none'],
-    ['Attack speed', s => s.attackSpeed.total, as2, s => `${s.attackSpeed.base} base, +${Math.round(s.attackSpeed.bonus * 100)}%`],
-    ['Crit chance', s => s.critChance, p0, s => s.critChance ? 'chance a hit that can crit does' : 'none'],
-    ['Crit damage', s => s.critDamage, p1, () => 'what a crit deals'],
-    ['Attack range', s => s.attackRange, n0, () => S.champ.ranged ? 'ranged' : 'melee'],
+    ['Attack damage', s => s.ad.total, n0, s => baseNote(s.ad), 'ad'],
+    ['Ability power', s => s.ap.total, n0, s => s.ap.total ? 'all of it bonus' : 'none', 'ap'],
+    ['Attack speed', s => s.attackSpeed.total, as2, s => `${s.attackSpeed.base} base, +${Math.round(s.attackSpeed.bonus * 100)}%`, 'as'],
+    ['Crit chance', s => s.critChance, p0, s => s.critChance ? 'chance a hit that can crit does' : 'none', 'crit'],
+    ['Crit damage', s => s.critDamage, p1, () => 'what a crit deals', 'crit'],
+    ['Attack range', s => s.attackRange, n0, () => S.champ.ranged ? 'ranged' : 'melee', 'range'],
   ]],
   ['Penetration and tempo', [
-    ['Lethality', s => s.lethality, n0, s => s.lethality ? 'flat armor penetration' : 'none'],
-    ['Armor penetration', s => s.armorPenPct, p0, s => s.armorPenPct ? 'percent' : 'none'],
-    ['Magic penetration', s => s.magicPenFlat, n0, s => s.magicPenFlat ? 'flat' : 'none'],
-    ['Magic penetration %', s => s.magicPenPct, p0, s => s.magicPenPct ? 'percent' : 'none'],
-    ['Ability haste', s => s.abilityHaste, n0, s => s.abilityHaste ? `${Math.round(s.abilityHaste / (100 + s.abilityHaste) * 100)}% shorter cooldowns` : 'none'],
-    ['Move speed', s => s.moveSpeed.total, n0, s => baseNote(s.moveSpeed)],
+    ['Lethality', s => s.lethality, n0, s => s.lethality ? 'flat armor penetration' : 'none', 'armorpen'],
+    ['Armor penetration', s => s.armorPenPct, p0, s => s.armorPenPct ? 'percent' : 'none', 'armorpen'],
+    ['Magic penetration', s => s.magicPenFlat, n0, s => s.magicPenFlat ? 'flat' : 'none', 'magicpen'],
+    ['Magic penetration %', s => s.magicPenPct, p0, s => s.magicPenPct ? 'percent' : 'none', 'magicpen'],
+    ['Ability haste', s => s.abilityHaste, n0, s => s.abilityHaste ? `${Math.round(s.abilityHaste / (100 + s.abilityHaste) * 100)}% shorter cooldowns` : 'none', 'haste'],
+    ['Move speed', s => s.moveSpeed.total, n0, s => baseNote(s.moveSpeed), 'ms'],
   ]],
   ['Health and sustain', [
-    ['Health', s => s.hp.total, n0, s => baseNote(s.hp)],
-    ['Mana', s => s.mana.total, v => v ? nf(v) : '–', s => s.mana.total ? baseNote(s.mana) : 'no mana'],
-    ['Armor', s => s.armor.total, n0, s => baseNote(s.armor)],
-    ['Magic resist', s => s.mr.total, n0, s => baseNote(s.mr)],
-    ['Life steal', s => s.lifeSteal, p0, s => s.lifeSteal ? 'on attacks' : 'none'],
-    ['Omnivamp', s => s.omnivamp, p0, s => s.omnivamp ? 'on all damage' : 'none'],
+    ['Health', s => s.hp.total, n0, s => baseNote(s.hp), 'hp'],
+    ['Mana', s => s.mana.total, v => v ? nf(v) : '–', s => s.mana.total ? baseNote(s.mana) : 'no mana', 'mana'],
+    ['Armor', s => s.armor.total, n0, s => baseNote(s.armor), 'armor'],
+    ['Magic resist', s => s.mr.total, n0, s => baseNote(s.mr), 'mr'],
+    ['Life steal', s => s.lifeSteal, p0, s => s.lifeSteal ? 'on attacks' : 'none', 'lifesteal'],
+    ['Omnivamp', s => s.omnivamp, p0, s => s.omnivamp ? 'on all damage' : 'none', 'omnivamp'],
   ]],
 ];
 function renderStats() {
@@ -1764,16 +1780,16 @@ function renderStats() {
     const head = B
       ? `<div class="srow shead"><span class="lbl">${group}</span><span class="tag a xs">A</span><span class="tag b xs">B</span><span class="lbl">Gap</span></div>`
       : `<div class="srow shead"><span class="lbl">${group}</span><span></span><span></span></div>`;
-    return `<div>${head}${rows.map(([label, get, fmt, note]) => {
+    return `<div>${head}${rows.map(([label, get, fmt, note, ico]) => {
       all++;
-      const a = get(sa);
-      if (!B) return `<div class="srow"><span class="sn">${label}</span><span class="n">${fmt(a)}</span><span class="note">${esc(note(sa))}</span></div>`;
+      const a = get(sa), sn = `<span class="sn">${statMark(ico, label)}${label}</span>`;
+      if (!B) return `<div class="srow">${sn}<span class="n">${fmt(a)}</span><span class="note">${esc(note(sa))}</span></div>`;
       const b = get(sb);
       // compared as shown: two numbers that read the same are the same
-      if (fmt(a) === fmt(b)) return `<div class="srow same"><span class="sn">${label}</span><span class="n">${fmt(a)}</span><span class="n">${fmt(b)}</span><span class="g">same</span></div>`;
+      if (fmt(a) === fmt(b)) return `<div class="srow same">${sn}<span class="n">${fmt(a)}</span><span class="n">${fmt(b)}</span><span class="g">same</span></div>`;
       diff++;
       const w = a > b ? 'a' : 'b';
-      return `<div class="srow"><span class="sn">${label}</span><span class="n${w === 'a' ? ' win' : ''}">${fmt(a)}</span><span class="n${w === 'b' ? ' win' : ''}">${fmt(b)}</span><span class="g ${w}">+${fmt(Math.abs(a - b))}</span></div>`;
+      return `<div class="srow">${sn}<span class="n${w === 'a' ? ' win' : ''}">${fmt(a)}</span><span class="n${w === 'b' ? ' win' : ''}">${fmt(b)}</span><span class="g ${w}">+${fmt(Math.abs(a - b))}</span></div>`;
     }).join('')}</div>`;
   }).join('');
   $('#ts-stats').textContent = B ? `All ${all}, ${diff} differ; where each is ahead` : `All ${all} stats`;
@@ -1788,7 +1804,7 @@ function paintAhead(sa, sb) {
   const side = (k, s, o) => {
     const up = rows.filter(([, get, fmt]) => fmt(get(s)) !== fmt(get(o)) && get(s) > get(o));
     return `<div class="ah ${k}"><div class="ah-head"><span class="tag ${k} sm">${k.toUpperCase()}</span>${esc(nameOf(k))}</div>`
-      + (up.map(([label, get, fmt]) => `<div class="ah-row"><b>+${fmt(get(s) - get(o))}</b><span>${label}</span></div>`).join('')
+      + (up.map(([label, get, fmt, , ico]) => `<div class="ah-row"><b>+${fmt(get(s) - get(o))}</b><span>${statMark(ico, label)}${label}</span></div>`).join('')
         || '<div class="ah-none">Ahead on nothing</div>') + '</div>';
   };
   const same = rows.filter(([, get, fmt]) => fmt(get(sa)) === fmt(get(sb)) && get(sa)).map(([label, get, fmt]) => `${label.toLowerCase()} <b>${fmt(get(sa))}</b>`);
@@ -2076,8 +2092,11 @@ function ago(t) {
   if (days < 7) return `${days} days ago`;
   return new Date(t).toLocaleDateString('en-US', {month: 'short', day: 'numeric', ...(new Date(t).getFullYear() !== now.getFullYear() && {year: 'numeric'})});
 }
-/* One entry: a button that loads it, and its Rename and Delete. While renamed, its name is a field instead.
-   Items that have left the game since it was saved are empty slots, as loading will leave them. */
+/* One entry: a button that loads it, and its Rename and Delete, as icons. While renamed, its name is a field instead.
+   Items that have left the game since it was saved are empty slots, as loading will leave them. The entry on
+   screen carries a small "On screen" mark (paintSaved sets aria-current). */
+const PENCIL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg>';
+const TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>';
 function savedRow(e) {
   const here = id => id && S.items.has(id), when = new Date(e.at), champ = S.champs.find(c => c.id === e.c)?.name || e.c;
   const face = `<span class="sv-face" aria-hidden="true" title="${esc(champ)}">${champIco(e.c)}</span>`;
@@ -2090,15 +2109,16 @@ function savedRow(e) {
     + e[k].map(id => `<span class="sv-it${here(id) ? '' : ' empty'}">${here(id) ? itemIco(id) : ''}</span>`).join('') + '</span>';
   // read out as one line; the pictures are for the eye
   const label = [e.name, `${champ}, level ${e.l}`, `saved ${said}`, ...also].join(', ');
-  return `<li class="sv" data-id="${e.id}"><button class="sv-load" data-act="load" aria-label="${esc(label)}" title="Load this build">${face}<span class="sv-txt"><b>${esc(e.name)}</b><span class="sv-meta">${meta}</span></span>
+  return `<li class="sv" data-id="${e.id}"><button class="sv-load" data-act="load" aria-label="${esc(label)}" title="Load this build">${face}<span class="sv-txt"><span class="sv-l1"><b>${esc(e.name)}</b><i class="sv-on" aria-hidden="true">On screen</i></span><span class="sv-meta">${meta}</span></span>
     <span class="sv-bs" aria-hidden="true">${build('a')}${build('b')}</span></button>
-    <span class="sv-acts"><button class="act" data-act="rename" aria-label="Rename ${esc(e.name)}">Rename</button><button class="act" data-act="delete" aria-label="Delete ${esc(e.name)}">Delete</button></span></li>`;
+    <span class="sv-acts"><button class="sv-ib" data-act="rename" aria-label="Rename ${esc(e.name)}" title="Rename">${PENCIL}</button><button class="sv-ib del" data-act="delete" aria-label="Delete ${esc(e.name)}" title="Delete">${TRASH}</button></span></li>`;
 }
 function renderSaved() {
   const ul = $('#saved-list');
   if (!ul || !S.items.size) return;
-  const list = readSaved(), n = list.length, badge = $('#saved-n');
+  const list = readSaved(), n = list.length, badge = $('#saved-n'), count = $('#saved-count');
   if (badge) { badge.textContent = n; badge.hidden = !n; badge.parentElement.setAttribute('aria-label', `Saved builds${n ? `, ${n}` : ''}`); }
+  if (count) count.textContent = n ? `${n} of ${SAVED_MAX}` : '';
   $('#saved-save').disabled = $('#saved-name').disabled = !!savedErr;
   // redrawing keeps the focus on the same button of the same entry
   const f = document.activeElement, back = ul.contains(f) && `[data-id="${f.closest('[data-id]')?.dataset.id}"] [data-act="${f.dataset.act}"]`;

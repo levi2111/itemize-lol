@@ -109,10 +109,11 @@ body[data-target="raw"] .needs-target{opacity:.28;pointer-events:none}
 .mark{display:inline-flex;align-items:baseline;font-stretch:108%;font-weight:800;font-size:1.2rem;letter-spacing:-.03em;color:var(--text);text-decoration:none}
 .mark b{font-weight:900;color:var(--ink);background:var(--a);border-radius:2px;padding:0 .26em}
 .mark span{padding-left:.12em;color:var(--dim)}
-.nav{display:flex;gap:1.4rem;font-size:.84rem;font-weight:500}
+.nav{display:flex;align-items:center;gap:1.4rem;font-size:.84rem;font-weight:500}
 .nav a{color:var(--dim);text-decoration:none}
 .nav a:hover,.nav a[aria-current]{color:var(--text)}
-.nav i{font-style:normal;font-family:var(--font-mono);font-size:.66rem;border:1px solid var(--rule);border-radius:2px;padding:0 .3rem;margin-left:.3rem}
+/* the page's name, plain text while it is the only page */
+.nav .here{color:var(--dim);cursor:default}
 .wf{font-family:var(--font-mono);font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);border:1px dashed var(--rule);padding:.25rem .5rem}
 .patch{font-family:var(--font-mono);font-size:.76rem;color:var(--dim)}
 .patch b{color:var(--text);font-weight:600}
@@ -133,7 +134,7 @@ body[data-compare="off"] .tot{min-width:19rem}
 .tot-bar{height:.4rem;background:rgba(236,231,216,.12);border-radius:1px;overflow:hidden}
 .tot-bar i{display:block;height:100%;width:var(--w,0%);background:var(--c);transition:width .2s}
 body[data-target="raw"] .tot-bar{visibility:hidden}
-.tot-cap{font-size:.82rem;color:var(--dim);white-space:nowrap}
+.tot-cap{min-height:1.3em;font-size:.82rem;color:var(--dim);white-space:nowrap}
 .tot-cap b{color:var(--text)}
 .hero-side{display:grid;align-content:end;gap:.8rem;padding-bottom:.2rem}
 .metric{display:grid;grid-template-columns:10.6rem auto;align-items:center;column-gap:.8rem}
@@ -199,7 +200,6 @@ body[data-target="raw"] .tot-bar{visibility:hidden}
 
 .skills{display:grid;gap:.6rem;align-content:start}
 .skills .sec-head{justify-content:flex-start;align-items:center;gap:.9rem}
-.skills .sec-head .hint{margin-left:auto}
 .rank-same{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.6rem 2.4rem;align-items:end}
 .skill-row{display:flex;gap:1.1rem}
 .skill{display:grid;gap:.4rem;width:3.5rem}
@@ -499,6 +499,8 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 5rem 10rem}
 .srow .note{font-size:.8rem;color:var(--faint);white-space:nowrap}
 .srow.same .n,.srow.same .sn{color:var(--faint)}
 .srow.same .g{color:var(--faint);font-weight:400}
+.srow .sn .si,.ah-row .si{margin-right:.45rem}
+.srow.same .si{opacity:.6}
 /* where each build is ahead: the stats one build has more of, by how much, A's left and B's right */
 .ahead{display:grid;gap:.6rem;padding-top:.9rem;border-top:1px solid var(--rule)}
 .ahead>.sec-head{justify-content:flex-start;align-items:center}
@@ -512,38 +514,52 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 5rem 10rem}
 .ah-same{margin:0;font-size:.8rem;color:var(--faint)}
 .ah-same b{color:var(--dim);font-weight:600}
 
-/* ---------- saved builds: the menu under Saved builds in the top bar ---------- */
-/* As on the receipt page: the nav's Saved builds opens the list in a menu (app.js draws it, savedRow). Each
-   entry is two lines: its name and when, then the items of A and B; the one on screen is marked. */
-.nav .set>.menu-btn{color:var(--dim)}
-.nav .set>.menu-btn:hover,.nav .set>.menu-btn[aria-expanded="true"]{color:var(--text)}
-.menu.saved{left:0;right:auto;width:32rem;gap:.55rem;padding:.85rem .95rem .9rem;font-size:.84rem;font-weight:400}
+/* ---------- saved builds: a small dropdown in the top bar, and the menu it opens ---------- */
+/* As on the receipt page: Saved builds opens the list in a menu (app.js draws it, savedRow), with a field to save
+   the setup on screen above it. Each entry is two lines: its name and when, then the items of A and B; the one on
+   screen is marked. Rename and Delete are quiet icons that come up with the pointer or the focus. */
+.sv-btn{display:inline-flex;align-items:center;gap:.4rem;height:1.85rem;padding:0 .5rem 0 .65rem;border:1px solid var(--rule);border-radius:3px;background:var(--bg);font-size:.8rem;font-weight:600;color:var(--dim);white-space:nowrap}
+.sv-btn:hover,.sv-btn[aria-expanded="true"]{border-color:var(--faint);color:var(--text)}
+.sv-btn i{display:inline-grid;place-items:center;min-width:1.15rem;height:1.15rem;padding:0 .28rem;border-radius:99px;background:rgba(236,231,216,.12);font-style:normal;font-family:var(--font-mono);font-size:.64rem;font-weight:600;color:var(--text)}
+.sv-btn .caret{width:.55rem;height:.55rem;flex:none;transition:transform .15s}
+.sv-btn[aria-expanded="true"] .caret{transform:rotate(180deg)}
+.menu.saved{left:0;right:auto;width:32rem;gap:.6rem;padding:.8rem .9rem .5rem;font-size:.84rem;font-weight:400}
 .saved p{margin:0}
+.sv-top{display:flex;align-items:baseline;justify-content:space-between;gap:.8rem}
+.sv-count{font-family:var(--font-mono);font-size:.7rem;color:var(--faint)}
 .sv-form{display:flex;gap:.5rem}
+.sv-form .btn{flex:none;padding:.36rem 1rem}
 .sv-form .btn:disabled,.sv-form .search:disabled{opacity:.4;cursor:default}
-.saved .sec-head{align-items:center;padding-top:.6rem;border-top:1px solid var(--rule)}
 .sv-status{display:flex;align-items:center;gap:.6rem;font-size:.78rem;color:var(--dim)}
 .sv-status:empty{display:none}
-.sv-list{margin:0;padding:0;list-style:none;max-height:min(26rem,calc(100vh - 15rem));overflow:auto;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
-.sv{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:.6rem;border-bottom:1px solid rgba(37,80,77,.6)}
-.sv-load{display:grid;grid-template-columns:2.4rem minmax(0,1fr);grid-template-areas:"face txt" "face items";column-gap:.7rem;row-gap:.35rem;padding:.5rem .45rem;border-left:2px solid transparent;text-align:left}
+.sv-list{margin:0 -.5rem;padding:0;list-style:none;max-height:min(26rem,calc(100vh - 15rem));overflow:auto;border-top:1px solid var(--rule);scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.sv{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:.4rem;padding-right:.4rem;border-bottom:1px solid rgba(37,80,77,.6)}
+.sv:last-child{border-bottom:0}
+.sv-load{display:grid;grid-template-columns:2.4rem minmax(0,1fr);grid-template-areas:"face txt" "face items";column-gap:.7rem;row-gap:.35rem;padding:.55rem .5rem;border-left:2px solid transparent;text-align:left}
 .sv-load:hover{background:rgba(236,231,216,.05)}
 .sv-load[aria-current="true"]{border-left-color:var(--text);background:linear-gradient(90deg,rgba(236,231,216,.07),transparent)}
-.sv-load[aria-current="true"] .sv-meta::before{content:"On screen · ";color:var(--dim)}
 .sv-face{width:2.4rem;height:2.4rem;border:1px solid var(--rule);border-radius:3px;overflow:hidden;background:var(--bg)}
 .sv-load>.sv-face{grid-area:face}
 .sv-txt{grid-area:txt;display:grid;gap:.1rem;min-width:0}
-.sv-txt b{font-size:.9rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sv-l1{display:flex;align-items:center;gap:.45rem;min-width:0}
+.sv-l1 b{min-width:0;font-size:.9rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sv-on{display:none;flex:none;padding:.05rem .32rem;border-radius:2px;background:var(--text);color:var(--ink);font-style:normal;font-size:.58rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;line-height:1.35}
+.sv-load[aria-current="true"] .sv-on{display:inline-block}
 .sv-meta{font-size:.74rem;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sv-bs{grid-area:items;display:flex;gap:.9rem}
 .sv-b{display:flex;align-items:center;gap:.18rem}
 .sv-b .tag{margin-right:.25rem}
 .sv-it{width:1.4rem;height:1.4rem;border:1px solid var(--rule);border-radius:2px;overflow:hidden;background:var(--bg)}
 .sv-it.empty{border-style:dashed;border-color:var(--faint);opacity:.5}
-.sv-acts{display:flex;gap:.25rem;padding-top:.55rem}
-.sv.editing{grid-template-columns:2.4rem minmax(0,1fr) auto;column-gap:.7rem;align-items:center;padding:.5rem 0 .5rem calc(.45rem + 2px)}
-.sv.editing .sv-acts{padding:0}
-.sv-none{padding:.75rem .85rem;border:1px dashed var(--faint);border-radius:4px;color:var(--dim)}
+.sv-acts{display:flex;gap:.1rem;opacity:0;transition:opacity .12s}
+.sv:hover .sv-acts,.sv:focus-within .sv-acts,.sv.editing .sv-acts{opacity:1}
+.sv-ib{width:1.75rem;height:1.75rem;display:grid;place-items:center;border-radius:3px;color:var(--faint)}
+.sv-ib svg{width:.9rem;height:.9rem}
+.sv-ib:hover,.sv-ib:focus-visible{color:var(--text);background:rgba(236,231,216,.08)}
+.sv-ib.del:hover{color:var(--warn)}
+.sv.editing{grid-template-columns:2.4rem minmax(0,1fr) auto;column-gap:.7rem;padding:.5rem .4rem .5rem calc(.5rem + 2px)}
+.sv-none{margin:.6rem .5rem .4rem;padding:.75rem .85rem;border:1px dashed var(--faint);border-radius:4px;color:var(--dim)}
+@media (hover:none){.sv-acts{opacity:1}}
 
 /* ---------- the combo: one line in the band, edited in a dropdown ---------- */
 .ibtn{width:1.65rem;height:1.65rem;display:inline-grid;place-items:center;flex:none;border:1px solid var(--rule);border-radius:3px;background:var(--well);color:var(--dim)}
@@ -646,13 +662,16 @@ body:not([data-ranks="split"]) .rank-split{display:none!important}
 </style>
 <style>
 /* ---------- additions to the wireframe ---------- */
-/* Riot's required notice has to be readily visible, so it gets a row of its own under the panes,
-   two lines tall. The row is part of .app's minimum height, and the root font size (top of the
+/* Riot's required notice has to be readily visible, so it gets a row of its own under the panes. It is
+   set quietly, small and grey on the page's own background, so that it doesn't weigh on the page, but in
+   full and readable. The row is part of .app's minimum height, and the root font size (top of the
    first sheet) is what keeps that minimum inside the window: when the two disagree, body's
    overflow:hidden cuts the notice off. */
 .app{grid-template-rows:3.1rem auto auto minmax(0,1fr) auto;min-height:51.4rem}
-.legal{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:1.5rem;min-height:2.8rem;padding:.4rem 1.5rem .45rem;border-top:1px solid var(--rule);background:var(--well);font-size:max(.7rem,10px);line-height:1.35;color:var(--dim)}
-.legal p{margin:0}
+.legal{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:1.5rem;min-height:2.3rem;padding:.3rem 1.5rem;border-top:1px solid rgba(37,80,77,.5);font-size:max(.66rem,10px);line-height:1.35;color:var(--faint)}
+.legal p{margin:0;max-width:110rem}
+.legal .fb-btn{padding:.16rem .6rem;border-color:var(--rule);font-size:.72rem;color:var(--dim)}
+.legal .fb-btn:hover,.legal .fb-btn[aria-expanded="true"]{border-color:var(--faint);color:var(--text)}
 .legal-acts{display:flex;align-items:center;gap:.5rem}
 .legal .cx-pill{display:none}
 /* contact: an envelope in the bar lists the ways to reach the maker; Feedback, at the end of the notice,
@@ -741,22 +760,20 @@ body:not(.has-items) .slot:not(.empty),#skill-row:not(.has-kit) .skill-ico{anima
 /* an item with effects to show and nothing to set: the button appears on hover */
 .slot .cfg.info{display:none}
 .slot:hover .cfg.info,.slot:focus-within .cfg.info,.slot .cfg.info[aria-expanded="true"]{display:grid}
-.imenu{position:fixed;z-index:45;width:20.5rem;max-height:calc(100vh - 1rem);overflow:auto;display:grid;gap:.75rem;padding:.8rem .85rem .85rem;background:var(--well);border:1px solid var(--faint);border-radius:4px;box-shadow:0 1rem 2rem rgba(0,0,0,.55);scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
-.im-head{display:grid;grid-template-columns:2.4rem minmax(0,1fr) auto;gap:.65rem;align-items:center}
-.im-head b{display:block;font-size:.98rem;font-weight:800;line-height:1.15}
-.im-head .hint{display:flex;align-items:center;gap:.3rem;font-size:.74rem}
-.im-ico{width:2.4rem;height:2.4rem;border:1px solid var(--rule);border-radius:3px;overflow:hidden}
-.im-sec{display:grid;gap:.5rem;padding-top:.65rem;border-top:1px solid var(--rule)}
-.ie{display:grid;gap:.3rem}
-.ie-h{display:flex;align-items:baseline;justify-content:space-between;gap:.6rem}
-.ie-h b{font-size:.86rem;font-weight:700}
-.ie-t{font-size:.74rem;font-weight:600;color:var(--dim)}
+/* The menu is the item's card (the hover card's head and stats, see the item card below) with its effects and
+   settings under it: an effect's name, type and what one firing deals, and a stepper or a checkbox per setting.
+   What explains them is behind Details, at the foot. */
+.imenu{position:fixed;z-index:45;width:21rem;max-height:calc(100vh - 1rem);overflow:auto;display:grid;gap:.55rem;padding:.65rem .75rem .55rem;background:var(--well);border:1px solid var(--faint);border-radius:4px;box-shadow:0 .8rem 1.6rem rgba(0,0,0,.55);font-size:.8rem;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.imenu .tip-h .esc{flex:none;margin-left:.15rem}
+.im-sec{display:grid;gap:.45rem;padding-top:.55rem;border-top:1px solid var(--rule)}
+.ie{display:grid;gap:.25rem}
+.ie-h{display:flex;align-items:baseline;gap:.6rem}
+.ie-h b{flex:1;min-width:0;font-size:.86rem;font-weight:700}
+.ie-t{font-size:.72rem;font-weight:600;color:var(--dim)}
 .ie-t.physical{color:var(--phys)} .ie-t.magic{color:var(--magic)}
-.ie-v{display:flex;align-items:baseline;justify-content:space-between;gap:.6rem;font-size:.76rem;color:var(--faint)}
-.ie-n i{font-style:normal;font-family:var(--font-mono);font-size:1rem;font-weight:600;color:var(--text);margin-right:.4rem}
-.ie-v em{flex-basis:100%;font-style:normal;color:var(--faint)}
-.ie-v{flex-wrap:wrap}
-.ic{display:flex;align-items:center;gap:.6rem;min-height:1.75rem;font-size:.82rem;color:var(--dim);cursor:default}
+.ie-n{min-width:2.6rem;text-align:right;font-family:var(--font-mono);font-size:.95rem;font-weight:600;color:var(--text)}
+.im-d{margin:0;font-size:.72rem;line-height:1.4;color:var(--faint)}
+.ic{display:flex;align-items:center;gap:.4rem;min-height:1.75rem;font-size:.8rem;line-height:1.25;color:var(--dim);cursor:default}
 .ic>span:first-child{flex:1;min-width:0}
 label.ic{cursor:pointer}
 .ic input[type="checkbox"]{width:.95rem;height:.95rem;margin:0;accent-color:var(--text)}
@@ -764,14 +781,21 @@ label.ic{cursor:pointer}
 .stp button{width:1.45rem;height:1.45rem;display:grid;place-items:center;border:1px solid var(--rule);border-radius:2px;font-family:var(--font-mono);font-size:.9rem;color:var(--dim)}
 .stp button:hover:not(:disabled){color:var(--ink);background:var(--text);border-color:var(--text)}
 .stp button:disabled{opacity:.35;cursor:default}
-.stp output{min-width:2.6rem;text-align:center;font-family:var(--font-mono);font-size:.92rem;font-weight:700;color:var(--text)}
-.stp output em{font-style:normal;font-weight:400;font-size:.66rem;color:var(--faint);margin-right:.3rem}
-.stp small{font-family:var(--font-mono);font-size:.68rem;color:var(--faint);margin-left:.15rem}
-.ic.auto .stp output{color:var(--dim)}
-.ic .act{height:1.45rem}
-.im-notes{display:grid;gap:.3rem;padding-top:.6rem;border-top:1px solid var(--rule);font-size:.74rem;color:var(--faint)}
+.stp output{min-width:1.9rem;text-align:center;font-family:var(--font-mono);font-size:.92rem;font-weight:700;color:var(--text)}
+.stp small{font-family:var(--font-mono);font-size:.68rem;color:var(--faint)}
+/* a count the combo decides is dimmer than one set by hand */
+.ic.auto .stp output{color:var(--faint);font-weight:500}
+.ireset{flex:none;width:1.45rem;height:1.45rem;display:grid;place-items:center;border-radius:2px;color:var(--faint)}
+.ireset svg{width:.8rem;height:.8rem}
+.ireset:hover,.ireset:focus-visible{color:var(--text);background:rgba(236,231,216,.08)}
+.im-notes{display:grid;gap:.3rem;padding-top:.55rem;border-top:1px solid var(--rule);font-size:.72rem;line-height:1.4;color:var(--faint)}
 .im-notes p{margin:0}
-.im-foot{display:flex;justify-content:flex-end}
+.im-foot{display:flex;align-items:center;justify-content:space-between;gap:.6rem;min-height:1.6rem;padding-top:.4rem;border-top:1px solid var(--rule)}
+.im-det{display:inline-flex;align-items:center;gap:.2rem;font-size:.74rem;font-weight:600;color:var(--dim)}
+.im-det svg{width:.8rem;height:.8rem;transition:transform .15s}
+.im-det[aria-expanded="true"] svg{transform:rotate(90deg)}
+.im-det:hover,.im-det[aria-expanded="true"]{color:var(--text)}
+.im-foot .act{height:1.45rem}
 
 /* ---------- an ability's card, on hover ---------- */
 .tip{position:fixed;z-index:60;min-width:15rem;max-width:22rem;display:grid;gap:.55rem;padding:.65rem .75rem .7rem;background:var(--well);border:1px solid var(--faint);border-radius:4px;box-shadow:0 .8rem 1.6rem rgba(0,0,0,.55);pointer-events:none;font-size:.8rem}
@@ -793,7 +817,7 @@ label.ic{cursor:pointer}
 /* an item's card: its icon, name and cost, then its stats */
 .tip-h .ti{flex:none;width:2.1rem;border:1px solid var(--faint);border-radius:2px;overflow:hidden}
 .tip-h .tn{display:grid;min-width:0}
-.tip-h .tn small{font-size:.7rem;color:var(--faint)}
+.tip-h .tn small{display:flex;align-items:center;gap:.35rem;font-size:.7rem;color:var(--faint)}
 .tip-h .gold{font-family:var(--font-mono);color:var(--text)}
 .tl .si{margin-right:.4rem}
 .si.no{visibility:hidden}
@@ -1029,9 +1053,6 @@ body[data-compare="off"] .tot{min-width:0;padding-right:var(--pr)}
 /* the slot's small round buttons get a finger-sized area around them */
 .slot .cfg::before,.slot .rm::before{content:"";position:absolute;inset:-.55rem}
 .skills .sec-head{flex-wrap:wrap}
-.skills .sec-head .hint{margin-left:0;flex-basis:100%;font-size:0}
-/* the hint says what a tap does (its desktop words stay for a reader) */
-.skills .sec-head .hint::after{content:"Tap an ability for its numbers, a pip to set its rank";content:"Tap an ability for its numbers, a pip to set its rank"/"";font-size:.8rem}
 /* ranks: a row per ability, its pips wide enough to tap */
 .rank-same{grid-template-columns:minmax(0,1fr);gap:.9rem}
 .skill-row{display:grid;gap:.5rem}
@@ -1138,7 +1159,9 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
 .step button,.stp button{width:2.75rem;height:2.75rem;font-size:1.1rem}
 .ic{min-height:3rem}
 .ic input[type="checkbox"]{width:1.35rem;height:1.35rem}
-.im-head .esc{align-self:start}
+.imenu .tip-h .esc{align-self:start}
+.ireset,.sv-ib{width:2.5rem;height:2.5rem}
+.im-det{min-height:2.5rem}
 .veil{place-items:end stretch}
 .cm{width:100%;height:calc(100% - 2.5rem);border-width:1px 0 0;border-radius:.75rem .75rem 0 0;padding-bottom:env(safe-area-inset-bottom)}
 .cm-head{grid-template-columns:minmax(0,1fr) auto;gap:.6rem;padding:.75rem var(--pr) .6rem var(--pl)}
@@ -1185,16 +1208,14 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
     <div class="bar-l">
       <a class="mark" href="#" aria-label="itemize.lol"><b>itemize</b><span>.lol</span></a>
       <nav class="nav" aria-label="Site">
-        <a href="#" aria-current="page">Workbench</a>
+        <span class="here" aria-current="page">Workbench</span>
         <div class="set">
-          <button class="menu-btn" id="saved-link" aria-haspopup="dialog" aria-expanded="false" aria-controls="saved-menu">Saved builds<i id="saved-n" hidden>0</i></button>
+          <button class="menu-btn sv-btn" id="saved-link" aria-haspopup="dialog" aria-expanded="false" aria-controls="saved-menu">Saved builds<i id="saved-n" hidden>0</i><svg class="caret" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
           <div class="menu saved" id="saved-menu" role="dialog" aria-label="Saved builds" hidden>
-            <label class="lbl" for="saved-name">Save this setup</label>
-            <div class="sv-form"><input class="search" id="saved-name" maxlength="80" autocomplete="off" spellcheck="false"><button class="btn" id="saved-save">Save</button></div>
+            <div class="sv-top"><span class="lbl" id="saved-h">Saved builds</span><span class="sv-count" id="saved-count"></span></div>
+            <div class="sv-form"><input class="search" id="saved-name" maxlength="80" autocomplete="off" spellcheck="false" aria-label="Name for this setup"><button class="btn" id="saved-save">Save</button></div>
             <p class="sv-status" id="saved-status" role="status"></p>
-            <div class="sec-head"><span class="lbl" id="saved-h">Saved in this browser</span><span class="hint">Click one to load it</span></div>
             <ul class="sv-list" id="saved-list" aria-labelledby="saved-h"></ul>
-            <p class="hint">Kept in this browser only, up to 50. Copy build link keeps one anywhere.</p>
           </div>
         </div>
       </nav>
@@ -1259,7 +1280,7 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
           <button role="radio" data-crit="never" aria-checked="false" title="Nothing crits: the least this combo does">Never</button>
           <button role="radio" data-crit="always" aria-checked="false" title="Everything that can crit does: the most this combo does">Always</button>
         </div>
-        <span class="lbl">Show as</span>
+        <span class="lbl">Damage</span>
         <div class="seg" id="tseg" role="radiogroup" aria-label="Show damage as">
           <button role="radio" data-t="raw" aria-checked="false">Raw output</button>
           <button role="radio" data-t="dummy" aria-checked="true">Target dummy</button>
@@ -1284,7 +1305,7 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
     </div>
     <div class="hero-side">
       <div class="metric">
-        <span class="lbl" id="dps-lbl">DPS, to the kill</span>
+        <span class="lbl" id="dps-lbl">DPS</span>
         <div class="metric-v">
           <span class="mv a win"><span class="tag a sm only-cmp">A</span><i>–</i></span>
           <span class="mv b only-cmp"><span class="tag b sm">B</span><i>–</i></span>
@@ -1330,7 +1351,6 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
           <div class="sec-head">
             <span class="lbl">Ability ranks</span>
             <button class="ibtn only-cmp" id="rank-link" aria-pressed="true"><svg class="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><svg class="i-unlink" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18.84 12.25 1.72-1.71h-.02a5.004 5.004 0 0 0-.12-7.07 5.006 5.006 0 0 0-6.95 0l-1.72 1.71"/><path d="m5.17 11.75-1.71 1.71a5.004 5.004 0 0 0 .12 7.07 5.006 5.006 0 0 0 6.95 0l1.71-1.71"/><path d="M8 2v3M2 8h3M16 19v3M19 16h3"/></svg></button>
-            <span class="hint">Click a pip to set a rank</span>
           </div>
           <div class="rank-same">
           <div class="skill-row" id="skill-row">

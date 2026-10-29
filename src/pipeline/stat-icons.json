@@ -1,5 +1,5 @@
 {
- "about": "Where the game's stat icons sit on texticons.png, the sheet item tooltips draw them from. The game publishes no map of the sheet, so these were found by hand. `pixels` is a hash of what the 20x20 tile draws (its RGBA pixels, fully transparent ones cleared): `npm run data:art` stops when one no longer matches, and `npm run data:art -- --accept` records the tiles as they are now once they have been looked at.",
+ "about": "Where the game's stat icons sit on texticons.png, the sheet item tooltips draw them from. The game publishes no map of the sheet, so these were found by hand: by matching each against the League wiki's named stat icons (Attack speed icon.png and so on), which are cut from the game. `pixels` is a hash of what the 20x20 tile draws (its RGBA pixels, fully transparent ones cleared): `npm run data:art` stops when one no longer matches, and `npm run data:art -- --accept` records the tiles as they are now once they have been looked at.",
  "checked": "16.21.1",
  "size": 20,
  "icons": {
@@ -9,6 +9,14 @@
   "ap": { "x": 96, "y": 24, "pixels": "0ca871a832dd3495" },
   "armor": { "x": 0, "y": 48, "pixels": "f9cc243329277a95" },
   "mr": { "x": 72, "y": 0, "pixels": "ff062003401077f1" },
-  "crit": { "x": 72, "y": 48, "pixels": "9cff749f54d4f2d3" }
+  "crit": { "x": 72, "y": 48, "pixels": "9cff749f54d4f2d3" },
+  "as": { "x": 25, "y": 48, "pixels": "48f6697d3fa7014c" },
+  "haste": { "x": 48, "y": 48, "pixels": "0d2defddc83b42ef" },
+  "armorpen": { "x": 96, "y": 72, "pixels": "741addb46a8551b3" },
+  "magicpen": { "x": 48, "y": 0, "pixels": "dd8ede6a29d8ab39" },
+  "lifesteal": { "x": 0, "y": 72, "pixels": "5ed3416834d925d7" },
+  "omnivamp": { "x": 26, "y": 25, "pixels": "e83f4ffc8831ad3a" },
+  "ms": { "x": 96, "y": 0, "pixels": "0a7659bb53190081" },
+  "range": { "x": 72, "y": 72, "pixels": "164c3fd4d188c452" }
  }
 }
