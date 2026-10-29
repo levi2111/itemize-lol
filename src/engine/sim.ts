@@ -63,6 +63,8 @@ export interface Hit {
   instances: number;
   /** a basic attack, or a rule with its own crit amount: damage that can be a critical strike */
   crit: boolean;
+  /** the action it belongs to, counting from 0 (see Fight.step) */
+  step: number;
 }
 
 const NO_SCOPE: Scope = { id: '(none)', dv: () => undefined, eff: () => undefined, calc: () => undefined };
@@ -85,8 +87,8 @@ export interface FightOptions {
   timed?: boolean;
 }
 
-/** Damage over time waiting to land on the clock: already amplified, resisted when it lands. */
-interface Tick { at: number; owner: Owner; rule: string; label: string; type: DamageType; raw: number; crit: boolean }
+/** Damage over time waiting to land on the clock: already amplified, resisted when it lands. `step` is the action that set it off. */
+interface Tick { at: number; owner: Owner; rule: string; label: string; type: DamageType; raw: number; crit: boolean; step: number }
 
 export class Fight {
   readonly champ: ChampionData;
@@ -106,6 +108,9 @@ export class Fight {
   readonly fired = new Map<string, number>();
   /** how many actions have been played; what a rule sets off within one action runs side by side */
   private action = 0;
+  /** the action being played, counting from 0: everything it sets off is put down to it, and so is what it deals
+      over time when that lands later. -1 before the first, for the items' actives used at the start */
+  step = -1;
   stats!: StatBlock;
   time = 0;
 
@@ -489,8 +494,8 @@ export class Fight {
     if (this.target) this.target.left = Math.max(0, this.target.left - dealt);
     this.total.raw += raw; this.total.dealt += dealt;
     const last = this.hits.at(-1);
-    if (last && last.owner === owner.key && last.rule === rule && last.type === type) { last.raw += raw; last.dealt += dealt; last.instances++; }
-    else this.hits.push({ line: owner.line, owner: owner.key, rule, label, type, raw, dealt, instances: 1, crit });
+    if (last && last.owner === owner.key && last.rule === rule && last.type === type && last.step === this.step) { last.raw += raw; last.dealt += dealt; last.instances++; }
+    else this.hits.push({ line: owner.line, owner: owner.key, rule, label, type, raw, dealt, instances: 1, crit, step: this.step });
     // rules reacting to damage do not react to the damage they deal themselves
     if (this.hitType === undefined) {
       this.hitType = type;
@@ -534,7 +539,7 @@ export class Fight {
       const parts = amounts.length === 1 ? Array<number>(n).fill(amounts[0]! / n) : amounts;
       parts.forEach((a, i) => {
         if (!(a > 0)) return;
-        this.ticks.push({ at: this.time + (i + 1) * ticking / parts.length, owner, rule: rule.id, label, type: rule.type, raw: this.amplify(owner.source, rule.type, a), crit });
+        this.ticks.push({ at: this.time + (i + 1) * ticking / parts.length, owner, rule: rule.id, label, type: rule.type, raw: this.amplify(owner.source, rule.type, a), crit, step: this.step });
         landed = true;
       });
       this.ticks.sort((x, y) => x.at - y.at);
@@ -616,14 +621,18 @@ export class Fight {
 
   /** On the clock: when the next tick of damage over time lands, Infinity with none waiting. */
   get nextTick(): number { return this.ticks[0]?.at ?? Infinity; }
-  /** On the clock: moves the fight to `at` and lands every tick due by then. */
+  /** On the clock: moves the fight to `at` and lands every tick due by then, each put down to the action that set it off. */
   landTicks(at: number): void {
     this.time = at;
+    const now = this.step;
     while (this.ticks.length && this.ticks[0]!.at <= at + 1e-9) {
       const t = this.ticks.shift()!;
       this.action++;
-      this.deal(t.owner, t.rule, t.label, t.type, t.raw, t.crit, true);
-      this.trigger('after');
+      this.step = t.step;
+      try {
+        this.deal(t.owner, t.rule, t.label, t.type, t.raw, t.crit, true);
+        this.trigger('after');
+      } finally { this.step = now; }
     }
   }
 
@@ -651,6 +660,7 @@ export class Fight {
 
   act(action: Action): void {
     this.action++;
+    this.step++;
     if (action === 'aa') {
       const s = this.stats;
       // crits are averaged: 25% crit chance at 2.0x is 1.25x on every attack

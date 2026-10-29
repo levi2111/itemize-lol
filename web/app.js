@@ -31,6 +31,7 @@ const S = {
   enemy: {id:'Ornn', name:'Ornn', level:13, items:[null,null,null,null,null,null]},   // the target champion and its six slots
   enemyView: null,                  // GET /champions/:id of the enemy, for the item picker's order when it picks for the enemy
   combo: {aa:3, q:1, w:1, e:0, r:0},
+  seq: null,                        // the combo's order when it is the visitor's own (My order), else null: the engine's
   crits: 'average',                 // how the combo counts critical strikes: average, never or always
   shops: {aram: false, arena: false},   // shops the item picker adds to Summoner's Rift's
   items: new Map(),
@@ -180,7 +181,7 @@ async function recalc() {
       const io = itemOptsOf(k);
       return {items: S.builds[k].filter(Boolean), ...(k === 'b' && S.split && {ranks: S.ranksB}), ...(Object.keys(io).length && {itemOptions: io})};
     }),
-    target: targetBody(), combo: {counts: S.combo, crits: S.crits},
+    target: targetBody(), combo: comboBody(),
   };
   try {
     const out = await api('/calc', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)});
@@ -249,37 +250,266 @@ function paintSub() {
     $('#l-sub').textContent = `${S.champ.name} at level ${S.level}, items included`;
     return;
   }
-  $('#combo-sum').textContent = comboText();
-  paintSteps();
+  paintCombo();
   paintTabs();
 }
-/* The combo's dropdown on the tabs page: a count per action, the same counts as the Breakdown's Qty column.
-   Built once per kit; paintSteps fills in the counts. */
 const deadSlot = k => SLOTS.includes(k) && S.view?.slots[k] && !S.view.slots[k].damaging;
-function renderSteps() {
-  const el = $('#steps');
-  if (!el) return;
-  el.innerHTML = ACTIONS.map(k => {
-    const name = k === 'aa' ? 'Auto attacks' : S.view?.slots[k]?.name || k.toUpperCase() + ' ability', dead = deadSlot(k);
-    const face = k === 'aa' ? 'AA' : `<i class="ico kit ${k}"></i>`;
-    const ctl = dead ? '<span class="none">no damage</span>'
-      : `<button data-d="-1" aria-label="One fewer: ${esc(name)}">−</button><output></output><button data-d="1" aria-label="One more: ${esc(name)}">+</button>`;
-    return `<div class="step${dead ? ' dead' : ''}" data-k="${k}"><span class="sk"${k === 'aa' ? '' : ` data-ab="${k}"`}>${face}</span><span class="nm"${k === 'aa' ? '' : ` data-ab="${k}"`}>${esc(name)}${k === 'aa' ? '' : `<small>${k.toUpperCase()}</small>`}</span>${ctl}</div>`;
-  }).join('');
-  paintSteps();
-}
-function paintSteps() {
-  for (const el of $$('#steps .step')) {
-    const k = el.dataset.k, out = $('output', el);
-    if (out) out.textContent = S.combo[k];
-    el.classList.toggle('zero', !S.combo[k]);
-  }
-  // the Breakdown's Qty column shows the same counts; the one being typed in is left alone
-  for (const input of $$('#lines input[data-q]')) if (document.activeElement !== input) input.value = S.combo[input.dataset.q];
-}
 function defaultCombo() {
   S.combo = {aa: 3};
   for (const k of SLOTS) S.combo[k] = deadSlot(k) ? 0 : 1;
+}
+
+/* ---------- the combo's order ---------- */
+/* The combo is a count per action (S.combo, also the Breakdown's Qty column) that the engine plays in its own
+   order: an auto attack before each cast, the casts in Q W E R order, the autos left over at the end
+   (defaultSequence in src/engine/sim.ts). Or it is an order of the visitor's own (S.seq, My order), and S.combo
+   holds its counts. On the tabs page the band shows the order, a chip per action; the editor under it has a step
+   per action, with what it deals in each build, all it sets off included (CalcResult.combo.steps), and the
+   target's health after it. Dragging a step, or Alt+arrow on it, makes the order one's own; in auto order an
+   action added goes where the engine would put it. The receipt page has no order of its own. */
+const SEQ_MAX = 80;                 // LIMITS.sequence in src/engine/calc.ts
+const SWORD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" x2="19" y1="19" y2="13"/><line x1="16" x2="20" y1="16" y2="20"/><line x1="19" x2="21" y1="21" y2="19"/></svg>';
+const AR = '<span class="ar" aria-hidden="true">›</span>';
+function autoSeq(c) {
+  const n = a => Math.max(0, Math.floor(c[a] || 0)), casts = SLOTS.flatMap(s => Array(n(s)).fill(s)), out = [];
+  for (let autos = n('aa'); autos > 0 || casts.length;) {
+    if (autos > 0) { out.push('aa'); autos--; }
+    if (casts.length) out.push(casts.shift());
+  }
+  return out;
+}
+const comboSeq = () => S.seq || autoSeq(S.combo);
+const countsOf = seq => Object.fromEntries(ACTIONS.map(k => [k, seq.filter(a => a === k).length]));
+const sameSeq = (x, y) => !!x && x.length === y.length && x.every((a, i) => a === y[i]);
+/* What recalc and the auto-build ask the engine to play. */
+const comboBody = () => S.seq ? {sequence: S.seq, crits: S.crits} : {counts: S.combo, crits: S.crits};
+const liveSlots = () => SLOTS.filter(k => !deadSlot(k));
+/* My order from here on: this one, and its counts. */
+function setSeq(seq) {
+  S.seq = seq.slice(0, SEQ_MAX);
+  S.combo = countsOf(S.seq);
+  paintSub(); schedule();
+}
+/* Auto order from here on, with these counts. */
+function setAuto(counts) {
+  S.seq = null;
+  S.combo = {aa: 0, q: 0, w: 0, e: 0, r: 0, ...counts};
+  paintSub(); schedule();
+}
+function resetCombo() { defaultCombo(); setAuto(S.combo); }
+/* A count typed in the Breakdown's Qty column: in my order one more goes at the end, and one fewer takes out the last. */
+function setCount(k, n) {
+  if (!S.seq) { S.combo[k] = n; return; }
+  const seq = [...S.seq];
+  for (let have = S.combo[k]; have < n && seq.length < SEQ_MAX; have++) seq.push(k);
+  for (let have = S.combo[k]; have > n; have--) seq.splice(seq.lastIndexOf(k), 1);
+  S.seq = seq; S.combo = countsOf(seq);
+}
+function addAction(k) {
+  if (deadSlot(k)) return;
+  if (S.seq) { if (S.seq.length < SEQ_MAX) setSeq([...S.seq, k]); return; }
+  if (S.combo[k] < 30) setAuto({...S.combo, [k]: S.combo[k] + 1});
+}
+function removeStep(i) {
+  const seq = comboSeq(), k = seq[i];
+  if (!k) return;
+  if (S.seq) setSeq(seq.filter((_, j) => j !== i)); else setAuto({...S.combo, [k]: S.combo[k] - 1});
+}
+/* Moves step `i` to be step `to`; false when that is where it already is. */
+function moveStep(i, to) {
+  const seq = [...comboSeq()];
+  if (to === i || to < 0 || to >= seq.length) return false;
+  seq.splice(to, 0, ...seq.splice(i, 1));
+  lifted = {i: to, t: performance.now()};
+  setSeq(seq);
+  setTimeout(() => $$('#lane .step.moved').forEach(x => x.classList.remove('moved')), LIFT);
+  return true;
+}
+const PRESETS = [
+  ['Abilities first', () => setSeq([...liveSlots(), 'aa', 'aa', 'aa'])],
+  ['Autos first', () => setSeq(['aa', 'aa', 'aa', ...liveSlots()])],
+  ['Autos only', () => setAuto({aa: 3})],
+  ['Abilities only', () => setAuto(countsOf(liveSlots()))],
+  ['Clear', () => setAuto({})],
+];
+
+const actName = k => k === 'aa' ? 'Auto attack' : S.view?.slots[k]?.name || k.toUpperCase() + ' ability';
+/* An action's icon; with `card`, an ability's shows its card when pointed at. */
+const actIco = (k, card) => k === 'aa' ? `<i class="ki aa">${SWORD}</i>` : `<i class="ki"${card ? ` data-ab="${k}"` : ''}><i class="ico kit ${k}"></i></i>`;
+/* Markup set only when it changes, so that what is pointed at or focused in it stays put. */
+const markup = new WeakMap();
+function setHtml(el, html) {
+  if (markup.get(el) === html) return false;
+  markup.set(el, html); el.innerHTML = html;
+  return true;
+}
+function paintCombo() {
+  paintBand(); paintEditor();
+  // the Breakdown's Qty column shows the same counts; the one being typed in is left alone
+  for (const input of $$('#lines input[data-q]')) if (document.activeElement !== input) input.value = S.combo[input.dataset.q];
+}
+/* The band's row: a chip per action, as many as fit, and "+N" for the rest. */
+function paintBand() {
+  const box = $('#seq-chips');
+  if (!box) return;
+  const seq = comboSeq(), mine = !!S.seq, tag = $('#seq-tag');
+  tag.textContent = mine ? 'My order' : 'Auto order';
+  tag.classList.toggle('mine', mine);
+  $('#combo-sum').setAttribute('aria-label', `Combo: ${comboText()}, ${mine ? 'my' : 'auto'} order`);
+  const chips = n => seq.slice(0, n).map(k => actIco(k, true)).join(AR) + (n < seq.length ? `${n ? AR : ''}<span class="more">+${seq.length - n}</span>` : '');
+  const all = seq.length ? chips(seq.length) : '<span class="none">Empty</span>', key = `${innerWidth} ${all}`;
+  if (markup.get(box) === key) return;
+  markup.set(box, key);
+  box.innerHTML = all;
+  if (box.scrollWidth <= box.clientWidth + 1) return;
+  // cut before the first chip that doesn't fit with the count of the rest after it
+  box.insertAdjacentHTML('beforeend', `${AR}<span class="more">+${seq.length}</span>`);
+  const more = box.lastElementChild, rect = el => el.getBoundingClientRect();
+  const end = rect(box).right - rect(more).width - rect(more.previousElementSibling).width - 8;
+  const fit = $$('.ki', box).findIndex(c => rect(c).right > end);
+  box.innerHTML = chips(fit < 0 ? seq.length : fit);
+}
+/* The editor: a step per action (a column, on a phone a row) with what it deals in each build and the target's
+   health after it, the combo's totals at the end, and the palette under them. A step's numbers wait for the result
+   of the order shown. While a step is dragged the lane is left as it is. */
+function paintEditor() {
+  const lane = $('#lane');
+  if (!lane || drag?.live) return;
+  const seq = comboSeq(), ks = S.res ? (S.compare && S.res.b ? ['a', 'b'] : ['a']) : [];
+  const fresh = ks.length > 0 && sameSeq(S.res.a.sequence, seq) && !!S.res.a.combo.steps;
+  const hp = S.res?.a.target?.hp.total, up = lifted && performance.now() - lifted.t < LIFT ? lifted.i : -1;
+  const dv = (b, v, other) => `<span class="dv ${b}${v !== null && other > v ? ' lo' : ''}"><i></i>${v === null ? '–' : nf(v)}</span>`;
+  const vals = f => ks.map(f), cells = vs => ks.map((b, j) => dv(b, vs[j], ks.length > 1 ? vs[1 - j] : null)).join('');
+  // the focus stays on the step it was on, or the palette's button
+  const at = document.activeElement, keep = at?.closest?.('#combo-menu') && (at.dataset.add ? `[data-add="${at.dataset.add}"]` : at.closest('.step') ? `.step[data-i="${at.closest('.step').dataset.i}"]` : null);
+  const steps = seq.map((k, i) => {
+    const step = b => fresh ? S.res[b].combo.steps[i] : null;
+    const bars = fresh && hp ? `<span class="hps">${ks.map(b => `<span class="hpb ${b}"><i style="--left:${(step(b).hpLeft / hp * 100).toFixed(1)}%"></i></span>`).join('')}</span>` : '';
+    return `<div class="step${i === up ? ' moved' : ''}" role="listitem" tabindex="0" data-i="${i}" aria-label="${i + 1}, ${esc(actName(k))}">`
+      + `<div class="top"><span class="no">${i + 1}</span><span class="grip" aria-hidden="true">⋮⋮</span><button class="x" data-x aria-label="Remove ${i + 1}, ${esc(actName(k))}">×</button></div>`
+      + `${actIco(k, true)}<span class="nm">${esc(actName(k))}</span>${cells(vals(b => step(b) && step(b).total.dealt))}${bars}</div>`;
+  });
+  setHtml(lane, steps.join('') || '<span class="none">Empty</span>');
+  const left = ks.length && S.res.a.combo.hpLeft !== null ? vals(b => S.res[b].combo.hpLeft) : null;
+  setHtml($('#lane-end'), ks.length ? `<span class="lbl">Combo</span>${cells(vals(b => S.res[b].combo.total.dealt))}`
+    + (left ? `<span class="hint">${left.map(nf).join(' / ')} HP left</span>` : '') : '');
+  // the palette: what deals damage, then what doesn't, greyed
+  const full = k => S.seq ? seq.length >= SEQ_MAX : S.combo[k] >= 30;
+  const pa = k => {
+    const dead = deadSlot(k), key = k === 'aa' ? 'AA' : k.toUpperCase();
+    return `<button class="pa" data-add="${k}"${dead || full(k) ? ' aria-disabled="true"' : ''}${dead ? ' title="no damage"' : ''} aria-label="${dead ? `${esc(actName(k))}, no damage` : `Add ${esc(actName(k))}`}">${actIco(k)}${dead ? key : '+ ' + key}</button>`;
+  };
+  const dead = ACTIONS.filter(deadSlot);
+  setHtml($('#pal'), ACTIONS.filter(k => !deadSlot(k)).map(pa).join('') + (dead.length ? '<span class="sep"></span>' + dead.map(pa).join('') : ''));
+  $$('#seq-mode button').forEach(b => b.setAttribute('aria-checked', (b.dataset.mode === 'mine') === !!S.seq));
+  if (keep && !$('#combo-menu').contains(document.activeElement)) $(`#combo-menu ${keep}`)?.focus({preventScroll: true});
+}
+function togglePresets(on) {
+  const el = $('#seq-pre');
+  if (!el) return;
+  el.hidden = !on;
+  $('#seq-pre-btn').setAttribute('aria-expanded', !!on);
+}
+function focusStep(i) { $(`#lane .step[data-i="${Math.max(0, i)}"]`)?.focus(); }
+
+/* Dragging a step: with the mouse from anywhere on it, with a finger by its grip. Its place is left dashed, a copy
+   follows the pointer, and a line shows where it will land: in the gap along the lane, or between the sheet's rows
+   on a phone. A step dropped where it was is a click. */
+let drag = null;                    // {i, id, x, y, el, live; once live: axis, left, dx, dy, ghost, line, at}
+let lifted = null;                  // the step just moved, {i, t}: it stays lifted for a moment
+let dropAt = 0;                     // when a drag ended: the click that follows it is not one
+const LIFT = 700;
+function liftStep(e) {
+  const d = drag, r = d.el.getBoundingClientRect();
+  Object.assign(d, {live: true, axis: PHONE.matches ? 'y' : 'x', left: r.left, dx: e.clientX - r.left, dy: e.clientY - r.top, at: d.i});
+  hideTip();
+  getSelection()?.removeAllRanges();
+  d.ghost = d.el.cloneNode(true);
+  d.ghost.classList.add('ghost');
+  d.ghost.removeAttribute('tabindex');
+  d.ghost.setAttribute('aria-hidden', 'true');
+  Object.assign(d.ghost.style, {width: `${r.width}px`, height: `${r.height}px`});
+  // inside the combo, which holds the kit's icons
+  $('#combo').append(d.ghost);
+  d.el.classList.add('held');
+  d.line = document.createElement('span');
+  d.line.className = 'drop';
+  $('#lane').append(d.line);
+  document.body.classList.add('seq-drag');
+}
+function moveGhost(e) {
+  const d = drag, lane = $('#lane'), across = d.axis === 'x', p = across ? e.clientX : e.clientY;
+  // a row on a phone moves only up and down
+  d.ghost.style.left = `${across ? e.clientX - d.dx : d.left}px`;
+  d.ghost.style.top = `${e.clientY - d.dy}px`;
+  const steps = $$('.step', lane), box = s => s.getBoundingClientRect();
+  d.at = steps.findIndex(s => p < (across ? box(s).left + box(s).width / 2 : box(s).top + box(s).height / 2));
+  if (d.at < 0) d.at = steps.length;
+  const lr = box(lane), ref = box(steps[Math.min(d.at, steps.length - 1)]), gap = parseFloat(getComputedStyle(lane).columnGap) || 0;
+  if (across) d.line.style.left = `${(d.at < steps.length ? ref.left - gap / 2 : ref.right + gap / 2) - lr.left + lane.scrollLeft}px`;
+  else d.line.style.top = `${(d.at < steps.length ? ref.top : ref.bottom) - lr.top}px`;
+  d.line.hidden = d.at === d.i || d.at === d.i + 1;
+  // near an edge, the lane (or the sheet) scrolls along
+  const sc = across ? lane : $('#combo-menu'), sr = box(sc), edge = 40;
+  if (across) sc.scrollLeft += p > sr.right - edge ? 12 : p < sr.left + edge ? -12 : 0;
+  else sc.scrollTop += p > sr.bottom - edge ? 12 : p < sr.top + edge ? -12 : 0;
+}
+function dropStep(keep) {
+  const d = drag;
+  drag = null;
+  if (!d?.live) return;
+  dropAt = performance.now();
+  d.ghost.remove(); d.line.remove(); d.el.classList.remove('held');
+  document.body.classList.remove('seq-drag');
+  const to = d.at > d.i ? d.at - 1 : d.at;
+  if (!keep || !moveStep(d.i, to)) paintEditor();
+}
+function wireCombo() {
+  const ed = $('#combo-menu'), lane = $('#lane');
+  if (!ed) return;
+  $('#seq-pre').innerHTML = PRESETS.map(([label], i) => `<button role="menuitem" data-pre="${i}">${label}</button>`).join('');
+  // opening the editor puts away an ability's card pointed at on the way, and the presets left open
+  for (const b of $$('#combo-sum, #combo-btn')) b.addEventListener('click', () => { hideTip(); togglePresets(false); });
+  ed.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (b?.dataset.add) { if (b.getAttribute('aria-disabled') !== 'true') addAction(b.dataset.add); }
+    else if (b?.matches('[data-x]')) removeStep(+b.closest('.step').dataset.i);
+    else if (b?.dataset.mode) { if ((b.dataset.mode === 'mine') !== !!S.seq) b.dataset.mode === 'mine' ? setSeq(comboSeq()) : setAuto(S.combo); }
+    else if (b?.dataset.pre) PRESETS[+b.dataset.pre][1]();
+    else if (b?.id === 'combo-reset') resetCombo();
+    else if (b?.id === 'combo-x') { setMenu(null); $('#combo-btn').focus(); }
+    togglePresets(b?.id === 'seq-pre-btn' && $('#seq-pre').hidden);
+    // what was clicked may be drawn again under the pointer: the click stops here, or the page would take the
+    // vanished button for a click outside the menu and close it
+    e.stopPropagation();
+  });
+  // a focused step: Alt+arrow moves it, Delete takes it out
+  lane.addEventListener('keydown', e => {
+    const el = e.target === e.target.closest?.('.step') ? e.target : null;
+    if (!el) return;
+    const i = +el.dataset.i, d = e.altKey && {ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1}[e.key];
+    if (d) { e.preventDefault(); if (moveStep(i, i + d)) focusStep(i + d); }
+    else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); removeStep(i); focusStep(Math.min(i, comboSeq().length - 1)); }
+  });
+  lane.addEventListener('pointerdown', e => {
+    const el = e.target.closest('.step');
+    if (!el || e.button !== 0 || e.target.closest('.x') || (e.pointerType !== 'mouse' && !e.target.closest('.grip'))) return;
+    drag = {i: +el.dataset.i, id: e.pointerId, x: e.clientX, y: e.clientY, el, live: false};
+    if (e.pointerType !== 'mouse') e.preventDefault();
+  });
+  document.addEventListener('pointermove', e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    if (!drag.live && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 5) return;
+    if (!drag.live) liftStep(e);
+    moveGhost(e);
+  });
+  document.addEventListener('pointerup', e => { if (drag?.id === e.pointerId) dropStep(true); });
+  document.addEventListener('pointercancel', e => { if (drag?.id === e.pointerId) dropStep(false); });
+  // while a step is dragged, nothing pointed at on the way shows its card, and Esc puts the step back
+  addEventListener('mouseover', e => { if (drag?.live) e.stopPropagation(); }, true);
+  addEventListener('keydown', e => { if (e.key === 'Escape' && drag?.live) { e.preventDefault(); e.stopPropagation(); dropStep(false); } }, true);
+  addEventListener('click', e => { if (performance.now() - dropAt < 400) { dropAt = 0; e.preventDefault(); e.stopPropagation(); } }, true);
+  addEventListener('resize', paintBand);
 }
 const maxRank = k => S.view?.slots[k]?.maxRank || (k === 'r' ? 3 : 5);
 /* The old picture goes blank at once and the new one fades in when it has arrived. */
@@ -296,7 +526,7 @@ function paintKit() {
   const row = $('#skill-row'), url = kitUrl(S.champ.id);
   if (row.dataset.kit === url) return;
   row.dataset.kit = url;
-  const els = [row, $('#rank-split'), $('#combo-menu')].filter(Boolean);
+  const els = [row, $('#rank-split'), $('#combo')].filter(Boolean);
   const put = () => els.forEach(el => { el.style.setProperty('--art-kit', `url("${url}")`); el.classList.add('has-kit'); });
   if (ready.has(url)) return put();
   els.forEach(el => el.classList.remove('has-kit'));
@@ -317,20 +547,21 @@ async function loadKit() {
   // a shared link may carry options this kit no longer has
   const known = new Set((S.view?.options || []).map(o => o.id));
   for (const id of Object.keys(S.options)) if (!known.has(id)) delete S.options[id];
-  nameKit(); paintSkills(); renderLines(); renderSteps(); renderOpts(); schedule();
+  nameKit(); paintSkills(); renderLines(); renderOpts(); schedule();
   // the picker's order follows what this champion's players build
   if (pick) renderItems();
 }
 function setChamp(c) {
   S.champ = c; S.view = null; S.options = {};
   renderOpts();
-  // a new kit gets the default combo: three autos and one of each ability that deals damage
+  // a new kit gets the default combo: three autos and one of each ability that deals damage, in the engine's order
   S.combo = {aa:3, q:1, w:1, e:1, r:1};
+  S.seq = null;
   comboFresh = true;
   if (S.order === 'manual') { S.order = 'qew'; $('#order').value = 'qew'; }
   if (S.orderB === 'manual') S.orderB = 'qew';
   S.ranks = autoRanks(S.order); S.ranksB = autoRanks(S.orderB);
-  paintChamp(); nameKit(); paintSkills(); renderLines(); renderSteps(); loadKit();
+  paintChamp(); nameKit(); paintSkills(); renderLines(); loadKit();
   followChamp();
 }
 let comboFresh = false;
@@ -765,7 +996,7 @@ function autoAsk() {
   return {
     req: {
       build: {champion: S.champ.id, level: S.level, ranks: k === 'b' && S.split ? S.ranksB : S.ranks, options: S.options, items: [], itemOptions: itemOptsOf(k)},
-      target: targetBody(), combo: {counts: S.combo, crits: S.crits},
+      target: targetBody(), combo: comboBody(),
       goal: AB.goal, limit: AB.mode === 'gold' ? {gold: AB.gold} : {items: AB.count},
       keep, never: [...AB.never], fill: AB.fill, boots: AB.boots, pool: AB.pool,
     },
@@ -1404,7 +1635,7 @@ function renderLines() {
   $('#lines').innerHTML = LINES.map(k => {
     const [key, name] = lineLabel(k), slot = S.view?.slots[k];
     const castable = ACTIONS.includes(k), dead = SLOTS.includes(k) && slot && !slot.damaging;
-    if (dead && comboFresh) S.combo[k] = 0;
+    if (dead && comboFresh && !S.seq) S.combo[k] = 0;
     const qty = !castable ? '<span class="q"></span>' : dead ? '<span class="q">–</span>'
       : `<label class="q"><input type="number" data-q="${k}" value="${S.combo[k]}" min="0" max="30" aria-label="Number of ${k === 'aa' ? 'auto attacks' : k.toUpperCase() + ' casts'}"><span>×</span></label>`;
     const word = slot && STATUS_WORD[slot.status];
@@ -2164,7 +2395,7 @@ function loadSaved(id) {
   closePicker(); closeItemMenu(); hideTip();
   const was = S.champ, gone = [...e.a, ...(e.b || [])].filter(x => x && !S.items.has(x)).length;
   // a state leaves out what is at its default (see encodeState), so that goes back to its default first
-  S.options = {}; S.itemOpts = {a: {}, b: {}}; S.split = false; S.crits = 'average'; S.shops = {aram: false, arena: false};
+  S.options = {}; S.itemOpts = {a: {}, b: {}}; S.split = false; S.crits = 'average'; S.shops = {aram: false, arena: false}; S.seq = null;
   applyState(s);
   if (S.champ !== was) S.view = null;
   comboFresh = false; savedEdit = null; savedUndo = null;
@@ -2291,6 +2522,8 @@ function encodeState() {
   const s = {c: S.champ.id, l: S.level, r: SLOTS.map(k => S.ranks[k]), o: S.order, a: S.builds.a, b: S.builds.b, n: [$('#name-a').value, $('#name-b').value],
     m: S.compare ? 1 : 0, t: S.target, d: S.target === 'raw' ? S.dummy : readDials(),
     e: [S.enemy.id, S.enemy.level, ...(enemyItems().length ? [S.enemy.items] : [])], q: ACTIONS.map(k => S.combo[k]),
+    // my order, a letter per action: "aqawa" is AA Q AA W AA
+    ...(S.seq && {qs: S.seq.map(k => k === 'aa' ? 'a' : k).join('')}),
     ...(Object.keys(S.options).length && {x: S.options}),
     ...(S.crits !== 'average' && {k: S.crits}),
     ...(S.split && {rb: SLOTS.map(k => S.ranksB[k]), ob: S.orderB}),
@@ -2341,6 +2574,11 @@ function applyState(s) {
   const e = Array.isArray(s.e) && S.champs.find(x => x.id === s.e[0]);
   if (e) S.enemy = {id: e.id, name: e.name, level: int(s.e[1], 1, 18, 13), items: build(s.e[2])};
   if (Array.isArray(s.q)) ACTIONS.forEach((k, i) => S.combo[k] = int(s.q[i], 0, 30, 0));
+  // the combo's own order (My order), and the counts are its; the receipt page has none, and keeps the counts
+  if (typeof s.qs === 'string' && s.qs.length <= SEQ_MAX && /^[aqwer]*$/.test(s.qs) && !RECEIPT) {
+    S.seq = [...s.qs].map(c => c === 'a' ? 'aa' : c);
+    S.combo = countsOf(S.seq);
+  }
   // ids are checked against the kit once it has loaded
   if (s.x && typeof s.x === 'object') for (const [id, v] of Object.entries(s.x).slice(0, 24)) if (Number.isFinite(+v)) S.options[id] = Math.round(+v);
   // the receipt page has no switch for crits and shows one set of ranks, so there they stay at the average and A's
@@ -2722,17 +2960,11 @@ function wire() {
   $('#rank-split')?.addEventListener('change', e => { const s = e.target.closest('select[data-ob]'); if (s) setOrder(s.dataset.ob, s.value); });
   $('#lines').addEventListener('input', e => {
     const k = e.target.dataset.q; if (!k) return;
-    S.combo[k] = Math.max(0, Math.min(30, Math.round(+e.target.value) || 0));
+    setCount(k, Math.max(0, Math.min(30, Math.round(+e.target.value) || 0)));
     paintSub(); schedule(true);
   });
-  // the tabs page: the combo's dropdown, and how crits count
-  $('#steps')?.addEventListener('click', e => {
-    const b = e.target.closest('button[data-d]'); if (!b) return;
-    const k = b.closest('.step').dataset.k;
-    S.combo[k] = Math.max(0, Math.min(30, S.combo[k] + +b.dataset.d));
-    paintSub(); schedule();
-  });
-  $('#combo-reset')?.addEventListener('click', () => { defaultCombo(); paintSub(); schedule(); });
+  // the tabs page: the combo's editor, and how crits count
+  wireCombo();
   $('#crit-seg')?.addEventListener('click', e => { const b = e.target.closest('button[data-crit]'); if (b) setCrits(b.dataset.crit); });
   $('#opts').addEventListener('input', e => { if (e.target.matches('input[data-o]')) setOpt(e.target); });
   $('#opts').addEventListener('click', e => { if (e.target.closest('#opts-reset')) { S.options = {}; paintOpts(); schedule(); } });
@@ -2889,7 +3121,7 @@ function paintAll() {
 
   $$('#crit-seg button').forEach(b => b.setAttribute('aria-checked', b.dataset.crit === S.crits));
   $$('#shop .chip[data-shop]').forEach(c => c.setAttribute('aria-pressed', !!S.shops[c.dataset.shop]));
-  paintLevel(); paintSkills(); paintChamp(); renderBuilds(); renderLines(); renderSteps(); paintTarget();
+  paintLevel(); paintSkills(); paintChamp(); renderBuilds(); renderLines(); paintTarget();
   if (S.target === 'champ') enemyStats();
 }
 

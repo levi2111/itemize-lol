@@ -93,6 +93,24 @@ test('options, item settings, crits and ranks per build', () => {
   for (const r of [...tabs.requests, ...receipt.requests]) calculate(data, r);
 });
 
+test('the combo\'s own order: a letter per action, played as given; the receipt and a bad one keep the counts', () => {
+  const mine = read({ ...PAGE, q: [3, 1, 1, 0, 0], qs: 'qwaaa' });
+  assert.deepEqual(mine.body.combo, { sequence: ['q', 'w', 'aa', 'aa', 'aa'], crits: 'average' });
+  assert.deepEqual(mine.requests[0]!.combo, mine.body.combo);
+  const r = calculate(data, mine.requests[0]!);
+  assert.deepEqual(r.sequence, ['q', 'w', 'aa', 'aa', 'aa']);
+  assert.notEqual(r.combo.total.dealt, calculate(data, read(PAGE).requests[0]!).combo.total.dealt);
+  // a preview shows the numbers of that order
+  assert.equal(preview(data, mine).card.builds[0]!.total, r.combo.total.dealt);
+  // emptied by hand, it is an empty combo, not the default
+  assert.deepEqual(read({ ...PAGE, q: [0, 0, 0, 0, 0], qs: '' }).body.combo, { sequence: [], crits: 'average' });
+  // the receipt has no order of its own; anything but the five letters, or a longer one than the engine plays, is not one
+  for (const [qs, layout] of [['qwaaa', 'receipt'], ['qwxaa', 'tabs'], ['QWAAA', 'tabs'], [['q', 'w'], 'tabs'], ['a'.repeat(81), 'tabs']] as const) {
+    assert.deepEqual(read({ ...PAGE, qs }, layout).body.combo.counts, { aa: 3, q: 1, w: 1, e: 0, r: 0 }, String(qs).slice(0, 10));
+  }
+  assert.equal(read({ ...PAGE, qs: 'a'.repeat(80) }).body.combo.sequence!.length, 80);
+});
+
 test('a headline is the calculation\'s own numbers', () => {
   for (const r of [...read(PAGE).requests, ...read({ ...PAGE, t: 'raw', k: 'never' }).requests, ...read({ ...PAGE, c: 'Vayne', t: 'champ', e: ['Garen', 18] }).requests]) {
     const full = calculate(data, r), h = headline(data, r);

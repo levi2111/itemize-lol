@@ -561,28 +561,79 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 5rem 10rem}
 .sv-none{margin:.6rem .5rem .4rem;padding:.75rem .85rem;border:1px dashed var(--faint);border-radius:4px;color:var(--dim)}
 @media (hover:none){.sv-acts{opacity:1}}
 
-/* ---------- the combo: one line in the band, edited in a dropdown ---------- */
+/* ---------- the combo: its order in the band, a chip per action, and the editor under it ---------- */
 .ibtn{width:1.65rem;height:1.65rem;display:inline-grid;place-items:center;flex:none;border:1px solid var(--rule);border-radius:3px;background:var(--well);color:var(--dim)}
 .ibtn svg{width:.95rem;height:.95rem}
 .ibtn:hover,.ibtn[aria-expanded="true"]{border-color:var(--text);color:var(--text)}
-.combo{display:flex;align-items:center;gap:.75rem}
-.combo-sum{font-size:.92rem;color:var(--text);white-space:nowrap}
-.combo-sum:hover{text-decoration:underline;text-decoration-color:var(--faint);text-underline-offset:.2em}
-.menu.combo-menu{left:0;right:auto;width:20rem;gap:.15rem}
-.step{display:grid;grid-template-columns:1.7rem minmax(0,1fr) 1.5rem 1.7rem 1.5rem;align-items:center;column-gap:.5rem;height:2.15rem;padding:0 .3rem;border-radius:3px}
-.step:hover{background:rgba(236,231,216,.05)}
-.step .sk{position:relative;width:1.7rem;height:1.7rem;display:grid;place-items:center;overflow:hidden;border:1px solid var(--rule);border-radius:2px;font-family:var(--font-mono);font-size:.6rem;font-weight:700;color:var(--dim);background:var(--bg)}
-.step .sk .ico{position:absolute;inset:0}
-.step .nm{display:flex;align-items:baseline;gap:.4rem;min-width:0;font-size:.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.step .nm small{font-family:var(--font-mono);font-size:.62rem;color:var(--faint)}
-.step button{width:1.5rem;height:1.5rem;display:grid;place-items:center;border:1px solid var(--rule);border-radius:2px;font-family:var(--font-mono);font-size:.9rem;color:var(--dim)}
-.step button:hover{color:var(--ink);background:var(--text);border-color:var(--text)}
-.step output{text-align:center;font-family:var(--font-mono);font-size:.92rem;font-weight:700}
-.step.zero output,.step.zero .nm{color:var(--faint)}
-.step.zero .sk .ico{filter:grayscale(1) brightness(.5)}
-.step.dead{opacity:.55}
-.step.dead .none{grid-column:3/6;justify-self:end;font-size:.74rem;color:var(--faint)}
-.combo-foot{display:flex;justify-content:space-between;align-items:center;gap:.6rem;margin-top:.3rem;padding:.45rem .3rem 0;border-top:1px solid var(--rule)}
+.combo{position:relative;display:flex;align-items:center;gap:.75rem;min-width:0}
+.hero-mode{flex:none}
+/* an action's icon: the ability's from the kit strip, a drawn sword for an auto attack */
+.ki{position:relative;flex:none;display:grid;place-items:center;width:1.75rem;height:1.75rem;overflow:hidden;border:1px solid var(--rule);border-radius:2px;background:var(--bg)}
+.ki .ico{position:absolute;inset:0;width:auto}
+.ki.aa{color:var(--phys);background:#0f2c2a}
+.ki.aa svg{width:62%;height:62%}
+.seq{display:flex;align-items:center;gap:.6rem;min-width:0;padding:.2rem .45rem .2rem .3rem;border:1px solid transparent;border-radius:4px}
+.seq:hover,.seq[aria-expanded="true"]{border-color:var(--rule);background:rgba(236,231,216,.04)}
+/* at most what the band has room for beside the switches at the page's narrowest (95.5rem); the rest is "+N" */
+.seq-row{display:flex;align-items:center;gap:.28rem;min-width:0;max-width:32rem;overflow:hidden}
+.seq-row .ar{flex:none;color:var(--faint);font-size:.85rem;line-height:1}
+.seq-row .more{flex:none;padding:0 .15rem 0 .1rem;font-family:var(--font-mono);font-size:.78rem;font-weight:600;color:var(--dim)}
+.seq-row .none{font-size:.85rem;color:var(--faint)}
+.mode{flex:none;font-family:var(--font-mono);font-size:.6rem;font-weight:600;line-height:1.5;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);border:1px solid var(--rule);border-radius:2px;padding:0 .35rem;white-space:nowrap}
+.mode.mine{color:var(--ink);background:var(--text);border-color:var(--text)}
+/* the editor: a column per step, the combo's totals at the end, and what can be added under them */
+.menu.ed{left:0;right:auto;width:max-content;min-width:44rem;max-width:calc(100vw - 3rem);gap:.75rem;padding:.8rem .9rem .75rem}
+.ed-h{display:flex;align-items:center;gap:.8rem}
+.ed-h>.lbl{display:none}
+.ed-h .seg button{padding:.28rem .7rem;font-size:.76rem}
+.ed-h .sp{margin-left:auto}
+.pre-set{position:relative}
+.pre-set .act{display:flex;align-items:center;gap:.35rem}
+.pre-set .caret{width:.55rem;height:.55rem;flex:none}
+.pre{position:absolute;right:0;top:calc(100% + .35rem);z-index:2;display:grid;min-width:11rem;padding:.35rem;background:var(--well);border:1px solid var(--faint);border-radius:4px;box-shadow:0 .8rem 1.6rem rgba(0,0,0,.5)}
+.pre button{padding:.42rem .55rem;border-radius:3px;font-size:.82rem;color:var(--dim);white-space:nowrap}
+.pre button:hover,.pre button:focus-visible{background:rgba(236,231,216,.07);color:var(--text)}
+.ed-b{display:flex;align-items:stretch;gap:1rem;min-width:0}
+.lane{position:relative;flex:0 1 auto;display:flex;align-items:stretch;gap:.85rem;min-width:0;min-height:8.6rem;overflow-x:auto;padding:.35rem .1rem .45rem;scrollbar-width:thin;scrollbar-color:var(--rule) transparent}
+.lane>.none{align-self:center;font-size:.85rem;color:var(--faint)}
+.step{position:relative;width:6.9rem;flex:none;display:grid;align-content:start;gap:.28rem;padding:.45rem .5rem .5rem;border:1px solid var(--rule);border-radius:4px;background:var(--bg);cursor:grab;transition:transform .2s,box-shadow .2s,border-color .2s}
+.step+.step::before{content:"›";position:absolute;left:-.62rem;top:1.15rem;color:var(--faint);font-size:.95rem}
+.step:focus-visible{outline-offset:1px}
+.step .top{display:flex;align-items:center;justify-content:space-between;height:1.05rem}
+.step .no{font-family:var(--font-mono);font-size:.62rem;font-weight:600;color:var(--faint)}
+.step .grip{color:var(--faint);font-family:var(--font-mono);font-size:.7rem;font-weight:700;line-height:1;letter-spacing:-.1em;opacity:0;touch-action:none}
+.step .x{width:1.05rem;height:1.05rem;display:grid;place-items:center;border-radius:2px;color:var(--faint);font-size:.85rem;line-height:1;opacity:0}
+.step .x:hover{color:var(--text);background:rgba(236,231,216,.1)}
+.step:hover .grip,.step:hover .x,.step:focus-within .x,.step.moved .grip{opacity:1}
+.step .ki{width:2.15rem;height:2.15rem}
+.step .nm{font-size:.74rem;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dv{display:flex;align-items:center;gap:.35rem;font-family:var(--font-mono);font-size:.88rem;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.dv i{width:.4rem;height:.4rem;border-radius:1px;background:var(--c);flex:none}
+.dv.lo{color:var(--dim);font-weight:500}
+.hps{display:grid;gap:2px;margin-top:.1rem}
+.hpb{position:relative;height:.28rem;background:rgba(236,231,216,.1);border-radius:1px;overflow:hidden}
+.hpb i{position:absolute;inset:0 auto 0 0;width:var(--left);background:color-mix(in srgb,var(--c) 70%,transparent)}
+.loading .step .dv,.loading .lend .dv{opacity:.55}
+/* a step being dragged: its place is left dashed, a copy follows the pointer, a line shows where it lands; once
+   dropped it stays lifted for a moment */
+.step.held{opacity:.35;border-style:dashed}
+.step.ghost{position:fixed;z-index:70;margin:0;pointer-events:none;border-color:var(--text);box-shadow:0 .8rem 1.6rem rgba(0,0,0,.55);transform:rotate(-3deg);transition:none}
+.step.ghost::before{content:none}
+.step.ghost .grip{opacity:1}
+.step.moved{border-color:var(--text);box-shadow:0 .5rem 1.2rem rgba(0,0,0,.5);transform:translateY(-.25rem)}
+.drop{position:absolute;top:.35rem;bottom:.45rem;width:2px;margin-left:-1px;background:var(--a);border-radius:1px;pointer-events:none}
+body.seq-drag,body.seq-drag *{cursor:grabbing!important;user-select:none}
+.lend{flex:none;display:grid;align-content:start;gap:.35rem;min-width:8.5rem;padding:.8rem 0 .5rem 1rem;border-left:1px solid var(--rule)}
+.lend .dv{font-size:1.15rem;font-weight:700}
+.lend .hint{font-size:.72rem;white-space:nowrap}
+.pal{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;padding-top:.65rem;border-top:1px solid var(--rule)}
+.pal .sep{width:1px;height:1.5rem;margin:0 .15rem;background:var(--rule)}
+.pa{display:inline-flex;align-items:center;gap:.45rem;height:2.05rem;padding:0 .65rem 0 .22rem;border:1px solid var(--rule);border-radius:3px;font-family:var(--font-mono);font-size:.82rem;font-weight:600;color:var(--text);background:var(--bg);white-space:nowrap}
+.pa:hover{border-color:var(--text)}
+.pa .ki{width:1.55rem;height:1.55rem}
+.pa[aria-disabled="true"]{opacity:.45;border-style:dashed;color:var(--dim);cursor:default}
+.pa[aria-disabled="true"]:hover{border-color:var(--rule)}
+.pa[aria-disabled="true"] .ki{filter:grayscale(1)}
 /* the kit strip's five icons, for the places other than the ranks row that show one */
 .ico.kit.p{background-position:0 0} .ico.kit.q{background-position:25% 0} .ico.kit.w{background-position:50% 0} .ico.kit.e{background-position:75% 0} .ico.kit.r{background-position:100% 0}
 
@@ -999,8 +1050,11 @@ body[data-compare="off"] .tot{min-width:0;padding-right:var(--pr)}
 .metric .lbl{font-size:.66rem}
 .metric-v{gap:.8rem}
 .mv{font-size:1.05rem;gap:.35rem}
-.combo{order:6;gap:.6rem;padding:.55rem var(--pr) 0 var(--pl)}
-.combo-sum{flex:1;min-width:0;min-height:2.5rem;overflow:hidden;text-overflow:ellipsis}
+.combo{order:6;flex-wrap:wrap;gap:.4rem .5rem;padding:.55rem var(--pr) 0 var(--pl)}
+.combo>.lbl{flex-basis:100%}
+.seq{flex:1;min-height:2.75rem;padding:.15rem .4rem .15rem .25rem;border-color:var(--rule)}
+.seq-row{max-width:none}
+.seq .ki{width:2.2rem;height:2.2rem}
 .ibtn{width:2.5rem;height:2.5rem}
 .hero-mode{order:7;display:grid;grid-template-columns:auto minmax(0,1fr);gap:.45rem .7rem;padding:.45rem var(--pr) .3rem var(--pl)}
 .hero-mode .seg+.lbl{margin-left:0}
@@ -1153,9 +1207,43 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
   padding:.85rem var(--pr) calc(.9rem + env(safe-area-inset-bottom)) var(--pl);border-width:1px 0 0;border-radius:.75rem .75rem 0 0;box-shadow:0 0 0 100vmax rgba(4,16,15,.6)}
 .imenu{z-index:45}
 .saved .sv-bs{flex-wrap:wrap;row-gap:.35rem}
-.step{grid-template-columns:2.5rem minmax(0,1fr) 2.75rem 2rem 2.75rem;height:3.25rem;column-gap:.6rem}
-.step .sk{width:2.5rem;height:2.5rem}
-.step .nm{font-size:.92rem}
+/* the combo's sheet: a row per step (number, icon, name, what A and B deal, remove, a grip to drag by), the totals
+   under them, the palette at the foot within reach of a thumb */
+.menu.ed{min-width:0;gap:.55rem}
+.ed-h,.pal{position:sticky;z-index:2;background:var(--well)}
+.ed-h{top:-.85rem;margin-top:-.85rem;padding-top:.85rem;flex-wrap:wrap;gap:.5rem .6rem}
+.pal{bottom:calc(-.9rem - env(safe-area-inset-bottom));margin-bottom:calc(-.9rem - env(safe-area-inset-bottom));padding:.55rem 0 calc(.9rem + env(safe-area-inset-bottom));gap:.3rem}
+.ed-h>.lbl{display:block}
+.ed-h .seg button{min-height:2.4rem;padding:.3rem .65rem;font-size:.76rem}
+.ed-h .esc{order:1;margin-left:auto}
+.ed-h .sp{order:2;flex-basis:100%;margin:0}
+.ed-h .pre-set,#combo-reset{order:3}
+.ed-b{display:grid;gap:0}
+.lane{display:grid;gap:0;min-height:0;overflow:visible;padding:0}
+.step{width:auto;grid-template-columns:.9rem 2rem minmax(0,1fr) 3.1rem 3.1rem 2.5rem 1.75rem;grid-template-rows:auto;align-items:center;gap:0 .4rem;min-height:3.1rem;padding:0 .2rem;border:0;border-bottom:1px solid rgba(37,80,77,.6);border-radius:0;background:none;cursor:default}
+.step+.step::before{content:none}
+.step .top{display:contents}
+.step .no{grid-area:1/1}
+.step .ki{grid-area:1/2;width:2rem;height:2rem}
+.step .nm{grid-area:1/3;font-size:.88rem;color:var(--text)}
+.step .dv{gap:.25rem;font-size:.84rem}
+.step .dv.a{grid-area:1/4;justify-content:flex-end}
+.step .dv.b{grid-area:1/5;justify-content:flex-end}
+.step .x{grid-area:1/6;width:2.5rem;opacity:1;font-size:1.2rem}
+.step .grip{grid-area:1/7;align-self:stretch;display:grid;place-items:center;opacity:1;font-size:.95rem;touch-action:none;cursor:grab}
+.step .hps{display:none}
+.step.moved{transform:none;box-shadow:none;background:rgba(236,231,216,.06)}
+.step.ghost{transform:none;border:1px solid var(--text);border-radius:4px;background:var(--well)}
+.drop{left:0;right:0;top:auto;bottom:auto;width:auto;height:2px;margin:-1px 0 0}
+body[data-compare="off"] .step{grid-template-columns:.9rem 2rem minmax(0,1fr) 3.1rem 0 2.5rem 1.75rem}
+body[data-compare="off"] .lend{grid-template-columns:minmax(0,1fr) 3.1rem 0 4.65rem}
+.lend{grid-template-columns:minmax(0,1fr) 3.1rem 3.1rem 4.65rem;align-items:center;gap:0 .4rem;min-width:0;min-height:2.9rem;padding:0 .2rem;border-left:0}
+.lend .lbl{grid-column:1}
+.lend .dv{justify-content:flex-end;font-size:.95rem}
+.lend .dv i,.lend .hint{display:none}
+.pa{height:2.75rem;gap:.35rem;padding:0 .5rem 0 .2rem}
+/* the band's row: its chips across, the order's tag at the end of the label's line */
+.seq .mode{position:absolute;top:.6rem;right:var(--pr)}
 .step button,.stp button{width:2.75rem;height:2.75rem;font-size:1.1rem}
 .ic{min-height:3rem}
 .ic input[type="checkbox"]{width:1.35rem;height:1.35rem}
@@ -1186,6 +1274,9 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
 .tot-n,body[data-compare="off"] .tot-n{grid-area:1/2/3/3;font-size:2.1rem}
 .tot-bar{grid-area:3/1/4/-1;margin-top:.15rem}
 .hero-side,.combo,.hero-mode,.glance{padding-left:var(--col);padding-right:var(--col)}
+.seq .mode{right:var(--col)}
+.ed-h .sp{order:0;flex-basis:auto;margin-left:auto}
+.ed-h .esc{order:4;margin-left:0}
 .pane>*,.setup>*,.loadout{margin-left:var(--col);margin-right:var(--col)}
 .tab{height:2.75rem}
 .slots{grid-template-columns:repeat(6,minmax(0,4.5rem))}
@@ -1199,6 +1290,7 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
 @media (hover:none){
 .slot .cfg.info,.slot.sel:not(.empty) .rm{display:grid}
 [data-ab],[title]:not(button,a,input,select,label){cursor:pointer}
+.step .grip,.step .x{opacity:1}
 }
 </style>
 </head>
@@ -1260,16 +1352,30 @@ body[data-compare="off"] .srow{grid-template-columns:minmax(0,1fr) 4.2rem minmax
   <!-- the display: always on screen -->
   <section class="hero" aria-label="Damage totals">
     <div class="hero-top">
-      <div class="combo">
+      <div class="combo" id="combo">
         <span class="lbl">Combo</span>
-        <button class="combo-sum menu-btn" id="combo-sum" aria-haspopup="true" aria-expanded="false" aria-controls="combo-menu" title="Change the combo"></button>
-        <div class="set">
-          <button class="ibtn menu-btn" id="combo-btn" aria-haspopup="true" aria-expanded="false" aria-controls="combo-menu" aria-label="Change the combo" title="Change the combo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></button>
-          <div class="menu combo-menu" id="combo-menu" role="dialog" aria-label="The combo" hidden>
-            <span class="lbl">Casts in the combo</span>
-            <div id="steps" style="display:contents"></div>
-            <div class="combo-foot"><span class="hint">Also in the Breakdown's Qty column</span><button class="act" id="combo-reset" title="Three autos and one of each ability that deals damage">Reset</button></div>
+        <button class="seq menu-btn" id="combo-sum" aria-haspopup="dialog" aria-expanded="false" aria-controls="combo-menu"><span class="seq-row" id="seq-chips"></span><span class="mode" id="seq-tag">Auto order</span></button>
+        <button class="ibtn menu-btn" id="combo-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="combo-menu" aria-label="Change the combo" title="Change the combo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></button>
+        <div class="menu combo-menu ed" id="combo-menu" role="dialog" aria-label="The combo" hidden>
+          <div class="ed-h">
+            <span class="lbl">Combo</span>
+            <div class="seg" id="seq-mode" role="radiogroup" aria-label="Order">
+              <button role="radio" data-mode="auto" aria-checked="true">Auto order</button>
+              <button role="radio" data-mode="mine" aria-checked="false">My order</button>
+            </div>
+            <span class="sp"></span>
+            <div class="pre-set">
+              <button class="act" id="seq-pre-btn" aria-haspopup="true" aria-expanded="false" aria-controls="seq-pre">Presets<svg class="caret" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+              <div class="pre" id="seq-pre" role="menu" aria-label="Presets" hidden></div>
+            </div>
+            <button class="act" id="combo-reset">Reset</button>
+            <button class="esc" id="combo-x">Esc</button>
           </div>
+          <div class="ed-b">
+            <div class="lane" id="lane" role="list" aria-label="Order"></div>
+            <div class="lend" id="lane-end"></div>
+          </div>
+          <div class="pal" id="pal"></div>
         </div>
       </div>
       <p class="pn" id="patch-note" role="status" hidden></p>

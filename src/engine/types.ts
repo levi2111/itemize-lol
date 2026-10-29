@@ -180,6 +180,8 @@ export interface CalcResult {
     /** target health left, null without a target */
     hpLeft: number | null;
     kills: boolean;
+    /** the combo action by action, in the order of `sequence` */
+    steps: ComboStep[];
   };
   /** sustained basic attacks with everything they trigger */
   dps: Amount;
@@ -194,6 +196,15 @@ export interface CalcResult {
   items: ItemInfo[];
   /** things the caller should tell the user: assumptions, and anything the engine could not evaluate */
   caveats: string[];
+}
+
+/** One action of the combo: what it dealt with everything it set off (an item's proc, a passive's stack bursting,
+ * damage over time), and the target's health after it, null without a target. Item actives used at the start
+ * count to the first action, and procs counted by hand at the end to the last, so the steps add up to the combo. */
+export interface ComboStep {
+  action: Action;
+  total: Amount;
+  hpLeft: number | null;
 }
 
 /** A fight on the clock, from a fresh start: every ability the combo uses is cast again each time it is ready, in the
