@@ -16,5 +16,7 @@
     "skipLibCheck": true,
     "resolveJsonModule": true
   },
-  "include": ["src", "test"]
+  "include": ["src", "test"],
+  // tsconfig.fly.json checks the fly
+  "exclude": ["src/fly", "test/fly-behaviour.test.ts", "test/fly-brain.test.ts", "test/fly-store.test.ts"]
 }

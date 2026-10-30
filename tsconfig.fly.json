@@ -1,0 +1,11 @@
+{
+  // The fly on its own: it is the one part of the build that uses the DOM's types, and the brain's loops index typed arrays
+  // on every line, where the strict index check would only add a "!" to each
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "noUncheckedIndexedAccess": false
+  },
+  "include": ["src/fly", "test/fly-behaviour.test.ts", "test/fly-brain.test.ts", "test/fly-store.test.ts"],
+  "exclude": []
+}

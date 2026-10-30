@@ -2281,6 +2281,7 @@ function setMenu(btn) {
   if (menu) show(menu, true);
   // a panel that is there to be written in (Feedback) takes the typing at once, except on a touch screen
   if (menu && !touched()) $(`#${panel(menu)} [data-focus]`)?.focus();
+  paintFly();
 }
 /* The two layouts are two pages, so choosing the other one is a link. The choice is remembered
    (layout.js sends later visits to that page) and the build is handed over, so nothing but the
@@ -2291,6 +2292,57 @@ function setLayout(link) {
   let hash = '';
   try { sessionStorage.setItem('carry', encodeState()); } catch (e) { hash = '#s=' + encodeState(); }
   location.assign(link.getAttribute('href') + hash);
+}
+
+/* ---------- the fly ---------- */
+/* A fruit fly with a real piece of a brain, living on the page (docs/fly.md): off until the settings menu lets it out, and
+   remembered in this browser. Its code, its worker and its circuit load only then, from the address the page names in
+   <meta name="fly">, so a visitor who leaves it off fetches none of it. */
+const FLY = $('meta[name="fly"]')?.content || '/fly/';
+const FLY_ON = 'fly-on';
+const FLY_NOW = {walk: 'walking', rest: 'standing', turn: 'turning', groom: 'grooming', feed: 'feeding', freeze: 'frozen', adjust: 'leaning', back: 'backing',
+  takeoff: 'taking off', fly: 'flying', land: 'landing', dead: 'squashed', squashed: 'squashed', arriving: 'flying in', starting: 'starting'};
+let fly = null;                     // the fly's controller, once its code has loaded
+function paintFly() {
+  if (!fly || $('#set-menu').hidden || $('#fly-set').hidden) return;
+  const f = fly.snapshot(), alive = f.ready && f.behaviour !== 'squashed';
+  $('#fly-gen').textContent = nf(f.generation);
+  $('#fly-escapes').textContent = nf(f.escapes);
+  $('#fly-squashes').textContent = nf(f.squashes);
+  $('#fly-reaction').textContent = f.reaction === null ? '–' : `${nf(f.reaction)} ms`;
+  $('#fly-hunger').textContent = `${Math.round(f.hunger * 100)}%`;
+  $('#fly-now').textContent = FLY_NOW[f.behaviour] ?? f.behaviour;
+  $('#fly-size').value = f.size;
+  $('#fly-size-n').textContent = f.size === 1 ? 'Real size' : `${f.size}×`;
+  $('#fly-blind').checked = f.blind;
+  $('#fly-scrambled').checked = f.scrambled;
+  $$('#fly-set button').forEach(b => b.disabled = !alive);
+}
+async function setFly(on) {
+  try { if (on) localStorage.setItem(FLY_ON, '1'); else localStorage.removeItem(FLY_ON); } catch (e) {}
+  $('#fly-on').checked = on;
+  $('#fly-set').hidden = !on;
+  if (!on) { fly?.stop(); return; }
+  try {
+    if (!fly) { fly = (await import(FLY + 'controller.js')).flyController; fly.subscribe(paintFly); }
+    // it may have been switched off again while its code came in
+    if ($('#fly-on').checked) fly.start();
+    paintFly();
+  } catch (e) { $('#fly-on').checked = false; $('#fly-set').hidden = true; }
+}
+function wireFly() {
+  $('#fly-on').addEventListener('change', e => setFly(e.target.checked));
+  $('#fly-size').addEventListener('input', e => fly?.setSize(+e.target.value));
+  $('#fly-blind').addEventListener('change', e => fly?.setBlind(e.target.checked));
+  $('#fly-scrambled').addEventListener('change', e => fly?.setScrambled(e.target.checked));
+  $('#fly-dust').addEventListener('click', () => fly?.dust());
+  $('#fly-set').addEventListener('click', e => { const b = e.target.closest('[data-food]'); if (b) fly?.dropFood(b.dataset.food); });
+  let on = false;
+  try { on = localStorage.getItem(FLY_ON) === '1'; } catch (e) {}
+  if (!on) return;
+  // the page first: the fly's code waits until everything the page itself needs is in
+  $('#fly-on').checked = true; $('#fly-set').hidden = false;
+  if (document.readyState === 'complete') setFly(true); else addEventListener('load', () => setFly(true), {once: true});
 }
 
 /* ---------- the remembered build ---------- */
@@ -3165,7 +3217,7 @@ function wireIntro() {
 
 /* ---------- wiring ---------- */
 function wire() {
-  wireTip(); wireIntro(); wireContact();
+  wireTip(); wireIntro(); wireContact(); wireFly();
   $('.tabs')?.addEventListener('click', e => { const t = e.target.closest('.tab'); if (t) setTab(t.dataset.tab); });
   document.addEventListener('click', e => {
     const b = e.target.closest('.menu-btn');

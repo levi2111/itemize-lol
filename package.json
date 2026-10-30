@@ -25,7 +25,7 @@
     "site": "node scripts/site.ts",
     "dev:worker": "wrangler dev",
     "deploy": "wrangler deploy",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.fly.json",
     "test": "node --test \"test/**/*.test.ts\""
   },
   "dependencies": {

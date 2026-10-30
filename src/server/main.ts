@@ -17,7 +17,7 @@ import { loadPatches } from './dataset.ts';
 import { LINK_ID, sharedPage } from './links.ts';
 import { championPage, championSite, robots, sitemap, SOURCE } from './pages.ts';
 import { preview, siteMeta } from './preview.ts';
-import { ENGINE_BASE, ENGINE_ENTRY, engineData, engineModules } from './engine-files.ts';
+import { ENGINE_BASE, ENGINE_ENTRY, engineData, engineModules, FLY_BASE, FLY_ENTRY, flyFiles } from './engine-files.ts';
 import { decodeShare, readShare } from './share.ts';
 import { sqliteLinks } from './sqlite-links.ts';
 
@@ -66,6 +66,15 @@ app.get(`${ENGINE_BASE}*`, c => {
   if (path === ENGINE_ENTRY || !modules) modules = engineModules();
   const code = modules.get(path);
   return code === undefined ? c.notFound() : c.body(code, 200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache' });
+});
+// the fly, in the same way
+let fly: Map<string, string> | null = null;
+app.get(`${FLY_BASE}*`, c => {
+  const path = c.req.path.slice(FLY_BASE.length);
+  if (path === FLY_ENTRY || !fly) fly = flyFiles();
+  const body = fly.get(path);
+  if (body === undefined) return c.notFound();
+  return c.body(body, 200, { 'Content-Type': path.endsWith('.json') ? 'application/json' : 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache' });
 });
 // everything else that is not the API is the static site in web/; a page answers without its .html, as on Cloudflare
 app.use('/*', serveStatic({

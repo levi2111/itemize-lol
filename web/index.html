@@ -21,6 +21,7 @@
 <meta name="theme-color" content="#0c2524">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <meta name="engine" content="/engine/">
+<meta name="fly" content="/fly/">
 <script src="/layout.js"></script>
 <link rel="preload" href="/fonts/archivo-v25.woff2" as="font" type="font/woff2" crossorigin>
 <!--art-->
@@ -828,6 +829,29 @@ button.cx-do:hover,a.cx:hover .cx-do{color:var(--text)}
 .menu a b{color:var(--text);font-weight:700}
 .menu a span{grid-column:2;font-size:.78rem}
 .menu a:hover{background:rgba(236,231,216,.07)}
+/* the fly (src/fly/): its block of the settings menu */
+.fly-box{display:grid;gap:.5rem;margin-top:.3rem;padding:.55rem .3rem .1rem;border-top:1px solid var(--rule)}
+.fly-on{display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+.fly-on input,.fly-row input{margin:0;width:.95rem;height:.95rem;accent-color:var(--text)}
+.fly-set{display:grid;gap:.55rem;font-size:.78rem;color:var(--dim)}
+.fly-nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.4rem .6rem;margin:0}
+.fly-nums dt{font-size:.66rem;color:var(--faint)}
+.fly-nums dd{margin:0;color:var(--text);font-family:var(--font-mono);font-size:.82rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fly-size{display:grid;grid-template-columns:auto minmax(0,1fr) 4rem;align-items:center;gap:.55rem}
+.fly-size input{width:100%;margin:0;accent-color:var(--text)}
+.fly-size b{text-align:right;color:var(--text);font-weight:600}
+.fly-row{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem .8rem}
+.fly-row:has(button){gap:.3rem}
+.fly-row button{padding:.2rem .4rem;border:1px solid var(--rule);border-radius:3px}
+.fly-row button:hover:not(:disabled){border-color:var(--text);color:var(--text)}
+.fly-row button:disabled{opacity:.45;cursor:default}
+.fly-row label{display:inline-flex;align-items:center;gap:.35rem;cursor:pointer}
+.fly-det summary{cursor:pointer}
+.fly-det summary:hover{color:var(--text)}
+.fly-det p{margin:.35rem 0 0;font-size:.72rem;line-height:1.35}
+.menu .fly-det a{display:inline;padding:0;border-radius:0;color:inherit;text-decoration:underline;text-underline-offset:.15em}
+.menu .fly-det a::before{content:none}
+.menu .fly-det a:hover{background:none;color:var(--text)}
 /* an estimated or unmodeled number is marked where it is shown */
 .est{font-family:var(--font-mono);font-size:.6rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--warn);border:1px solid currentColor;border-radius:2px;padding:0 .25rem;opacity:.85;cursor:help}
 .wf{cursor:help}
@@ -1483,13 +1507,37 @@ body[data-compare="off"] .lend{grid-template-columns:minmax(0,1fr) 3.1rem 0 4.65
         </div>
       </div>
       <div class="set">
-        <button class="gear menu-btn" id="set-btn" aria-haspopup="true" aria-expanded="false" aria-controls="set-menu" aria-label="Settings" title="Settings">
+        <button class="gear menu-btn" id="set-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="set-menu" aria-label="Settings" title="Settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </button>
-        <div class="menu" id="set-menu" role="menu" aria-label="Settings" hidden>
+        <div class="menu" id="set-menu" role="dialog" aria-label="Settings" hidden>
           <span class="lbl">Layout</span>
-          <a href="/" role="menuitemradio" data-layout="tabs" aria-checked="true"><b>Tabs</b><span>Totals on top, the details one tab at a time</span></a>
-          <a href="/receipt" role="menuitemradio" data-layout="receipt" aria-checked="false"><b>Receipt</b><span>Everything on one screen, printed as a receipt</span></a>
+          <div role="menu" aria-label="Layout" style="display:contents">
+            <a href="/" role="menuitemradio" data-layout="tabs" aria-checked="true"><b>Tabs</b><span>Totals on top, the details one tab at a time</span></a>
+            <a href="/receipt" role="menuitemradio" data-layout="receipt" aria-checked="false"><b>Receipt</b><span>Everything on one screen, printed as a receipt</span></a>
+          </div>
+          <div class="fly-box">
+            <label class="fly-on"><span class="lbl">Fly</span><input type="checkbox" id="fly-on"></label>
+            <div class="fly-set" id="fly-set" hidden>
+              <dl class="fly-nums">
+                <div><dt>Generation</dt><dd id="fly-gen">1</dd></div>
+                <div><dt>Escaped</dt><dd id="fly-escapes">0</dd></div>
+                <div><dt>Squashed</dt><dd id="fly-squashes">0</dd></div>
+                <div><dt>Reaction</dt><dd id="fly-reaction">–</dd></div>
+                <div><dt>Hunger</dt><dd id="fly-hunger">–</dd></div>
+                <div><dt>Now</dt><dd id="fly-now">–</dd></div>
+              </dl>
+              <label class="fly-size">Size<input type="range" id="fly-size" min="1" max="4" step=".25" value="1"><b id="fly-size-n">Real size</b></label>
+              <div class="fly-row" role="group" aria-label="Food">
+                <button data-food="sugar">Sugar</button><button data-food="banana">Banana</button><button data-food="vinegar">Vinegar</button><button data-food="bitter">Bitter</button><button id="fly-dust">Dust</button>
+              </div>
+              <div class="fly-row"><label><input type="checkbox" id="fly-blind">Blind</label><label><input type="checkbox" id="fly-scrambled">Scrambled wiring</label></div>
+              <details class="fly-det"><summary>Details</summary>
+                <p><a href="https://flywire.ai" target="_blank" rel="noopener">FlyWire</a> connectome v783, 2,000 neurons. Dorkenwald et al. 2024, Schlegel et al. 2024. <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener">CC BY-NC 4.0</a></p>
+                <p>Model: <a href="https://github.com/philshiu/Drosophila_brain_model" target="_blank" rel="noopener">Shiu et al. 2024</a>. Cell types: <a href="https://github.com/flyconnectome/flywire_annotations" target="_blank" rel="noopener">flywire_annotations</a></p>
+              </details>
+            </div>
+          </div>
         </div>
       </div>
     </div>

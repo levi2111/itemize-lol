@@ -4,7 +4,8 @@
      - the art index is written into the page, with a preload for the item sheet, so the first
        pictures are on their way before any script has run;
      - the engine the auto-build runs in the browser, with its data, goes in a folder named after
-       its contents (src/server/engine-files.ts), and the page's <meta name="engine"> points there.
+       its contents (src/server/engine-files.ts), and the page's <meta name="engine"> points there;
+       the fly goes in one of its own the same way, for <meta name="fly">.
    There is a page per layout, and both get the same treatment.
    Then each champion gets a page of its own in both layouts, made from those (src/server/pages.ts), with the
    sitemap, robots.txt and the redirects of other names.
@@ -19,7 +20,7 @@ import { ROOT } from '../src/pipeline/paths.ts';
 import type { ArtIndex } from '../src/pipeline/art.ts';
 import { buildOg } from './og.ts';
 import { loadPatches } from '../src/server/dataset.ts';
-import { ENGINE_BASE, engineModules } from '../src/server/engine-files.ts';
+import { ENGINE_BASE, engineModules, FLY_BASE, flyFiles } from '../src/server/engine-files.ts';
 import { championPage, championSite, redirectsFile, robots, sitemap, SOURCE } from '../src/server/pages.ts';
 
 const web = join(ROOT, 'web'), out = join(ROOT, '.build', 'site');
@@ -53,13 +54,18 @@ for (const { data: d } of patches.all) {
   engine.set(`data/${d.patch}/items.json`, JSON.stringify(d.items));
   for (const c of d.index) engine.set(`data/${d.patch}/champions/${c.id}.json`, JSON.stringify(d.champion(c.id)));
 }
-const engineHash = createHash('sha256');
-for (const [path, text] of [...engine].sort(([a], [b]) => a.localeCompare(b))) engineHash.update(path).update('\0').update(text).update('\0');
-const engineDir = `assets/engine.${engineHash.digest('hex').slice(0, 10)}/`;
-for (const [path, text] of engine) {
-  mkdirSync(dirname(join(out, engineDir, path)), { recursive: true });
-  writeFileSync(join(out, engineDir, path), text);
-}
+/** Writes these files into a folder named after all of them, and returns its name. */
+const folder = (name: string, files: Map<string, string>) => {
+  const hash = createHash('sha256');
+  for (const [path, text] of [...files].sort(([a], [b]) => a.localeCompare(b))) hash.update(path).update('\0').update(text).update('\0');
+  const dir = `assets/${name}.${hash.digest('hex').slice(0, 10)}/`;
+  for (const [path, text] of files) {
+    mkdirSync(dirname(join(out, dir, path)), { recursive: true });
+    writeFileSync(join(out, dir, path), text);
+  }
+  return dir;
+};
+const engineDir = folder('engine', engine), flyDir = folder('fly', flyFiles());
 
 const art: ArtIndex = JSON.parse(readFileSync(join(web, 'art', 'index.json'), 'utf8'));
 const made: Record<string, string> = {};
@@ -68,6 +74,7 @@ for (const page of PAGES) {
   html = swap(page, html, '<script src="/app.js" defer></script>', `<script src="/${app}" defer></script>`);
   html = swap(page, html, '<script src="/layout.js"></script>', `<script src="/${layout}"></script>`);
   html = swap(page, html, `<meta name="engine" content="${ENGINE_BASE}">`, `<meta name="engine" content="/${engineDir}">`);
+  html = swap(page, html, `<meta name="fly" content="${FLY_BASE}">`, `<meta name="fly" content="/${flyDir}">`);
   html = swap(page, html, '<!--art-->', [
     `<link rel="preload" href="/art/${art.version}/items.webp" as="image" type="image/webp">`,
     // "<" is escaped so that nothing in the data can close the element

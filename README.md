@@ -131,6 +131,10 @@ Each build has an **Auto-build** button. It opens a panel that finds the items m
 - **The rules come from the game files**: each item's `limits` (`ItemData`) are its groups with an `mMaxGroupOwnable`, such as `{ "LastWhisper": 1 }` or `{ "Boots": 1 }`.
 - **It runs in the browser**, in a Web Worker (`src/autobuild/worker.ts`), so it costs the Worker nothing and can't run into its CPU limit. `src/server/engine-files.ts` turns the worker and what it imports into JavaScript by stripping the types (Node's `stripTypeScriptTypes`; nothing else changes, so the page scores builds with the very code the API uses), next to each served patch's `data/<patch>/items.json` and `data/<patch>/champions/<id>.json`; the page tells it which patch to read. The Node server serves that under `/engine/`, made from `src/` on each load. `scripts/site.ts` writes it into `assets/engine.<hash>/`, named after its contents, and points each page's `<meta name="engine">` at it. The worker loads the items (about 520 KB) and the champion once; pointing at an Auto-build button starts that early.
 
+## The fly
+
+The settings menu can let out a fruit fly: 2,000 real neurons of the FlyWire connectome in Shiu et al.'s model, in a Web Worker, living on the page. It flees the cursor, rides along when the page scrolls, eats what it is given and can be swatted. Off by default, and nothing of it loads until it is on. Its data is CC BY-NC 4.0, credited in the menu. See `docs/fly.md`.
+
 ## Layout
 
 ```
@@ -139,6 +143,7 @@ src/models/     hand-written models: champions/*.ts, items/*.ts, models.lock.jso
 src/shared/     dataset types, formula evaluator
 src/engine/     stats, mitigation, the fight simulation, the calculation
 src/autobuild/  the auto-build's search, and the Web Worker that runs it in the browser
+src/fly/        the fruit fly: a real piece of a fly's brain in a Web Worker, its senses, its body, its canvases (docs/fly.md)
 src/server/     HTTP API, and the Node server that also serves the site; share links read as the page reads them, and what a preview says
 src/worker/     the same API as a Cloudflare Worker, and the short links with their link previews
 migrations/     the short links' table, for D1 (wrangler d1 migrations) and for the Node server's SQLite file alike

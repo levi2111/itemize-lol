@@ -17,14 +17,19 @@ export const ENGINE_ENTRY = 'autobuild/worker.js';
     in `<meta name="engine">`, which scripts/site.ts points at the published copy. */
 export const ENGINE_BASE = '/engine/';
 
+/** The fly's first module, from its base, which the settings menu imports; it starts the worker from beside it. */
+export const FLY_ENTRY = 'controller.js';
+/** Where a page finds the fly when nothing else says, as ENGINE_BASE: `<meta name="fly">`. */
+export const FLY_BASE = '/fly/';
+
 const SRC = join(ROOT, 'src');
 const IMPORT = /(\bfrom\s*|\bimport\s*)(['"])(\.\.?\/[^'"]+)\.ts\2/g;
 
-/** Every module the worker loads, by its path under the engine's base: autobuild/worker.js -> code. */
-export function engineModules(): Map<string, string> {
+/** Every module the entries load, by its path under dir, with the types out: autobuild/worker.js -> code. */
+function modulesFrom(dir: string, entries: string[]): Map<string, string> {
   const out = new Map<string, string>();
   const visit = (file: string) => {
-    const at = relative(SRC, file).split(/[\\/]/).join('/').replace(/\.ts$/, '.js');
+    const at = relative(dir, file).split(/[\\/]/).join('/').replace(/\.ts$/, '.js');
     if (out.has(at)) return;
     const code = stripTypeScriptTypes(readFileSync(file, 'utf8'));
     const deps: string[] = [];
@@ -35,7 +40,18 @@ export function engineModules(): Map<string, string> {
     }));
     for (const d of deps) visit(d);
   };
-  visit(join(SRC, ENGINE_ENTRY.replace(/\.js$/, '.ts')));
+  for (const entry of entries) visit(join(dir, entry.replace(/\.js$/, '.ts')));
+  return out;
+}
+
+/** Every module the worker loads, by its path under the engine's base. */
+export const engineModules = () => modulesFrom(SRC, [ENGINE_ENTRY]);
+
+/** The fly as a browser runs it (src/fly/): its modules and its circuit, by their path under its base. Apart from the
+    engine, in a folder of its own, so a new patch doesn't send a visitor the circuit again. */
+export function flyFiles(): Map<string, string> {
+  const dir = join(SRC, 'fly'), out = modulesFrom(dir, [FLY_ENTRY, 'worker.js']);
+  out.set('circuit.json', readFileSync(join(dir, 'circuit.json'), 'utf8'));
   return out;
 }
 
