@@ -5,7 +5,7 @@
        pictures are on their way before any script has run;
      - the engine the auto-build runs in the browser, with its data, goes in a folder named after
        its contents (src/server/engine-files.ts), and the page's <meta name="engine"> points there;
-       the fly goes in one of its own the same way, for <meta name="fly">.
+       the fly goes in one of its own the same way, for the pages at /fly.
    There is a page per layout, and both get the same treatment.
    Then each champion gets a page of its own in both layouts, made from those (src/server/pages.ts), with the
    sitemap, robots.txt and the redirects of other names.
@@ -20,8 +20,9 @@ import { ROOT } from '../src/pipeline/paths.ts';
 import type { ArtIndex } from '../src/pipeline/art.ts';
 import { buildOg } from './og.ts';
 import { loadPatches } from '../src/server/dataset.ts';
-import { ENGINE_BASE, engineModules, FLY_BASE, flyFiles } from '../src/server/engine-files.ts';
-import { championPage, championSite, redirectsFile, robots, sitemap, SOURCE } from '../src/server/pages.ts';
+import { ENGINE_BASE, engineModules, flyFiles } from '../src/server/engine-files.ts';
+import { FLY_PAGES, flyPage } from '../src/server/fly-page.ts';
+import { championPage, championSite, LAYOUTS, redirectsFile, robots, sitemap, SOURCE } from '../src/server/pages.ts';
 
 const web = join(ROOT, 'web'), out = join(ROOT, '.build', 'site');
 mkdirSync(out, { recursive: true });
@@ -74,7 +75,6 @@ for (const page of PAGES) {
   html = swap(page, html, '<script src="/app.js" defer></script>', `<script src="/${app}" defer></script>`);
   html = swap(page, html, '<script src="/layout.js"></script>', `<script src="/${layout}"></script>`);
   html = swap(page, html, `<meta name="engine" content="${ENGINE_BASE}">`, `<meta name="engine" content="/${engineDir}">`);
-  html = swap(page, html, `<meta name="fly" content="${FLY_BASE}">`, `<meta name="fly" content="/${flyDir}">`);
   html = swap(page, html, '<!--art-->', [
     `<link rel="preload" href="/art/${art.version}/items.webp" as="image" type="image/webp">`,
     // "<" is escaped so that nothing in the data can close the element
@@ -83,6 +83,8 @@ for (const page of PAGES) {
   writeFileSync(join(out, page), html);
   made[page] = html;
 }
+mkdirSync(join(out, 'fly'), { recursive: true });
+for (const layout of LAYOUTS) writeFileSync(join(out, FLY_PAGES[layout].file), flyPage(made[SOURCE[layout]]!, layout, `/${flyDir}`));
 
 // the champion pages, from the live patch the Worker is bundled with (scripts/bundle.ts reads the same ITEMIZE_PATCH)
 const data = dataset;

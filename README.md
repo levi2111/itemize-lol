@@ -133,7 +133,7 @@ Each build has an **Auto-build** button. It opens a panel that finds the items m
 
 ## The fly
 
-The settings menu can let out a fruit fly: 2,000 real neurons of the FlyWire connectome in Shiu et al.'s model, in a Web Worker, living on the page. It flees the cursor, rides along when the page scrolls, eats what it is given and can be swatted. Off by default, and nothing of it loads until it is on. Its data is CC BY-NC 4.0, credited in the menu. See `docs/fly.md`.
+`/fly` (and `/fly/receipt`) is the site with a fruit fly on it: 2,000 real neurons of the FlyWire connectome in Shiu et al.'s model, in a Web Worker, living on the page. It flees the cursor, rides along when the page scrolls, eats what it is given and can be swatted. Nothing links there and the other pages hold none of it. Its data is CC BY-NC 4.0, credited in those pages' settings menu. See `docs/fly.md`.
 
 ## Layout
 

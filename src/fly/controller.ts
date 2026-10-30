@@ -11,7 +11,7 @@ import { drawFly, drawFood, drawSmear, drawSwat, smearFade, type Smear } from '.
 // The fly of this page (docs/fly.md): one per page, run while the settings menu has it on. It owns the two canvases, the brain's
 // worker, the fly's loop (senses, motor layer, body) and what the page tells the senses. It reads the page's geometry only:
 // positions and sizes of elements, scroll offsets, where the pointer is, that a key was pressed (never which) and that something
-// was clicked; never any text. The settings menu (web/app.js) reads and steers it through the methods below.
+// was clicked; never any text. The settings menu (src/fly/menu.ts) reads and steers it through the methods below.
 
 // Page coordinates, so that it scrolls with the page, and when it was dropped.
 type FoodItem = { id: number; kind: FoodKind; x: number; y: number; at: number };

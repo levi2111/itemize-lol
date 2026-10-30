@@ -5,7 +5,9 @@
    (#shared-build, just above this script); that build is handed over as setLayout in app.js hands one over. */
 (() => {
   const champ = document.documentElement.dataset.champ;
-  const PAGES = champ ? {tabs: '/' + champ, receipt: '/receipt/' + champ} : {tabs: '/', receipt: '/receipt'};
+  // a page under an address of its own keeps to it
+  const base = document.documentElement.dataset.base || '';
+  const PAGES = champ ? {tabs: '/' + champ, receipt: '/receipt/' + champ} : {tabs: base || '/', receipt: base + '/receipt'};
   let want = null;
   try { want = localStorage.getItem('layout'); } catch (e) {}
   if (!Object.hasOwn(PAGES, want) || want === document.documentElement.dataset.layout) return;

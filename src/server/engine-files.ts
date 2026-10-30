@@ -17,10 +17,10 @@ export const ENGINE_ENTRY = 'autobuild/worker.js';
     in `<meta name="engine">`, which scripts/site.ts points at the published copy. */
 export const ENGINE_BASE = '/engine/';
 
-/** The fly's first module, from its base, which the settings menu imports; it starts the worker from beside it. */
-export const FLY_ENTRY = 'controller.js';
-/** Where a page finds the fly when nothing else says, as ENGINE_BASE: `<meta name="fly">`. */
-export const FLY_BASE = '/fly/';
+/** The fly's first module, from its base, which the pages at /fly load (src/server/fly-page.ts). */
+export const FLY_ENTRY = 'menu.js';
+/** The Node server's address for the fly's files; the published site has them in a folder of their own (scripts/site.ts). */
+export const FLY_BASE = '/fly-code/';
 
 const SRC = join(ROOT, 'src');
 const IMPORT = /(\bfrom\s*|\bimport\s*)(['"])(\.\.?\/[^'"]+)\.ts\2/g;

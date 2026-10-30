@@ -3,7 +3,7 @@ import type { Outcome } from './loop.ts';
 
 // What the fly keeps in this browser between visits (docs/fly.md): the size multiplier, its hunger, the generation (one more
 // for every fly that arrives after a squash) and its escape record. Whether the fly shows at all is the settings menu's
-// (web/app.js). Storage can be unavailable or hold anything; both fall back to the defaults.
+// (src/fly/menu.ts). Storage can be unavailable or hold anything; both fall back to the defaults.
 
 export type Reaction = { ms: number; mode: 'short' | 'long' };
 export type FlyStats = { escapes: number; squashes: number; short: number; long: number; reactions: Reaction[] };

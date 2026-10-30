@@ -15,7 +15,8 @@ import { ROOT } from '../pipeline/paths.ts';
 import { createApp } from './app.ts';
 import { loadPatches } from './dataset.ts';
 import { LINK_ID, sharedPage } from './links.ts';
-import { championPage, championSite, robots, sitemap, SOURCE } from './pages.ts';
+import { FLY_PAGES, flyPage } from './fly-page.ts';
+import { championPage, championSite, LAYOUTS, robots, sitemap, SOURCE } from './pages.ts';
 import { preview, siteMeta } from './preview.ts';
 import { ENGINE_BASE, ENGINE_ENTRY, engineData, engineModules, FLY_BASE, FLY_ENTRY, flyFiles } from './engine-files.ts';
 import { decodeShare, readShare } from './share.ts';
@@ -67,7 +68,8 @@ app.get(`${ENGINE_BASE}*`, c => {
   const code = modules.get(path);
   return code === undefined ? c.notFound() : c.body(code, 200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache' });
 });
-// the fly, in the same way
+// the pages with the fly, and its files in the same way as the engine's
+for (const layout of LAYOUTS) app.get(FLY_PAGES[layout].path, c => c.html(flyPage(readFileSync(join(web, SOURCE[layout]), 'utf8'), layout, FLY_BASE)));
 let fly: Map<string, string> | null = null;
 app.get(`${FLY_BASE}*`, c => {
   const path = c.req.path.slice(FLY_BASE.length);
